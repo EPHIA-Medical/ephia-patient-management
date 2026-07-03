@@ -64,7 +64,7 @@ export default function VoucherPreview({ practice = {}, voucher = {} }) {
           )}
           <div>
             <div style={{ ...label, opacity: 0.55, marginBottom: "6px" }}>Gutscheincode</div>
-            <div style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "1px" }}>{code || "—"}</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>{code || "—"}</div>
             {voucher.gueltigBis && (
               <div style={{ fontSize: "13px", fontWeight: 400, opacity: 0.7, marginTop: "10px" }}>Gültig bis {fmtDate(voucher.gueltigBis)}</div>
             )}
