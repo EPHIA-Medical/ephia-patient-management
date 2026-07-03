@@ -96,8 +96,7 @@ export default function VoucherPreview({ practice = {}, voucher = {} }) {
 
         {/* Footer note */}
         <div style={{ fontSize: "12px", fontWeight: 400, lineHeight: 1.6, opacity: 0.7 }}>
-          Einzulösen bei {practice.name || "uns"}{practice.address1 ? `, ${practice.address1}` : ""}.
-          Übertragbar · keine Barauszahlung.
+          Einzulösen bei {[practice.name || "uns", practice.address1, practice.address2, practice.address3].filter(Boolean).join(", ")}. Übertragbar · keine Barauszahlung.
         </div>
       </div>
     </div>
