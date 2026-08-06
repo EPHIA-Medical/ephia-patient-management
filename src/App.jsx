@@ -2247,7 +2247,7 @@ export default function EphiaInvoice() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
         <div className="text-center">
-          <div className="mb-2 flex justify-center"><img src="/logo.svg" alt="EPHIA" style={{ height: "42px" }} /></div>
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <p className="text-xs text-gray-400">Wird geladen...</p>
         </div>
       </div>

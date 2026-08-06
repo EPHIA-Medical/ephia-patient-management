@@ -10,7 +10,7 @@ export function LoginScreen({ onSignInClick, onSignUpClick, onResetClick, onAGBC
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
-          <div className="mb-2 flex justify-center"><img src="/logo.svg" alt="EPHIA" style={{ height: "42px" }} /></div>
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <div className="text-xs text-gray-400 uppercase tracking-wider">Rechnungsverwaltung</div>
         </div>
 
@@ -95,7 +95,7 @@ export function SignUpScreen({ onSignUpClick, onBackClick, isLoading, error, suc
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
-          <div className="mb-2 flex justify-center"><img src="/logo.svg" alt="EPHIA" style={{ height: "42px" }} /></div>
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <div className="text-xs text-gray-400 uppercase tracking-wider">Neues Konto</div>
         </div>
 
@@ -198,7 +198,7 @@ export function ResetPasswordScreen({ onResetClick, onBackClick, isLoading, erro
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
-          <div className="mb-2 flex justify-center"><img src="/logo.svg" alt="EPHIA" style={{ height: "42px" }} /></div>
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <div className="text-xs text-gray-400 uppercase tracking-wider">Passwort zurücksetzen</div>
         </div>
 
@@ -261,7 +261,7 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
-          <div className="mb-2 flex justify-center"><img src="/logo.svg" alt="EPHIA" style={{ height: "42px" }} /></div>
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <div className="text-xs text-gray-400 uppercase tracking-wider">Neues Passwort festlegen</div>
         </div>
 
