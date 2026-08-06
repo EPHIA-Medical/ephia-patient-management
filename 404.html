@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ephia</title>
+    <script>
+      // GitHub Pages SPA fix: save the path and redirect to root so React Router can handle it
+      sessionStorage.setItem('ghpages-redirect', location.pathname + location.search + location.hash);
+      location.replace('/');
+    </script>
+  </head>
+  <body></body>
+</html>
