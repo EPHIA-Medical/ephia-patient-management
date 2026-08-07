@@ -11,7 +11,7 @@ export function LoginScreen({ onSignInClick, onSignUpClick, onResetClick, onAGBC
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
           <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
-          <div className="text-xs text-gray-400 uppercase tracking-wider">Rechnungsverwaltung</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wider">Patientenmanagement</div>
         </div>
 
         {error && (

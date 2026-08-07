@@ -17,12 +17,12 @@ export default function AGBPage({ onBack }) {
         <div className="prose prose-sm max-w-none text-gray-700 text-sm leading-relaxed space-y-5">
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">§ 1 Geltungsbereich</h2>
-            <p>Diese Allgemeinen Geschäftsbedingungen gelten für die Nutzung der webbasierten Anwendung „EPHIA Rechnungsverwaltung" (nachfolgend „App"), bereitgestellt von der EPHIA Medical GmbH (nachfolgend „Anbieter"). Mit der Registrierung und Nutzung der App erklärst Du Dich mit diesen Bedingungen einverstanden.</p>
+            <p>Diese Allgemeinen Geschäftsbedingungen gelten für die Nutzung der webbasierten Anwendung „EPHIA Patientenmanagement" (nachfolgend „App"), bereitgestellt von der EPHIA Medical GmbH (nachfolgend „Anbieter"). Mit der Registrierung und Nutzung der App erklärst Du Dich mit diesen Bedingungen einverstanden.</p>
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">§ 2 Leistungsbeschreibung</h2>
-            <p>Die App ermöglicht niedergelassenen Ärzt:innen und Praxen die digitale Erstellung, Verwaltung und den Export von Rechnungen für Privatpatient:innen. Der Anbieter stellt die App als Software-as-a-Service (SaaS) über das Internet zur Verfügung. Ein Anspruch auf ständige Verfügbarkeit besteht nicht.</p>
+            <p>Die App ermöglicht niedergelassenen Ärzt:innen und Praxen die digitale Verwaltung von Patient:innendaten sowie die Erstellung, Verwaltung und den Export von Rechnungen für Privatpatient:innen. Der Anbieter stellt die App als Software-as-a-Service (SaaS) über das Internet zur Verfügung. Ein Anspruch auf ständige Verfügbarkeit besteht nicht.</p>
           </section>
 
           <section>
