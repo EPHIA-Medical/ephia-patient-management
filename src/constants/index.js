@@ -45,6 +45,7 @@ export const DEFAULT_PRACTICE = {
   logo: "",
   city: "",
   zahlungsfrist: 14,
+  showBankOnInvoice: true,
   praeparate: [],
   kioskPin: "", // 4-6 digit code gating exit from patient-facing kiosk views (empty = disabled)
 };

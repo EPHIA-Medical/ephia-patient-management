@@ -3,8 +3,11 @@ import { fmtDate, fmt, fmtPhone } from "../../utils/helpers";
 
 // ═══════════════════ Invoice Preview ═══════════════════
 
-export default function InvoicePreview({ practice, patient: rawPatient, invoiceMeta, lineItems, begruendung, targetGesamt, voucherRedemption }) {
+export default function InvoicePreview({ practice, patient: rawPatient, invoiceMeta, lineItems, begruendung, targetGesamt, voucherRedemption, paymentStatus }) {
   const patient = rawPatient || {};
+  const isPaid = paymentStatus === "bezahlt";
+  // Bank details are pointless on a settled invoice and can be disabled globally in settings
+  const showBank = !isPaid && practice.showBankOnInvoice !== false;
   const zwischensumme = lineItems.reduce((s, it) => s + it.betrag, 0);
   const isKlein = practice.kleinunternehmer;
   const isAusland = patient.country && patient.country !== "Deutschland";
@@ -171,11 +174,15 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
         </div>
       )}
 
-      {invoiceMeta.zahlungsfrist != null && invoiceMeta.zahlungsfrist !== "" && (
+      {isPaid ? (
+        <div style={{ fontSize: "10px", color: "#444", marginBottom: "16px" }}>
+          Der Rechnungsbetrag wurde bereits vollständig beglichen. Betrag dankend erhalten.
+        </div>
+      ) : invoiceMeta.zahlungsfrist != null && invoiceMeta.zahlungsfrist !== "" && (
         <div style={{ fontSize: "10px", color: "#444", marginBottom: "16px" }}>
           Bitte überweisen Sie den Rechnungsbetrag innerhalb von {invoiceMeta.zahlungsfrist} Tagen
           {invoiceMeta.datum ? (() => { const d = new Date(invoiceMeta.datum); d.setDate(d.getDate() + Number(invoiceMeta.zahlungsfrist)); return ` (bis zum ${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })})`; })() : ""}
-          {" "}auf das unten angegebene Konto.
+          {showBank ? " auf das unten angegebene Konto." : "."}
         </div>
       )}
 
@@ -185,12 +192,14 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
           <div>{practice.email}</div>
           {practice.steuernummer && <div>Steuernummer: {practice.steuernummer}</div>}
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div>{practice.bankName}</div>
-          <div>IBAN: {practice.iban}</div>
-          <div>BIC: {practice.bic}</div>
-          {practice.paypal && <div>PayPal: {practice.paypal}</div>}
-        </div>
+        {showBank && (
+          <div style={{ textAlign: "right" }}>
+            {practice.bankName && <div>{practice.bankName}</div>}
+            {practice.iban && <div>IBAN: {practice.iban}</div>}
+            {practice.bic && <div>BIC: {practice.bic}</div>}
+            {practice.paypal && <div>PayPal: {practice.paypal}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

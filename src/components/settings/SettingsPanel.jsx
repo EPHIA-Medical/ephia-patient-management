@@ -399,6 +399,13 @@ export default function SettingsPanel({ practice, setPractice, show, setShow, on
               <input type="number" min="0" className={inputCls2} value={practice.zahlungsfrist ?? 14} placeholder="14" onChange={(e) => setPractice({ ...practice, zahlungsfrist: e.target.value === "" ? "" : parseInt(e.target.value, 10) || 0 })} />
               <p className="text-[10px] text-gray-400 mt-1">Wird automatisch auf neuen Rechnungen eingesetzt</p>
             </div>
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition sm:col-span-2">
+              <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400 mt-0.5" checked={practice.showBankOnInvoice !== false} onChange={(e) => setPractice({ ...practice, showBankOnInvoice: e.target.checked })} />
+              <div>
+                <span className="text-sm text-gray-700">Bankverbindung in der Rechnungs-Fußzeile anzeigen</span>
+                <p className="text-[10px] text-gray-400 mt-0.5">Auf Rechnungen, die als bezahlt markiert sind, wird die Bankverbindung immer ausgeblendet und stattdessen „Betrag dankend erhalten" ausgewiesen</p>
+              </div>
+            </label>
           </div>
 
           {/* ── Gespeicherte Präparate ── */}

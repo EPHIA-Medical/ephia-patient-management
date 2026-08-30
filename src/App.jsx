@@ -3248,7 +3248,7 @@ export default function EphiaInvoice() {
               {!hvOnlyMode && (
               <label className="flex items-center gap-2 cursor-pointer select-none mb-2">
                 <input type="checkbox" className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-green-500 focus:ring-green-400" checked={markAsPaid} onChange={(e) => setMarkAsPaid(e.target.checked)} />
-                <span className="text-xs text-gray-500">Als bezahlt markieren</span>
+                <span className="text-xs text-gray-500">Als bezahlt markieren <span className="text-gray-400">(Rechnung erscheint ohne Zahlungsaufforderung und Bankverbindung)</span></span>
               </label>
               )}
               {!hvOnlyMode && treatmentMarkers.length > 0 && (
@@ -3301,6 +3301,7 @@ export default function EphiaInvoice() {
                     begruendung={needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : ""}
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
+                    paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
                   />
                 )}
               </PreviewScaler>
@@ -3358,6 +3359,7 @@ export default function EphiaInvoice() {
                     begruendung={needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : ""}
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
+                    paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
                   />
                 )}
               </MobileScaledPreview>
@@ -4258,7 +4260,7 @@ export default function EphiaInvoice() {
                     <HonorarvereinbarungPreview practice={viewPractice} patient={(linkedHV || viewingInvoice).patient} invoiceMeta={(linkedHV || viewingInvoice).invoiceMeta} lineItems={(linkedHV || viewingInvoice).lineItems} isStandalone={!!(linkedHV ? linkedHV._hvOnly : viewingInvoice._hvOnly)} signatures={(linkedHV || viewingInvoice)._signatures} onSignatureClick={() => setShowSignatureModal(true)} onDoctorSign={(linkedHV || viewingInvoice)._signatures?.patient && !(linkedHV || viewingInvoice)._signatures?.doctor ? () => setShowHvDoctorSign(true) : undefined} />
                   )
                 ) : (
-                  <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} />
+                  <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                 )}
               </div>
               {previewTab === "rechnung" && !isStandaloneTD && viewingInvoice.attachTreatmentPdf && viewingInvoice.treatmentDoc && (
@@ -4307,7 +4309,7 @@ export default function EphiaInvoice() {
                       <HonorarvereinbarungPreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} isStandalone={!!viewingInvoice._hvOnly} signatures={viewingInvoice._signatures} onSignatureClick={() => setShowSignatureModal(true)} onDoctorSign={viewingInvoice._signatures?.patient && !viewingInvoice._signatures?.doctor ? () => setShowHvDoctorSign(true) : undefined} />
                     )
                   ) : (
-                    <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} />
+                    <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                   )}
                 </div>
                 {previewTab === "rechnung" && !isStandaloneTD && viewingInvoice.attachTreatmentPdf && viewingInvoice.treatmentDoc && (
