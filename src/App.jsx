@@ -151,6 +151,7 @@ export default function EphiaInvoice() {
   const [markAsPaid, setMarkAsPaid] = useState(false);
   const [attachTreatmentPdf, setAttachTreatmentPdf] = useState(false);
   const [hvOnlyMode, setHvOnlyMode] = useState(false);
+  const [beratungOnly, setBeratungOnly] = useState(false); // consultation-only invoice (no Präparat/Injektion)
   const [fromHvId, setFromHvId] = useState(null); // ID of imported HV
   const [hvBaseGesamt, setHvBaseGesamt] = useState(null); // original HV Gesamtbetrag (brutto)
   const [hvBaseProductCost, setHvBaseProductCost] = useState(null); // original HV product cost (ml * preisProMl)
@@ -931,12 +932,13 @@ export default function EphiaInvoice() {
   }, [hvAdjustedGesamt, hvBaseGesamt, hvExtraBrutto]);
 
   const wunschGesamt = parseDE(wunschGesamtStr);
+  const isBeratungOnly = beratungOnly && !hvOnlyMode;
   const computedS = wunschGesamt > 0
-    ? calcWeightedForGesamt(wunschGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis)
+    ? calcWeightedForGesamt(wunschGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly)
     : null;
-  const liveItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis);
+  const liveItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
   const zwischensumme = liveItems.reduce((s, it) => s + it.betrag, 0);
-  const defaultItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, [], sachkosten, null, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis);
+  const defaultItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, [], sachkosten, null, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
   const defaultNetto = defaultItems.reduce((s, it) => s + it.betrag, 0);
   const defaultGesamt = noMwst ? defaultNetto : Math.round((defaultNetto * 1.19) * 100) / 100;
   const mwst = noMwst ? 0 : Math.round(zwischensumme * 0.19 * 100) / 100;
@@ -980,11 +982,13 @@ export default function EphiaInvoice() {
       if (dupInvoice) errors.nummerDuplicate = true;
     }
     if (!invoiceMeta.datum) errors.datum = true;
-    if (!praeparat.trim()) errors.praeparat = true;
-    if (ml <= 0) errors.ml = true;
-    if (ganzeAmpulle) {
-      if (ampullenpreisStr === "" || ampullenpreis <= 0) errors.ampullenpreis = true;
-    } else if (preisProMlStr === "" || preisProMl < 0) errors.preisProMl = true;
+    if (!isBeratungOnly) {
+      if (!praeparat.trim()) errors.praeparat = true;
+      if (ml <= 0) errors.ml = true;
+      if (ganzeAmpulle) {
+        if (ampullenpreisStr === "" || ampullenpreis <= 0) errors.ampullenpreis = true;
+      } else if (preisProMlStr === "" || preisProMl < 0) errors.preisProMl = true;
+    }
 
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -1179,7 +1183,7 @@ export default function EphiaInvoice() {
   const handleClearVoucher = () => { setAppliedVoucher(null); setVoucherLookupError(""); };
 
   const handleGenerate = async () => {
-    const items = buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, hvOnlyMode ? [] : sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis);
+    const items = buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, hvOnlyMode ? [] : sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
     const hasHV = hvOnlyMode ? true : (fromHvId ? false : items.some((it) => it.steigerung != null && it.steigerung > 3.5));
     const patientDbId = createForPatient?._raw?.id || createForPatient?.id || null;
     // Effective invoice total (matches InvoicePreview: targetGesamt overrides when MwSt applies)
@@ -1199,7 +1203,8 @@ export default function EphiaInvoice() {
       lineItems: items,
       hasHV,
       _hvOnly: hvOnlyMode || undefined,
-      praeparat,
+      beratungOnly: isBeratungOnly || undefined,
+      praeparat: isBeratungOnly ? "" : praeparat,
       einheit,
       ml,
       mlStr,
@@ -1214,8 +1219,8 @@ export default function EphiaInvoice() {
       begruendung: needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : "",
       selectedZuschlaege: [...selectedZuschlaege],
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
-      treatmentDoc: treatmentMarkers.length > 0 ? { markers: treatmentMarkers.map(m => ({ x: m.x, y: m.y, amount: m.amount })), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
-      attachTreatmentPdf: hvOnlyMode ? false : attachTreatmentPdf,
+      treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: treatmentMarkers.map(m => ({ x: m.x, y: m.y, amount: m.amount })), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
+      attachTreatmentPdf: (hvOnlyMode || isBeratungOnly) ? false : attachTreatmentPdf,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
       indicationType: hvOnlyMode ? undefined : indicationType,
       _fromHvId: fromHvId || undefined,
@@ -1346,7 +1351,7 @@ export default function EphiaInvoice() {
     trackEvent(amendingId ? "document_edited" : "document_created", { type: docType, has_treatment_doc: !!entry.treatmentDoc }, session?.access_token);
     setAmendingId(null);
     setPreviewTab(hvOnlyMode ? "honorar" : "rechnung");
-    setHvOnlyMode(false);
+    setHvOnlyMode(false); setBeratungOnly(false);
     if (patientCreateModal) setPatientCreateModal(null);
     navigateToPreview(entry);
     window.scrollTo(0, 0);
@@ -1376,7 +1381,7 @@ export default function EphiaInvoice() {
     setTreatmentMarkers([]);
     setTreatmentFacePhoto("");
     setMarkAsPaid(false);
-    setHvOnlyMode(false);
+    setHvOnlyMode(false); setBeratungOnly(false);
     setAmendingId(null);
     setCreateForPatient(null);
     setIndicationType("aesthetic");
@@ -1400,7 +1405,7 @@ export default function EphiaInvoice() {
     setTreatmentMarkers([]);
     setTreatmentFacePhoto("");
     setMarkAsPaid(false);
-    setHvOnlyMode(true);
+    setHvOnlyMode(true); setBeratungOnly(false);
     setAmendingId(null);
     setCreateForPatient(null);
     navigate("/erstellen");
@@ -1429,7 +1434,7 @@ export default function EphiaInvoice() {
     setTreatmentMarkers([]);
     setTreatmentFacePhoto("");
     setMarkAsPaid(false);
-    setHvOnlyMode(true);
+    setHvOnlyMode(true); setBeratungOnly(false);
     setAmendingId(null);
     setFromHvId(null);
     setHvBaseGesamt(null);
@@ -1473,7 +1478,7 @@ export default function EphiaInvoice() {
     setTreatmentMarkers([]);
     setTreatmentFacePhoto("");
     setMarkAsPaid(false);
-    setHvOnlyMode(false);
+    setHvOnlyMode(false); setBeratungOnly(false);
     setAmendingId(null);
     setAppliedVoucher(null); setVoucherLookupError("");
     setFromHvId(null);
@@ -1517,6 +1522,7 @@ export default function EphiaInvoice() {
     setDiagnose(inv.invoiceMeta?.diagnose || "");
     setShowIndicationModal(false);
     setHvOnlyMode(fromTab === "honorar" ? true : !!inv._hvOnly);
+    setBeratungOnly(!!inv.beratungOnly);
     setFromHvId(inv._fromHvId || null);
     setHvBaseGesamt(null);
     setHvBaseProductCost(null);
@@ -2573,7 +2579,7 @@ export default function EphiaInvoice() {
 
       {/* Verdienst Popup */}
       {showVerdienst && (() => {
-        const praeparatKosten = ganzeAmpulle ? ampullenpreis : ml * preisProMl;
+        const praeparatKosten = isBeratungOnly ? 0 : ganzeAmpulle ? ampullenpreis : ml * preisProMl;
         const sachkostenTotal = (sachkosten || []).reduce((sum, sk) => sum + parseDE(sk.betragStr), 0);
         const zuschlagTotal = (selectedZuschlaege || []).reduce((sum, code) => {
           const z = ZUSCHLAEGE.find((zs) => zs.code === code);
@@ -2601,10 +2607,12 @@ export default function EphiaInvoice() {
                     <span className="text-gray-700">− {fmt(liveMwst).replace(".", ",")} €</span>
                   </div>
                 )}
+                {!isBeratungOnly && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">{ganzeAmpulle ? "Präparatkosten (1 Ampulle)" : `Präparatkosten (${mlStr || "0"} × ${preisProMlStr || "0"} €)`}</span>
                   <span className="text-gray-700">{praeparatKosten > 0 ? "−" : ""} {fmt(praeparatKosten).replace(".", ",")} €</span>
                 </div>
+                )}
                 {sachkostenTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Weitere Sachkosten</span>
@@ -2717,7 +2725,7 @@ export default function EphiaInvoice() {
               <div className="relative bg-white rounded-xl shadow-2xl p-6 sm:p-8" style={{ maxWidth: 480, width: "100%" }}>
                 <button
                   className="absolute top-3 right-3 p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition"
-                  onClick={() => { setShowIndicationModal(false); setAmendingId(null); setHvOnlyMode(false); if (patientCreateModal) { setPatientCreateModal(null); } else { navigate("/rechnungen"); } }}
+                  onClick={() => { setShowIndicationModal(false); setAmendingId(null); setHvOnlyMode(false); setBeratungOnly(false); if (patientCreateModal) { setPatientCreateModal(null); } else { navigate("/rechnungen"); } }}
                   aria-label="Abbrechen"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -2781,7 +2789,7 @@ export default function EphiaInvoice() {
             )}
 
             {/* HV import banner */}
-            {createForPatient && !hvOnlyMode && !amendingId && (() => {
+            {createForPatient && !hvOnlyMode && !isBeratungOnly && !amendingId && (() => {
               const pDbId = createForPatient?._raw?.id || createForPatient?.id || null;
               const pEmail = (createForPatient?.data?.email || createForPatient?.email || createForPatient?._raw?.data?.email || "").toLowerCase();
               // Find HVs belonging to this patient
@@ -3008,6 +3016,32 @@ export default function EphiaInvoice() {
             </div>
             )}
 
+            {/* ─── Rechnungsart: Behandlung vs. Nur Beratung ─── */}
+            {!hvOnlyMode && (
+            <div className="mb-6 pb-5 border-b border-gray-100">
+              <div className="flex items-center gap-1 mb-3">
+                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Rechnungsart</p>
+                <InfoTooltip>
+                  <div>Mit „Nur Beratung" stellst Du ausschließlich die ärztliche Beratung (GOÄ 1 bzw. GOÄ 3) in Rechnung — ohne Präparat und ohne Injektionsleistungen (GOÄ 5, GOÄ 267).</div>
+                </InfoTooltip>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className={`px-4 py-2 text-xs rounded-lg border transition ${!beratungOnly ? "bg-blue-50 border-blue-300 text-blue-700 font-medium" : "border-[#DFE3EB] text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                  onClick={() => setBeratungOnly(false)}
+                >
+                  Behandlung
+                </button>
+                <button
+                  className={`px-4 py-2 text-xs rounded-lg border transition ${beratungOnly ? "bg-blue-50 border-blue-300 text-blue-700 font-medium" : "border-[#DFE3EB] text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                  onClick={() => setBeratungOnly(true)}
+                >
+                  Nur Beratung
+                </button>
+              </div>
+            </div>
+            )}
+
             {/* ─── GOÄ 3 toggle ─── */}
             {!hvOnlyMode && (
             <div className="mb-6 pb-5 border-b border-gray-100">
@@ -3019,6 +3053,7 @@ export default function EphiaInvoice() {
             )}
 
             {/* Treatment inputs */}
+            {!isBeratungOnly && (
             <div className="mb-6 pb-5 border-b border-gray-100">
               <div className="flex items-center gap-1 mb-4">
                 <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Verwendetes Präparat</p>
@@ -3086,6 +3121,7 @@ export default function EphiaInvoice() {
               </div>
               </div>
             </div>
+            )}
 
             {/* ── Sachkosten ── */}
             {!hvOnlyMode && (
@@ -3172,7 +3208,7 @@ export default function EphiaInvoice() {
                 <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Gewünschter Gesamtbetrag</p>
                 <InfoTooltip>
                   <div>
-                    Gib den gewünschten <strong>Gesamtbetrag</strong> {noMwst ? "" : "(inkl. MwSt.) "}ein. Der Steigerungssatz der GOÄ 267 wird automatisch so berechnet, dass die Rechnung diesen Betrag erreicht.{"\n\n"}
+                    Gib den gewünschten <strong>Gesamtbetrag</strong> {noMwst ? "" : "(inkl. MwSt.) "}ein. Der Steigerungssatz der {isBeratungOnly ? (useBeratungLang ? "GOÄ 3" : "GOÄ 1") : "GOÄ 267"} wird automatisch so berechnet, dass die Rechnung diesen Betrag erreicht.{"\n\n"}
                     Lass das Feld leer, um den Standard-Steigerungssatz (3,5-fach) zu verwenden.
                   </div>
                 </InfoTooltip>
@@ -3251,14 +3287,14 @@ export default function EphiaInvoice() {
                 <span className="text-xs text-gray-500">Als bezahlt markieren <span className="text-gray-400">(Rechnung erscheint ohne Zahlungsaufforderung und Bankverbindung)</span></span>
               </label>
               )}
-              {!hvOnlyMode && treatmentMarkers.length > 0 && (
+              {!hvOnlyMode && !isBeratungOnly && treatmentMarkers.length > 0 && (
                 <label className="flex items-start gap-2 cursor-pointer select-none mb-4">
                   <input type="checkbox" className="w-4 h-4 mt-0.5 flex-shrink-0 rounded border-gray-300 text-blue-500 focus:ring-blue-400" checked={attachTreatmentPdf} onChange={(e) => setAttachTreatmentPdf(e.target.checked)} />
                   <span className="text-xs text-gray-500">Behandlungsdokumentation ohne Notizen an Rechnung anhängen</span>
                 </label>
               )}
               <div className="flex items-center justify-between">
-                <button className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] text-gray-500 hover:bg-gray-50" onClick={() => { setAmendingId(null); setHvOnlyMode(false); navigate("/rechnungen"); }}>
+                <button className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] text-gray-500 hover:bg-gray-50" onClick={() => { setAmendingId(null); setHvOnlyMode(false); setBeratungOnly(false); navigate("/rechnungen"); }}>
                   Abbrechen
                 </button>
                 <button

@@ -130,9 +130,11 @@ export function toDE(num) {
   return num.toString().replace(".", ",");
 }
 
-export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sachkosten, customS, einheit, useGoa3, ganzeAmpulle, ampullenpreis) {
+export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sachkosten, customS, einheit, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly) {
   // customS can be: { s1, s5, s267 } from calcWeightedForGesamt, or null
-  const goaLines = BOTOX_GOA_ITEMS.map((g) => {
+  // beratungOnly: consultation-only invoice — GOÄ 1/3 (+ Zuschläge/Sachkosten), no GOÄ 5/267, no product line
+  const goaSource = beratungOnly ? BOTOX_GOA_ITEMS.filter((g) => g.goaCode === "1") : BOTOX_GOA_ITEMS;
+  const goaLines = goaSource.map((g) => {
     // Swap GOÄ 1 → GOÄ 3 if extended consultation
     if (g.goaCode === "1" && useGoa3) {
       g = { ...g, goaCode: "3", description: "Eingehende Beratung (mehr als 10 Min.)", punkte: 150 };
@@ -189,17 +191,18 @@ export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sa
     isProduct: true,
   }));
 
+  if (beratungOnly) return [...goaLines, ...zuschlagLines, ...sachkostenLines];
   return [...goaLines, ...zuschlagLines, productLine, ...sachkostenLines];
 }
 
 // Compute weighted Steigerungssätze to reach a desired Gesamtbetrag (inkl. MwSt.)
 // Distribution ratio: GOÄ 1/3 and GOÄ 5 get weight 1, GOÄ 267 gets weight 3
 // All start at base 2.3x, then excess is distributed by weight
-export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useGoa3, ganzeAmpulle, ampullenpreis) {
+export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly) {
   const p1 = useGoa3 ? 150 : 80; // GOÄ 1 or 3
   const p5 = 80;                  // GOÄ 5
   const p267 = 80;                // GOÄ 267
-  const productCost = ganzeAmpulle ? Math.round((ampullenpreis || 0) * 100) / 100 : Math.round(ml * preisProMl * 100) / 100;
+  const productCost = beratungOnly ? 0 : ganzeAmpulle ? Math.round((ampullenpreis || 0) * 100) / 100 : Math.round(ml * preisProMl * 100) / 100;
   const sachkostenTotal = (sachkosten || []).reduce((sum, sk) => sum + parseDE(sk.betragStr), 0);
   const zuschlagTotal = (selectedZuschlaege || []).reduce((sum, code) => {
     const z = ZUSCHLAEGE.find((zs) => zs.code === code);
@@ -211,6 +214,14 @@ export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZus
   // Target netto that GOÄ lines must cover
   const goaTarget = desiredNetto - productCost - sachkostenTotal - zuschlagTotal;
   if (goaTarget <= 0) return { s1: 2.3, s5: 2.3, s267: 2.3 };
+
+  // Consultation-only: the single GOÄ 1/3 line must carry the full target.
+  // Full precision (like solveS267 below) so the Betrag lands on the exact cent.
+  if (beratungOnly) {
+    const targetBetrag1 = Math.round(goaTarget * 100) / 100;
+    const s1 = targetBetrag1 / (p1 * PUNKTWERT);
+    return { s1, s5: s1, s267: s1 };
+  }
 
   // Strategy: round s1 and s5 to 2 decimals, then derive s267 with full precision
   // so that calcGoaBetrag(p267, s267) lands on the exact cent needed.
