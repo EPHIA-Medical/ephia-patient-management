@@ -46,6 +46,7 @@ export const DEFAULT_PRACTICE = {
   city: "",
   zahlungsfrist: 14,
   praeparate: [],
+  kioskPin: "", // 4-6 digit code gating exit from patient-facing kiosk views (empty = disabled)
 };
 
 export const AUTO_LOGOUT_MS = 15 * 60 * 1000; // 15 minutes

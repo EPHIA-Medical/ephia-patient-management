@@ -36,6 +36,7 @@ import InfoTooltip from "./components/ui/InfoTooltip";
 import ConsentFormPreview, { ConsentFormView } from "./components/consent/ConsentFormComponents";
 import { CONSENT_TEMPLATES } from "./components/consent/consentTemplates";
 import SignaturePad, { SignatureModal } from "./components/consent/SignaturePad";
+import PinGate from "./components/consent/PinGate";
 import TreatmentMap from "./components/treatment/TreatmentMap";
 import MobileScaledPreview from "./components/treatment/MobileScaledPreview";
 import SettingsPanel from "./components/settings/SettingsPanel";
@@ -168,6 +169,8 @@ export default function EphiaInvoice() {
   const [consentPatient, setConsentPatient] = useState(null); // patient for active consent flow
   const [consentTemplate, setConsentTemplate] = useState(null); // active consent template
   const [consentWarningPatient, setConsentWarningPatient] = useState(null); // patient pending consent warning confirmation
+  const [consentHandback, setConsentHandback] = useState(null); // completed consent entry waiting for PIN-gated device handback
+  const [consentHandbackPin, setConsentHandbackPin] = useState(false); // PIN gate visible on handback screen
   const pendingDocBehIdRef = useRef(null); // Behandlung ID to link next created doc to
   const [invoices, setInvoices] = useState([]);
   const [behandlungen, setBehandlungen] = useState([]);
@@ -243,6 +246,18 @@ export default function EphiaInvoice() {
       navigate(selectedPatient ? `/patients/${selectedPatient.id || selectedPatient._raw?.id}` : "/patients");
     }
   }, [isConsentPage, consentPatient, consentTemplate]);
+
+  // Kiosk PIN is only active with at least 4 digits (see settings hint)
+  const kioskPin = (practice.kioskPin || "").length >= 4 ? practice.kioskPin : "";
+
+  // Kiosk lock: while the full-page consent flow is active, force the route back to
+  // /aufklaerung/neu so the browser back button can't drop patients into the app.
+  const consentKioskActive = !!(consentPatient && consentTemplate && patientCreateModal !== "aufklaerung");
+  useEffect(() => {
+    if (consentKioskActive && !isConsentPage && !consentCompletingRef.current) {
+      navigate("/aufklaerung/neu");
+    }
+  }, [consentKioskActive, isConsentPage]);
 
   // ─── Navigate to the right preview URL based on document type ───
   const navigateToPreview = (inv) => {
@@ -1856,12 +1871,25 @@ export default function EphiaInvoice() {
     } catch (e) { console.error("Error syncing consent demographics/anamnese to patient:", e); }
 
     setInvoices(prev => [entry, ...prev]);
+    if (kioskPin) {
+      // Kiosk mode: keep the patient on a handback screen; the app is only
+      // reachable again after the practice PIN is entered (finalizeConsentHandback).
+      setConsentHandback(entry);
+    } else {
+      finalizeConsentHandback(entry);
+    }
+  };
+
+  // Leave the consent kiosk flow and show the saved document (doctor view)
+  const finalizeConsentHandback = (entry) => {
     setPreviewTab("consent");
     consentCompletingRef.current = true;
     if (patientCreateModal) setPatientCreateModal(null);
     navigateToPreview(entry);
     setConsentPatient(null);
     setConsentTemplate(null);
+    setConsentHandback(null);
+    setConsentHandbackPin(false);
     setSaveToast("Aufklärungsbogen gespeichert");
     setTimeout(() => { setSaveToast(""); consentCompletingRef.current = false; }, 2500);
   };
@@ -2600,11 +2628,14 @@ export default function EphiaInvoice() {
 
       {!isKnownRoute && <NotFoundPage />}
 
-      {isConsentPage && consentTemplate && consentPatient && (
+      {/* Full-page consent flow: intentionally NOT tied to the route, so the view
+          (and the kiosk lock) survives back-button navigation without losing state */}
+      {consentKioskActive && (
         <ConsentFormView
           template={consentTemplate}
           patient={consentPatient}
           practice={practice}
+          kioskPin={kioskPin}
           onComplete={handleConsentComplete}
           onCancel={() => { setConsentPatient(null); setConsentTemplate(null); navigate(`/patients/${consentPatient?.id || selectedPatient?.id}`); }}
         />
@@ -2625,6 +2656,7 @@ export default function EphiaInvoice() {
                 template={consentTemplate}
                 patient={consentPatient}
                 practice={practice}
+                kioskPin={kioskPin}
                 onComplete={handleConsentComplete}
                 onCancel={() => { setPatientCreateModal(null); setConsentPatient(null); setConsentTemplate(null); }}
                 isModal
@@ -2632,6 +2664,36 @@ export default function EphiaInvoice() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Kiosk handback screen: shown after the patient completed/refused the consent
+          form while a Praxis-PIN is set. Exiting to the app requires the PIN. */}
+      {consentHandback && (
+        <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center p-6">
+          <div className="w-full max-w-sm text-center">
+            <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-5 rounded-full bg-teal-50 flex items-center justify-center">
+              <svg className="w-8 h-8 md:w-10 md:h-10 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <h3 className="text-lg md:text-xl font-semibold text-gray-800 mb-2">Vielen Dank!</h3>
+            <p className="text-sm md:text-base text-gray-500 mb-8">
+              Der Aufklärungsbogen wurde gespeichert. Bitte geben Sie das Gerät an Ihre:n Ärzt:in zurück.
+            </p>
+            <button
+              className="w-full py-3 text-sm md:text-base font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition"
+              onClick={() => setConsentHandbackPin(true)}
+            >
+              Weiter als Ärzt:in
+            </button>
+          </div>
+        </div>
+      )}
+      {consentHandback && consentHandbackPin && (
+        <PinGate
+          pin={kioskPin}
+          subtitle="Zum Fortfahren bitte die Praxis-PIN eingeben."
+          onSuccess={() => finalizeConsentHandback(consentHandback)}
+          onCancel={() => setConsentHandbackPin(false)}
+        />
       )}
 
       {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>

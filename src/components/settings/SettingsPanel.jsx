@@ -449,6 +449,23 @@ export default function SettingsPanel({ practice, setPractice, show, setShow, on
                 <strong>Achtung:</strong> Ohne Auto-Logout bist Du selbst dafür verantwortlich, dass keine unbefugten Personen Zugriff erhalten.
               </p>
             )}
+            <div className="p-3 rounded-lg border border-gray-100">
+              <label className="block text-sm text-gray-700 mb-0.5">Praxis-PIN für den Aufklärungsbogen</label>
+              <p className="text-[10px] text-gray-400 mb-2">Mit gesetzter PIN können Patient:innen den Aufklärungsbogen (z.B. auf dem Tablet im Wartezimmer) nicht selbst schließen — das Verlassen des Bogens erfordert die PIN. Leer lassen zum Deaktivieren.</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={6}
+                className={inputCls2 + " max-w-[10rem]"}
+                placeholder="4–6 Ziffern"
+                value={practice.kioskPin || ""}
+                onChange={(e) => setPractice({ ...practice, kioskPin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+              />
+              {practice.kioskPin && practice.kioskPin.length < 4 && (
+                <p className="text-[10px] text-red-500 mt-1">Die PIN muss mindestens 4 Ziffern haben — kürzere PINs werden nicht aktiv.</p>
+              )}
+            </div>
             {!isFirstTime && session && (
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <p className="text-xs font-medium text-gray-600 mb-3">Passwort ändern</p>

@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import { CONSENT_TEMPLATES } from "./consentTemplates";
 import { fmtDate, fmtPhone } from "../../utils/helpers";
 import SignaturePad from "./SignaturePad";
+import PinGate from "./PinGate";
 // ═══════════════════ Consent Form Components ═══════════════════
 
-export function ConsentFormView({ template, patient, practice, onComplete, onCancel }) {
+export function ConsentFormView({ template, patient, practice, onComplete, onCancel, kioskPin }) {
   const scrollRef = React.useRef(null);
   const [scrollProgress, setScrollProgress] = React.useState(0);
   const [hasScrolledToEnd, setHasScrolledToEnd] = React.useState(false);
@@ -14,6 +15,7 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
   const patientSigRef = React.useRef(null);
   const [refused, setRefused] = React.useState(false);
   const [showHandback, setShowHandback] = React.useState(false);
+  const [showPinGate, setShowPinGate] = React.useState(false);
 
   // Demographics (pre-populate from patient profile if available)
   const _patientRaw = (patient._raw && typeof patient._raw.data === "object" && patient._raw.data) ? patient._raw.data : {};
@@ -330,7 +332,7 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
             <p className="text-xs md:text-sm text-gray-500 mb-6">Der Aufklärungsbogen wurde nicht abgeschlossen. Ihre:e Ärzt:in wird den Vorgang fortsetzen.</p>
             <button
               className="w-full py-3 text-sm md:text-base font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition"
-              onClick={onCancel}
+              onClick={() => { if (kioskPin) { setShowPinGate(true); } else { onCancel(); } }}
             >
               Weiter als Ärzt:in
             </button>
@@ -339,6 +341,16 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
             </button>
           </div>
         </div>
+      )}
+
+      {/* PIN gate: exiting the kiosk view requires the practice PIN */}
+      {showPinGate && (
+        <PinGate
+          pin={kioskPin}
+          subtitle="Zum Verlassen des Aufklärungsbogens bitte die Praxis-PIN eingeben."
+          onSuccess={() => { setShowPinGate(false); onCancel(); }}
+          onCancel={() => setShowPinGate(false)}
+        />
       )}
     </div>
   );
