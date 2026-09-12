@@ -37,6 +37,7 @@ import ConsentFormPreview, { ConsentFormView } from "./components/consent/Consen
 import { CONSENT_TEMPLATES } from "./components/consent/consentTemplates";
 import SignaturePad, { SignatureModal } from "./components/consent/SignaturePad";
 import PinGate from "./components/consent/PinGate";
+import { serializeMarkers } from "./components/treatment/markerUtils";
 import TreatmentMap from "./components/treatment/TreatmentMap";
 import MobileScaledPreview from "./components/treatment/MobileScaledPreview";
 import SettingsPanel from "./components/settings/SettingsPanel";
@@ -1219,7 +1220,7 @@ export default function EphiaInvoice() {
       begruendung: needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : "",
       selectedZuschlaege: [...selectedZuschlaege],
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
-      treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: treatmentMarkers.map(m => ({ x: m.x, y: m.y, amount: m.amount })), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
+      treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
       attachTreatmentPdf: (hvOnlyMode || isBeratungOnly) ? false : attachTreatmentPdf,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
       indicationType: hvOnlyMode ? undefined : indicationType,

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
+import { MarkerDot, ColorSwatches, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor } from "./markerUtils";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -37,6 +38,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   const [saved, setSaved] = React.useState(markers.length > 0);
   React.useEffect(() => { if (markers.length > 0) setSaved(true); }, [markers]);
   const modalRef = React.useRef(null);
+  // Colour applied to newly placed points; starts with the colour of the last existing point
+  const [activeColor, setActiveColor] = React.useState(markers.length > 0 ? markerColor(markers[markers.length - 1]) : DEFAULT_MARKER_COLOR);
 
   // Pinch-to-zoom state for the modal face map
   const [zoom, setZoom] = React.useState(1);
@@ -111,11 +114,15 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const faceH = rect.height;
     const x = (rawX / faceW) * 100;
     const y = (rawY / faceH) * 100;
-    setMarkers([...markers, { id: Date.now(), x, y, amount: "" }]);
+    setMarkers([...markers, { id: Date.now(), x, y, amount: "", color: activeColor }]);
   };
 
   const updateAmount = (id, val) => {
     setMarkers(markers.map((m) => (m.id === id ? { ...m, amount: val } : m)));
+  };
+
+  const cycleColor = (id) => {
+    setMarkers(markers.map((m) => (m.id === id ? { ...m, color: nextMarkerColor(markerColor(m)) } : m)));
   };
 
   const removeMarker = (id) => {
@@ -141,7 +148,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
           <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
           {markers.map((m, idx) => (
             <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-              <div className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold select-none" style={{ width: 17, height: 17, fontSize: 9, lineHeight: 1, boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}>{idx + 1}</div>
+              <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow />
             </div>
           ))}
         </div>
@@ -151,7 +158,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
               <div className="space-y-1.5" style={{ minWidth: 140 }}>
                 {markers.map((m, idx) => (
                   <div key={m.id} className="flex items-center gap-2">
-                    <span className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold flex-shrink-0" style={{ width: 20, height: 20, fontSize: 10 }}>{idx + 1}</span>
+                    <span className="text-[10px] text-gray-400 w-5 text-right flex-shrink-0">{idx + 1}.</span>
+                    <MarkerDot marker={m} idx={idx} size={20} fontSize={10} />
                     <input type="text" inputMode="decimal" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded bg-gray-50" value={m.amount} readOnly />
                     <span className="text-xs text-gray-400">{einheit}</span>
                   </div>
@@ -184,7 +192,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
               <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
               {markers.map((m, idx) => (
                 <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                  <div className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold select-none" style={{ width: 15, height: 15, fontSize: 8, lineHeight: 1, boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}>{idx + 1}</div>
+                  <MarkerDot marker={m} idx={idx} size={15} fontSize={8} shadow />
                 </div>
               ))}
             </div>
@@ -231,7 +239,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 <span className="hidden sm:inline">Klicke auf das Gesicht, um Injektionspunkte zu setzen.</span>
                 <span className="sm:hidden">Tippe auf das Gesicht um Punkte zu setzen. Zwei Finger zum Zoomen.</span>
               </p>
-              <p className="text-xs text-amber-500 mb-3">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Präparats übernommen.</p>
+              <p className="text-xs text-amber-500 mb-2">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <div className="mb-3"><ColorSwatches value={activeColor} onChange={setActiveColor} /></div>
               {zoom > 1 && (
                 <button className="text-xs text-blue-500 hover:text-blue-700 mb-2 sm:hidden" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Zoom zurücksetzen</button>
               )}
@@ -256,7 +265,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                       {markers.map((m, idx) => (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                          <div className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold select-none" style={{ width: markerSize, height: markerSize, fontSize: markerFontSize, lineHeight: 1, boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}>{idx + 1}</div>
+                          <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow />
                         </div>
                       ))}
                     </div>
@@ -297,7 +306,10 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                   <div className="space-y-1.5">
                     {markers.map((m, idx) => (
                       <div key={m.id} className="flex items-center gap-1.5">
-                        <span className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold flex-shrink-0" style={{ width: 18, height: 18, fontSize: 9 }}>{idx + 1}</span>
+                        <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
+                        <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
+                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} />
+                        </button>
                         <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => updateAmount(m.id, e.target.value)} />
                         <span className="text-xs text-gray-400">{einheit}</span>
                         <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => removeMarker(m.id)} title="Löschen">

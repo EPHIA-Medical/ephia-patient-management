@@ -1,26 +1,39 @@
 import React from "react";
 import { fmtDate, fmtPhone, evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
+import { MARKER_COLORS, markerColor, markerLabel, fmtNum } from "../treatment/markerUtils";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
-// Pre-render a numbered circle as a tiny canvas → data URL image
-// html2canvas renders <img> tags perfectly, unlike CSS text centering
-export function makeDotImage(number) {
-  const size = 40; // draw at 2x for sharpness
+// Pre-render a labelled pill as a tiny canvas → data URL image
+// html2canvas renders <img> tags perfectly, unlike CSS text centering.
+// Returns { src, w, h } in CSS pixels (drawn at 2x for sharpness).
+export function makeDotImage(label, color = "#ef4444") {
+  const h = 40; // 2x of 20px
+  const fontPx = Math.round(h * 0.5);
   const c = document.createElement("canvas");
-  c.width = size; c.height = size;
   const ctx = c.getContext("2d");
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-  ctx.fillStyle = "#ef4444";
-  ctx.fill();
-  ctx.fillStyle = "white";
-  ctx.font = `bold ${Math.round(size * 0.5)}px Arial, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(number), size / 2, size / 2);
-  return c.toDataURL("image/png");
+  ctx.font = `bold ${fontPx}px Arial, sans-serif`;
+  const textW = ctx.measureText(String(label)).width;
+  const w = Math.max(h, Math.ceil(textW + h * 0.6));
+  c.width = w; c.height = h;
+  const ctx2 = c.getContext("2d");
+  const r = h / 2;
+  ctx2.beginPath();
+  ctx2.moveTo(r, 0);
+  ctx2.lineTo(w - r, 0);
+  ctx2.arc(w - r, r, r, -Math.PI / 2, Math.PI / 2);
+  ctx2.lineTo(r, h);
+  ctx2.arc(r, r, r, Math.PI / 2, -Math.PI / 2);
+  ctx2.closePath();
+  ctx2.fillStyle = color;
+  ctx2.fill();
+  ctx2.fillStyle = "white";
+  ctx2.font = `bold ${fontPx}px Arial, sans-serif`;
+  ctx2.textAlign = "center";
+  ctx2.textBaseline = "middle";
+  ctx2.fillText(String(label), w / 2, h / 2 + 1);
+  return { src: c.toDataURL("image/png"), w: w / 2, h: h / 2 };
 }
 
 export default function TreatmentDocPreview({ practice, patient, treatmentDoc, einheit, id: previewId, facePhoto }) {
@@ -34,15 +47,27 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const pat = patient || {};
   const patName = [pat.vorname, pat.nachname].filter(Boolean).join(" ") || pat.name || "";
 
-  // Pre-generate dot images for all markers (memoized per render)
-  const dotImages = React.useMemo(() => markers.map((_, i) => makeDotImage(i + 1)), [markers.length]);
+  // Pre-generate dot images for all markers (memoized on their content)
+  const markersKey = JSON.stringify(markers.map((m) => [m.amount, m.color || ""]));
+  const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i), markerColor(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build multi-column legend: fill columns to match face height (340px), ~18px per row
-  const colSize = 18;
-  const columns = [];
-  for (let i = 0; i < markers.length; i += colSize) {
-    columns.push(markers.slice(i, i + colSize));
-  }
+  // Legend grouped by colour: count of points and units per colour
+  const colorGroups = (() => {
+    const map = new Map();
+    markers.forEach((m) => {
+      const hex = markerColor(m);
+      const g = map.get(hex) || { hex, count: 0, units: 0 };
+      g.count += 1;
+      g.units += evalAmount(m.amount);
+      map.set(hex, g);
+    });
+    const order = MARKER_COLORS.map((c) => c.hex);
+    return [...map.values()].sort((a, b) => {
+      const ia = order.indexOf(a.hex), ib = order.indexOf(b.hex);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    }).map((g) => ({ ...g, units: Math.round(g.units * 100) / 100 }));
+  })();
+  const multiColor = colorGroups.length > 1;
 
   const S = {
     page: { fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: "11px", lineHeight: "1.55", color: "#1a1a1a", padding: "40px 44px", width: "210mm", minHeight: "297mm", margin: "0 auto", background: "white", position: "relative", boxSizing: "border-box", overflow: "hidden" },
@@ -102,26 +127,25 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
             {/* Face diagram */}
             <div style={{ position: "relative", width: "340px", height: "340px", flexShrink: 0, border: "1px solid #e5e5e5", borderRadius: "6px", overflow: "hidden", background: "#fafafa" }}>
               <img src={facePhoto || FACE_IMAGE_B64} alt="Gesicht" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              {markers.map((m, idx) => (
-                <img key={idx} src={dotImages[idx]} alt={String(idx + 1)} style={{ position: "absolute", left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20, marginLeft: -10, marginTop: -10, zIndex: 10 }} />
-              ))}
+              {markers.map((m, idx) => {
+                const d = dotImages[idx] || { src: "", w: 20, h: 20 };
+                return (
+                  <img key={idx} src={d.src} alt={markerLabel(m, idx)} style={{ position: "absolute", left: `${m.x}%`, top: `${m.y}%`, width: d.w, height: d.h, marginLeft: -d.w / 2, marginTop: -d.h / 2, zIndex: 10 }} />
+                );
+              })}
             </div>
-            {/* Legend to the right, columns as tall as the face */}
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignContent: "flex-start", maxHeight: "340px" }}>
-              {columns.map((col, ci) => (
-                <div key={ci} style={{ fontSize: "11px", color: "#333" }}>
-                  {col.map((m, idx) => {
-                    const globalIdx = ci * colSize + idx;
-                    const val = evalAmount(m.amount);
-                    const displayVal = val % 1 === 0 ? val.toString() : val.toFixed(2).replace(/0+$/, "").replace(".", ",");
-                    return (
-                      <div key={globalIdx} style={{ marginBottom: "1px" }}>
-                        <span style={{ fontWeight: 600 }}>{globalIdx + 1}:</span> {displayVal} {einh}
-                      </div>
-                    );
-                  })}
+            {/* Legend: the dots show the units per point; summarise per colour */}
+            <div style={{ fontSize: "11px", color: "#333", lineHeight: "1.6" }}>
+              <div style={{ color: "#666", marginBottom: "6px" }}>Die Zahl im Punkt ist die Menge in {einh}.</div>
+              {multiColor && colorGroups.map((g) => (
+                <div key={g.hex} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                  <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: g.hex, flexShrink: 0 }} />
+                  <span>{g.count} {g.count === 1 ? "Punkt" : "Punkte"}{g.units > 0 ? ` · ${fmtNum(g.units)} ${einh}` : ""}</span>
                 </div>
               ))}
+              <div style={{ marginTop: multiColor ? "6px" : 0, fontWeight: 600 }}>
+                {markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 ? ` · ${totalStr} ${einh} gesamt` : ""}
+              </div>
             </div>
           </div>
         </div>

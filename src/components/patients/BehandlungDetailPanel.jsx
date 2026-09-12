@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { fmtDate, parseDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
+import { MarkerDot, ColorSwatches, serializeMarkers, markerColor, nextMarkerColor, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -20,6 +21,7 @@ export default function BehandlungDetailPanel({
   const [inlineTempPraep, setInlineTempPraep] = useState("");
   const [inlineTempEinheit, setInlineTempEinheit] = useState("SE");
   const [inlineTempNotes, setInlineTempNotes] = useState("");
+  const [inlineEditColor, setInlineEditColor] = useState(DEFAULT_MARKER_COLOR);
   const [inlineTempMarkers, setInlineTempMarkers] = useState([]);
   const faceModalRef = useRef(null);
 
@@ -51,7 +53,7 @@ export default function BehandlungDetailPanel({
     if (field === "date") updatedTd.behandlungsDatum = value;
     if (field === "praeparat") { updatedTd.praeparat = value.praep; updatedTd.einheit = value.einh; }
     if (field === "notes") updatedTd.notes = value;
-    if (field === "markers") updatedTd.markers = value.map(m => ({ x: m.x, y: m.y, amount: m.amount }));
+    if (field === "markers") updatedTd.markers = serializeMarkers(value);
     const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
     if (onUpdateInvoice) onUpdateInvoice(updated);
     setViewingTreatment(updated);
@@ -96,7 +98,7 @@ export default function BehandlungDetailPanel({
                   <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                   {(td.markers || []).map((m, idx) => (
                     <div key={idx} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                      <div className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold select-none" style={{ width: 26, height: 26, fontSize: 12, lineHeight: 1, boxShadow: "0 0 4px rgba(0,0,0,0.3)" }}>{idx + 1}</div>
+                      <MarkerDot marker={m} idx={idx} size={26} fontSize={12} shadow />
                     </div>
                   ))}
                 </div>
@@ -164,7 +166,8 @@ export default function BehandlungDetailPanel({
                   <div className="mt-1.5 space-y-1">
                     {(td.markers || []).map((m, idx) => (
                       <div key={idx} className="flex items-center gap-2">
-                        <span className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold flex-shrink-0" style={{ width: 22, height: 22, fontSize: 11 }}>{idx + 1}</span>
+                        <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
+                        <MarkerDot marker={m} idx={idx} size={22} fontSize={11} />
                         <span className="text-sm text-gray-700">{m.amount}{String(m.amount).match(/[xX\u00d7*]/) ? ` = ${evalAmount(m.amount)}` : ""} {einh}</span>
                       </div>
                     ))}
@@ -389,10 +392,10 @@ export default function BehandlungDetailPanel({
           if (hit) { setInlineTempMarkers(inlineTempMarkers.filter((m) => m.id !== hit.id)); return; }
           const tooClose = inlineTempMarkers.some((m) => Math.abs(m.x - x) < 2 && Math.abs(m.y - y) < 2);
           if (tooClose) return;
-          setInlineTempMarkers([...inlineTempMarkers, { id: Date.now(), x, y, amount: "" }]);
+          setInlineTempMarkers([...inlineTempMarkers, { id: Date.now(), x, y, amount: "", color: inlineEditColor }]);
         };
         const saveFaceMarkers = () => {
-          const updatedTd = { ...inv.treatmentDoc, markers: inlineTempMarkers.map(m => ({ x: m.x, y: m.y, amount: m.amount })) };
+          const updatedTd = { ...inv.treatmentDoc, markers: serializeMarkers(inlineTempMarkers) };
           const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
           if (onUpdateInvoice) onUpdateInvoice(updated);
           setViewingTreatment(updated);
@@ -408,7 +411,8 @@ export default function BehandlungDetailPanel({
                 </button>
               </div>
               <p className="text-xs text-gray-400 mb-1">Klicke auf das Gesicht, um Injektionspunkte zu setzen.</p>
-              <p className="text-xs text-amber-500 mb-3">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Pr&auml;parats &uuml;bernommen.</p>
+              <p className="text-xs text-amber-500 mb-2">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Pr&auml;parats &uuml;bernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <div className="mb-3"><ColorSwatches value={inlineEditColor} onChange={setInlineEditColor} /></div>
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 overflow-y-auto">
                 <div className="flex-shrink-0">
                   <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: faceSzFE, height: faceSzFE, cursor: "crosshair", background: "#fafafa" }}>
@@ -416,7 +420,7 @@ export default function BehandlungDetailPanel({
                       <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                       {inlineTempMarkers.map((m, idx) => (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                          <div className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold select-none" style={{ width: 21, height: 21, fontSize: 11, lineHeight: 1, boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}>{idx + 1}</div>
+                          <MarkerDot marker={m} idx={idx} size={21} fontSize={11} shadow />
                         </div>
                       ))}
                     </div>
@@ -426,7 +430,10 @@ export default function BehandlungDetailPanel({
                   <div className="space-y-1.5">
                     {inlineTempMarkers.map((m, idx) => (
                       <div key={m.id} className="flex items-center gap-1.5">
-                        <span className="flex items-center justify-center rounded-full bg-red-500 text-white font-bold flex-shrink-0" style={{ width: 18, height: 18, fontSize: 9 }}>{idx + 1}</span>
+                        <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
+                        <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, color: nextMarkerColor(markerColor(mk)) } : mk))}>
+                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} />
+                        </button>
                         <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, amount: e.target.value } : mk))} />
                         <span className="text-xs text-gray-400">{inlineTempEinheit}</span>
                         <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" onClick={() => setInlineTempMarkers(inlineTempMarkers.filter((mk) => mk.id !== m.id))} title="L&ouml;schen">

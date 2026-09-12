@@ -4,6 +4,7 @@ import { trackEvent } from "../../lib/analytics";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import TreatmentMap from "../treatment/TreatmentMap";
 import InfoTooltip from "../ui/InfoTooltip";
+import { serializeMarkers } from "../treatment/markerUtils";
 
 export default function BehandlungAddPanel({
   patient, email, rawData, patientDbId, matchingInvoices, rechnungsInvoices, copySourceDocs = [], practice,
@@ -39,7 +40,7 @@ export default function BehandlungAddPanel({
     // Transfer the documented injection points, if the source has any
     const srcMarkers = src.treatmentDoc?.markers || [];
     if (srcMarkers.length > 0) {
-      setNewTreatmentMarkers(srcMarkers.map((m, i) => ({ id: Date.now() + i, x: m.x, y: m.y, amount: m.amount })));
+      setNewTreatmentMarkers(srcMarkers.map((m, i) => ({ id: Date.now() + i, x: m.x, y: m.y, amount: m.amount, ...(m.color ? { color: m.color } : {}) })));
       if (src.treatmentDoc?.facePhoto) setNewTreatmentFacePhoto(src.treatmentDoc.facePhoto);
     } else {
       const menge = src.mlStr || (src.ml != null ? toDE(src.ml) : "");
@@ -156,7 +157,7 @@ export default function BehandlungAddPanel({
         const saveTreatment = (openQuickInvoice) => {
           const effectiveAmount = newTreatmentMarkers.length > 0 ? fmtUnits(newTreatmentMarkers) : newTreatmentAmount;
           const treatmentData = {
-            markers: newTreatmentMarkers.map(m => ({ x: m.x, y: m.y, amount: m.amount })),
+            markers: serializeMarkers(newTreatmentMarkers),
             behandlungsDatum: newTreatmentDate,
             praeparat: newTreatmentPraeparat,
             einheit: activeEinheit,
