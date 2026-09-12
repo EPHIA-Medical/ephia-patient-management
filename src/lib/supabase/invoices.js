@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "./client";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv, supabaseDeleteWhere } from "./client";
 
 export async function supabaseFetchInvoices(accessToken, userId) {
   const res = await fetch(
@@ -61,17 +61,6 @@ export async function supabaseUpdateInvoice(accessToken, invoiceId, invoiceData,
   return data;
 }
 
-export async function supabaseDeleteInvoice(accessToken, invoiceId) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/invoices?id=eq.${pgv(invoiceId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
-  return res.ok;
+export function supabaseDeleteInvoice(accessToken, invoiceId) {
+  return supabaseDeleteWhere(accessToken, "invoices", `id=eq.${pgv(invoiceId)}`, "Rechnung löschen");
 }

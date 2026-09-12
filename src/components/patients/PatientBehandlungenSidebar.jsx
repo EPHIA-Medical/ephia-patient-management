@@ -120,15 +120,26 @@ export default function PatientBehandlungenSidebar({
                   {behDocs.map(doc => {
                     const status = getDocStatus(doc);
                     return (
-                      <button key={doc._supabaseId || doc.id} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition border-b border-gray-50 last:border-b-0" onClick={() => handleDocClick(doc)}>
+                      <div key={doc._supabaseId || doc.id} role="button" tabIndex={0} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition border-b border-gray-50 last:border-b-0 cursor-pointer" onClick={() => handleDocClick(doc)} onKeyDown={(e) => { if (e.key === "Enter") handleDocClick(doc); }}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           <span className="text-sm text-gray-400">{"\u{1F4C4}"}</span>
                           <span className="text-sm text-gray-700">{getDocLabel(doc)}</span>
                           {doc.invoiceMeta?.nummer && doc.invoiceMeta.nummer !== "\u2014" && <span className="text-xs text-gray-400">#{doc.invoiceMeta.nummer}</span>}
                           {status.risk && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Risiko</span>}
                         </div>
-                        <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
-                      </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
+                          {onDelete && (
+                            <button
+                              className="p-1 text-gray-300 hover:text-red-500 transition"
+                              title="Dokument löschen"
+                              onClick={(e) => { e.stopPropagation(); onDelete(doc.id); }}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
                   {/* Add document to Behandlung */}

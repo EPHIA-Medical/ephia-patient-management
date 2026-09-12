@@ -1,3 +1,4 @@
+import { showToast } from "../../utils/toast";
 import React, { useState, useRef, useEffect } from "react";
 import { fmtDate } from "../../utils/helpers";
 import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
@@ -349,21 +350,40 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
       )}
 
       {/* Delete Behandlung confirmation */}
-      {confirmDeleteBeh && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
-            <h3 className="text-sm font-semibold text-gray-800 mb-2">Behandlung l&ouml;schen?</h3>
-            <p className="text-xs text-gray-500 mb-4">Die zugeh&ouml;rigen Dokumente bleiben erhalten.</p>
-            <div className="flex gap-2 justify-end">
-              <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50" onClick={() => setConfirmDeleteBeh(null)}>Abbrechen</button>
-              <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={async () => {
-                try { await onDeleteBehandlung(confirmDeleteBeh._id); } catch (e) { console.error("Delete Behandlung error:", e); }
-                setConfirmDeleteBeh(null);
-              }}>L&ouml;schen</button>
+      {confirmDeleteBeh && (() => {
+        const behDocCount = matchingInvoices.filter((inv) => inv._behandlungId === confirmDeleteBeh._id).length;
+        const runDelete = async (deleteDocs) => {
+          try {
+            await onDeleteBehandlung(confirmDeleteBeh._id, { deleteDocs });
+            showToast(deleteDocs && behDocCount > 0 ? "Behandlung und Dokumente gelöscht" : "Behandlung gelöscht");
+            setConfirmDeleteBeh(null);
+          } catch (e) {
+            console.error("Delete Behandlung error:", e);
+            showToast("Fehler beim Löschen: " + (e?.message || e), { error: true });
+          }
+        };
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-2">Behandlung vom {fmtDate(confirmDeleteBeh.datum)} l&ouml;schen?</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                {behDocCount === 0
+                  ? "Diese Behandlung enthält keine Dokumente."
+                  : `Diese Behandlung enthält ${behDocCount} Dokument${behDocCount === 1 ? "" : "e"}. Du kannst sie behalten (sie erscheinen dann unter „Einzelne Dokumente“) oder mitlöschen.`}
+              </p>
+              <div className="flex flex-col gap-2">
+                {behDocCount > 0 && (
+                  <button className="px-3 py-2 text-xs rounded border border-[#DFE3EB] text-gray-700 hover:bg-gray-50" onClick={() => runDelete(false)}>Nur Behandlung l&ouml;schen, Dokumente behalten</button>
+                )}
+                <button className="px-3 py-2 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={() => runDelete(true)}>
+                  {behDocCount > 0 ? `Behandlung mit ${behDocCount} Dokument${behDocCount === 1 ? "" : "en"} löschen` : "Behandlung löschen"}
+                </button>
+                <button className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700" onClick={() => setConfirmDeleteBeh(null)}>Abbrechen</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Hidden treatment document preview for PDF generation */}
       {treatmentDocTarget && (() => {

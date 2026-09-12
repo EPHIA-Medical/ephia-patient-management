@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "./client";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv, supabaseDeleteWhere } from "./client";
 
 export async function supabaseFetchDocuments(accessToken, userId) {
   const res = await fetch(
@@ -64,19 +64,38 @@ export async function supabaseUpdateDocument(accessToken, documentId, docData, i
   return data;
 }
 
-export async function supabaseDeleteDocument(accessToken, documentId) {
+export function supabaseDeleteDocument(accessToken, documentId) {
+  return supabaseDeleteWhere(accessToken, "documents", `id=eq.${pgv(documentId)}`, "Dokument löschen");
+}
+
+export function supabaseDeleteDocumentsByPatient(accessToken, patientId) {
+  return supabaseDeleteWhere(accessToken, "documents", `patient_id=eq.${pgv(patientId)}`, "Dokumente löschen");
+}
+
+export function supabaseDeleteDocumentsByBehandlung(accessToken, behandlungId) {
+  return supabaseDeleteWhere(accessToken, "documents", `behandlung_id=eq.${pgv(behandlungId)}`, "Dokumente löschen");
+}
+
+// Unlink all documents of a Behandlung (used when the Behandlung is deleted but its documents are kept)
+export async function supabaseDetachDocumentsFromBehandlung(accessToken, behandlungId) {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/documents?id=eq.${pgv(documentId)}`,
+    `${SUPABASE_URL}/rest/v1/documents?behandlung_id=eq.${pgv(behandlungId)}`,
     {
-      method: "DELETE",
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${accessToken}`,
       },
+      body: JSON.stringify({ behandlung_id: null }),
     }
   );
-  return res.ok;
+  if (!res.ok) {
+    let msg = "";
+    try { const body = await res.json(); msg = body.message || ""; } catch (e) { /* ignore */ }
+    throw new Error(`Dokumente lösen fehlgeschlagen (${res.status})${msg ? ": " + msg : ""}`);
+  }
+  return true;
 }
 
 export async function supabaseUpdateDocumentBehandlung(accessToken, documentId, behandlungId) {

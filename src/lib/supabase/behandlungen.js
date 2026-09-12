@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "./client";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv, supabaseDeleteWhere } from "./client";
 
 export async function supabaseFetchBehandlungen(accessToken, userId) {
   const res = await fetch(
@@ -61,17 +61,10 @@ export async function supabaseUpdateBehandlung(accessToken, behandlungId, behDat
   return data;
 }
 
-export async function supabaseDeleteBehandlung(accessToken, behandlungId) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/behandlungen?id=eq.${pgv(behandlungId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
-  return res.ok;
+export function supabaseDeleteBehandlung(accessToken, behandlungId) {
+  return supabaseDeleteWhere(accessToken, "behandlungen", `id=eq.${pgv(behandlungId)}`, "Behandlung löschen");
+}
+
+export function supabaseDeleteBehandlungenByPatient(accessToken, patientId) {
+  return supabaseDeleteWhere(accessToken, "behandlungen", `patient_id=eq.${pgv(patientId)}`, "Behandlungen löschen");
 }

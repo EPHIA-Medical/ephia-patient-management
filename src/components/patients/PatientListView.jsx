@@ -5,7 +5,7 @@ import { fmtDate } from "../../utils/helpers";
 
 export default function PatientListView({ patients, invoices, kleinunternehmer, onSelectPatient, onDeletePatient, onBack, onAddPatient }) {
   const [search, setSearch] = React.useState("");
-  const [sortKey, setSortKey] = React.useState(null);
+  const [sortKey, setSortKey] = React.useState("nachname");
   const [sortDir, setSortDir] = React.useState("asc");
 
   const handleSort = (key) => {
@@ -74,9 +74,9 @@ export default function PatientListView({ patients, invoices, kleinunternehmer, 
     : patientList;
 
   const getters = {
-    vorname: (p) => p.vorname,
-    nachname: (p) => p.nachname,
-    email: (p) => p.email,
+    vorname: (p) => p.vorname || null,
+    nachname: (p) => p.nachname || null,
+    email: (p) => p.email || null,
     invoiceCount: (p) => p.invoiceCount,
     offen: (p) => p.offen,
     paidThisYear: (p) => p.paidThisYear,
@@ -92,7 +92,9 @@ export default function PatientListView({ patients, invoices, kleinunternehmer, 
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
       if (vb == null) return -1;
-      const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb), "de");
+      let cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb), "de", { sensitivity: "base" });
+      if (cmp === 0 && sortKey !== "nachname") cmp = a.nachname.localeCompare(b.nachname, "de", { sensitivity: "base" });
+      if (cmp === 0 && sortKey !== "vorname") cmp = a.vorname.localeCompare(b.vorname, "de", { sensitivity: "base" });
       return sortDir === "asc" ? cmp : -cmp;
     });
   })();
@@ -143,12 +145,12 @@ export default function PatientListView({ patients, invoices, kleinunternehmer, 
             <th className={thCls + " hidden md:table-cell"} onClick={() => handleSort("offen")}>Offen{sortIndicator("offen")}</th>
             <th className={thCls + " hidden md:table-cell"} onClick={() => handleSort("paidThisYear")}>Bezahlt {new Date().getFullYear()}{sortIndicator("paidThisYear")}</th>
             <th className={thCls + " hidden lg:table-cell"} onClick={() => handleSort("lastDate")}>Letzte Rechnung{sortIndicator("lastDate")}</th>
-            <th className="px-3 py-2 w-10 hidden sm:table-cell"></th>
+            <th className="px-3 py-2 w-10"></th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((p) => (
-            <tr key={p.email} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onSelectPatient(p)}>
+            <tr key={p._raw.id || p.email} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onSelectPatient(p)}>
               <td className="px-3 py-3 align-middle"><span className="text-sm text-gray-700">{p.vorname}</span></td>
               <td className="px-3 py-3 align-middle"><span className="text-sm font-medium text-gray-700">{p.nachname}</span></td>
               <td className="px-3 py-3 align-middle"><span className="text-sm text-gray-500 break-all">{p.email}</span></td>
@@ -156,7 +158,7 @@ export default function PatientListView({ patients, invoices, kleinunternehmer, 
               <td className="px-3 py-3 align-middle hidden md:table-cell"><span className={`text-sm ${p.offen > 0 ? "text-amber-600 font-medium" : "text-gray-400"}`}>{p.offen > 0 ? p.offen.toFixed(2).replace(".", ",") + " €" : "–"}</span></td>
               <td className="px-3 py-3 align-middle hidden md:table-cell"><span className={`text-sm ${p.paidThisYear > 0 ? "text-green-600" : "text-gray-400"}`}>{p.paidThisYear > 0 ? p.paidThisYear.toFixed(2).replace(".", ",") + " €" : "–"}</span></td>
               <td className="px-3 py-3 align-middle hidden lg:table-cell"><span className="text-sm text-gray-500">{p.lastInvoiceDate ? fmtDate(p.lastInvoiceDate) : "–"}</span></td>
-              <td className="px-3 py-3 align-middle hidden sm:table-cell">
+              <td className="px-3 py-3 align-middle">
                 <button className="p-1.5 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" title="Löschen" onClick={(e) => { e.stopPropagation(); onDeletePatient(p._raw); }}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>

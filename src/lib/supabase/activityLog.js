@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "./client";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv, supabaseDeleteWhere } from "./client";
 
 export async function supabaseFetchActivityLog(accessToken, userId) {
   const res = await fetch(
@@ -38,4 +38,8 @@ export async function supabaseCreateActivityLog(accessToken, userId, patientId, 
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Create activity log failed");
   return Array.isArray(data) ? data[0] : data;
+}
+
+export function supabaseDeleteActivityLogByPatient(accessToken, patientId) {
+  return supabaseDeleteWhere(accessToken, "activity_log", `patient_id=eq.${pgv(patientId)}`, "Verlauf löschen");
 }

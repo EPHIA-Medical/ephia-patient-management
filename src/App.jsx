@@ -6,12 +6,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "./lib/supabase/client";
 import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseResetPassword, supabaseRefreshToken, supabaseGetUser } from "./lib/supabase/auth";
 import { supabaseFetchProfiles, supabaseUpdateProfile } from "./lib/supabase/profiles";
 import { supabaseFetchInvoices, supabaseCreateInvoice, supabaseUpdateInvoice, supabaseDeleteInvoice } from "./lib/supabase/invoices";
-import { supabaseFetchDocuments, supabaseCreateDocument, supabaseUpdateDocument, supabaseDeleteDocument, supabaseUpdateDocumentBehandlung } from "./lib/supabase/documents";
-import { supabaseFetchBehandlungen, supabaseCreateBehandlung, supabaseUpdateBehandlung, supabaseDeleteBehandlung } from "./lib/supabase/behandlungen";
+import { supabaseFetchDocuments, supabaseCreateDocument, supabaseUpdateDocument, supabaseDeleteDocument, supabaseUpdateDocumentBehandlung, supabaseDeleteDocumentsByPatient, supabaseDeleteDocumentsByBehandlung, supabaseDetachDocumentsFromBehandlung } from "./lib/supabase/documents";
+import { supabaseFetchBehandlungen, supabaseCreateBehandlung, supabaseUpdateBehandlung, supabaseDeleteBehandlung, supabaseDeleteBehandlungenByPatient } from "./lib/supabase/behandlungen";
 import { supabaseFetchVouchers, supabaseFetchVoucherByCode, supabaseCreateVoucher, supabaseUpdateVoucher, supabaseDeleteVoucher } from "./lib/supabase/vouchers";
 import { migrateInvoicesToDocuments } from "./lib/migration";
 import { supabaseFetchPatients, supabaseDeletePatient } from "./lib/supabase/patients";
-import { supabaseFetchActivityLog, supabaseCreateActivityLog } from "./lib/supabase/activityLog";
+import { supabaseFetchActivityLog, supabaseCreateActivityLog, supabaseDeleteActivityLogByPatient } from "./lib/supabase/activityLog";
 import { trackEvent } from "./lib/analytics";
 import {
   MEK_SESSION_KEY, bufToBase64, base64ToBuf, derivePDK,
@@ -1616,21 +1616,28 @@ export default function EphiaInvoice() {
   const confirmDeletePatientAction = async () => {
     if (!confirmDeletePatient) return;
     const patientEmail = (confirmDeletePatient.data?.email || confirmDeletePatient.email || "").toLowerCase();
+    const patientDbId = confirmDeletePatient.id;
 
-    // Find all invoices for this patient
-    const matchingInvoices = invoices.filter((inv) => (inv.patient?.email || "").toLowerCase() === patientEmail);
+    // Find all documents for this patient (by DB id, falling back to e-mail for legacy records)
+    const matchingInvoices = invoices.filter((inv) => {
+      if (inv._patientDbId && patientDbId) return inv._patientDbId === patientDbId;
+      const invEmail = (inv.patient?.email || "").toLowerCase();
+      return patientEmail && invEmail && invEmail === patientEmail;
+    });
+    const matchingBeh = behandlungen.filter((b) => b._patientId === patientDbId);
 
-    // Delete all matching invoices from Supabase
+    // Delete server-side in dependency order: documents → Behandlungen → Verlauf → Patient:in.
+    // Every call throws on failure so a rejected delete never disappears only locally.
     if (session) {
       try {
         for (const inv of matchingInvoices) {
-          if (inv._supabaseId) {
-            await deleteDocAdapter(inv._supabaseId);
-          }
+          if (inv._supabaseId) await deleteDocAdapter(inv._supabaseId);
         }
-        // Delete the patient record
-        if (confirmDeletePatient.id) {
-          await supabaseDeletePatient(session.access_token, confirmDeletePatient.id);
+        if (patientDbId) {
+          if (docsMigrated.current) await supabaseDeleteDocumentsByPatient(session.access_token, patientDbId);
+          await supabaseDeleteBehandlungenByPatient(session.access_token, patientDbId);
+          await supabaseDeleteActivityLogByPatient(session.access_token, patientDbId);
+          await supabaseDeletePatient(session.access_token, patientDbId);
         }
       } catch (err) {
         console.error("Failed to delete patient:", err);
@@ -1640,10 +1647,12 @@ export default function EphiaInvoice() {
     }
 
     // Update local state
-    trackEvent("patient_deleted", { invoices_deleted: matchingInvoices.length }, session?.access_token);
+    trackEvent("patient_deleted", { invoices_deleted: matchingInvoices.length, behandlungen_deleted: matchingBeh.length }, session?.access_token);
     const deletedInvoiceIds = new Set(matchingInvoices.map((inv) => inv.id));
     setInvoices(invoices.filter((inv) => !deletedInvoiceIds.has(inv.id)));
-    setPatients(patients.filter((p) => p.id !== confirmDeletePatient.id));
+    setBehandlungen((prev) => prev.filter((b) => b._patientId !== patientDbId));
+    setActivityLog((prev) => prev.filter((e) => e._patientId !== patientDbId));
+    setPatients(patients.filter((p) => p.id !== patientDbId));
     setConfirmDeletePatient(null);
     setSelectedPatient(null);
     navigate("/patients");
@@ -1730,12 +1739,27 @@ export default function EphiaInvoice() {
     logActivity(beh?._patientId, "behandlung", behId, "updated", `Behandlung aktualisiert`);
   };
 
-  const handleDeleteBehandlung = async (behId) => {
+  const handleDeleteBehandlung = async (behId, { deleteDocs = false } = {}) => {
     const beh = behandlungen.find(b => b._id === behId);
+    const behDocs = invoices.filter(inv => inv._behandlungId === behId);
+    if (deleteDocs) {
+      // Legacy invoices table rows carry no behandlung_id, so delete them one by one
+      for (const inv of behDocs) {
+        if (inv._supabaseId && !docsMigrated.current) await deleteDocAdapter(inv._supabaseId);
+      }
+      if (docsMigrated.current) await supabaseDeleteDocumentsByBehandlung(session.access_token, behId);
+    } else if (docsMigrated.current) {
+      await supabaseDetachDocumentsFromBehandlung(session.access_token, behId);
+    }
     await supabaseDeleteBehandlung(session.access_token, behId);
     setBehandlungen(prev => prev.filter(b => b._id !== behId));
-    setInvoices(prev => prev.map(inv => inv._behandlungId === behId ? { ...inv, _behandlungId: null } : inv));
-    logActivity(beh?._patientId, "behandlung", behId, "deleted", `Behandlung gelöscht`);
+    if (deleteDocs) {
+      const ids = new Set(behDocs.map(inv => inv.id));
+      setInvoices(prev => prev.filter(inv => !ids.has(inv.id)));
+    } else {
+      setInvoices(prev => prev.map(inv => inv._behandlungId === behId ? { ...inv, _behandlungId: null } : inv));
+    }
+    logActivity(beh?._patientId, "behandlung", behId, "deleted", deleteDocs ? `Behandlung mit ${behDocs.length} Dokument(en) gelöscht` : `Behandlung gelöscht`);
   };
 
   const handleLinkDocToBehandlung = async (docId, behandlungId) => {
@@ -2549,12 +2573,13 @@ export default function EphiaInvoice() {
         });
         const pHVs = pInvoices.filter((inv) => inv.hasHV != null ? inv.hasHV : (inv.lineItems || []).some((it) => it.steigerung != null && it.steigerung > 3.5));
         const pName = [confirmDeletePatient.data?.vorname || confirmDeletePatient.vorname, confirmDeletePatient.data?.nachname || confirmDeletePatient.nachname].filter(Boolean).join(" ") || pEmail;
+        const pBehCount = behandlungen.filter((b) => b._patientId === pDbId).length;
         return (
           <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-2">Patient:in löschen?</h3>
               <p className="text-xs text-gray-500 mb-4">
-                <strong>{pName}</strong> und alle zugehörigen Rechnungen ({pInvoices.length}) und Honorarvereinbarungen ({pHVs.length}) werden unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                <strong>{pName}</strong> wird mit allen Behandlungen ({pBehCount}) und Dokumenten ({pInvoices.length}, davon {pHVs.length} Honorarvereinbarungen) unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
               </p>
               <div className="flex gap-2 justify-end">
                 <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50" onClick={() => setConfirmDeletePatient(null)}>Abbrechen</button>
