@@ -1,5 +1,5 @@
 import React from "react";
-import { fmtDate, fmtPhone, evalAmount } from "../../utils/helpers";
+import { fmtDate, fmtPhone, evalAmount, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { MARKER_COLORS, markerColor, markerLabel, fmtNum } from "../treatment/markerUtils";
 
@@ -36,7 +36,7 @@ export function makeDotImage(label, color = "#ef4444") {
   return { src: c.toDataURL("image/png"), w: w / 2, h: h / 2 };
 }
 
-export default function TreatmentDocPreview({ practice, patient, treatmentDoc, einheit, id: previewId, facePhoto }) {
+export default function TreatmentDocPreview({ practice, patient, treatmentDoc, einheit, id: previewId, facePhoto, showPatientHinweis = true }) {
   const td = treatmentDoc || {};
   const markers = td.markers || [];
   const praep = td.praeparat || "";
@@ -45,6 +45,9 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const totalUnits = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
   const totalStr = totalUnits % 1 === 0 ? totalUnits.toString() : totalUnits.toFixed(2).replace(/0+$/, "").replace(".", ",");
   const pat = patient || {};
+  const hinweis = showPatientHinweis ? (td.patientHinweis || "").trim() : "";
+  const betrag = showPatientHinweis ? (td.patientBetrag || "").trim() : "";
+  const hasBank = !!(practice.iban || practice.bankName);
   const patName = [pat.vorname, pat.nachname].filter(Boolean).join(" ") || pat.name || "";
 
   // Pre-generate dot images for all markers (memoized on their content)
@@ -148,6 +151,27 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Patient-facing note + optional amount with bank details */}
+      {(hinweis || betrag) && (
+        <div style={{ marginTop: "8px", marginBottom: "16px" }}>
+          <div style={S.sectionTitle}>Hinweis</div>
+          {hinweis && <div style={{ fontSize: "11px", color: "#333", whiteSpace: "pre-wrap", marginBottom: betrag ? "8px" : 0 }}>{hinweis}</div>}
+          {betrag && (
+            <div style={{ fontSize: "11px", color: "#333" }}>
+              <div style={{ fontWeight: 600, marginBottom: hasBank ? "4px" : 0 }}>Zu zahlender Betrag: {fmtBetrag(betrag)} €</div>
+              {hasBank && (
+                <div style={{ color: "#444" }}>
+                  {practice.bankName && <div>{practice.bankName}</div>}
+                  {practice.iban && <div>IBAN: {practice.iban}</div>}
+                  {practice.bic && <div>BIC: {practice.bic}</div>}
+                  <div>Verwendungszweck: Behandlung {datumStr}{patName ? `, ${patName}` : ""}</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

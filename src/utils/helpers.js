@@ -266,3 +266,10 @@ export function calcGesamt(lineItems, kleinunternehmer, isAusland, isMedical) {
   return Math.round((zwischensumme + mwst) * 100) / 100;
 }
 
+
+// Format a free-text amount ("45", "45,5", "45.50") as "45,50"; returns the raw text if not numeric
+export function fmtBetrag(str) {
+  const v = parseFloat(String(str || "").replace(/\s/g, "").replace(",", "."));
+  if (isNaN(v)) return String(str || "");
+  return v.toFixed(2).replace(".", ",");
+}

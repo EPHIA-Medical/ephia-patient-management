@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { fmtDate, parseDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { MarkerDot, ColorSwatches, serializeMarkers, markerColor, nextMarkerColor, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
+import { fmtBetrag } from "../../utils/helpers";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -21,6 +22,9 @@ export default function BehandlungDetailPanel({
   const [inlineTempPraep, setInlineTempPraep] = useState("");
   const [inlineTempEinheit, setInlineTempEinheit] = useState("SE");
   const [inlineTempNotes, setInlineTempNotes] = useState("");
+  const [editHinweis, setEditHinweis] = useState(false);
+  const [inlineTempHinweis, setInlineTempHinweis] = useState("");
+  const [inlineTempBetrag, setInlineTempBetrag] = useState("");
   const [inlineEditColor, setInlineEditColor] = useState(DEFAULT_MARKER_COLOR);
   const [inlineTempMarkers, setInlineTempMarkers] = useState([]);
   const faceModalRef = useRef(null);
@@ -53,6 +57,7 @@ export default function BehandlungDetailPanel({
     if (field === "date") updatedTd.behandlungsDatum = value;
     if (field === "praeparat") { updatedTd.praeparat = value.praep; updatedTd.einheit = value.einh; }
     if (field === "notes") updatedTd.notes = value;
+    if (field === "hinweis") { updatedTd.patientHinweis = (value.text || "").trim(); updatedTd.patientBetrag = (value.betrag || "").trim(); }
     if (field === "markers") updatedTd.markers = serializeMarkers(value);
     const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
     if (onUpdateInvoice) onUpdateInvoice(updated);
@@ -185,9 +190,36 @@ export default function BehandlungDetailPanel({
                 </div>
               )}
 
-              {/* Notizen */}
+              {/* Hinweis für Patient:in (printed on the PDF) */}
               <div>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notizen</span>
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Hinweis f&uuml;r Patient:in</span>
+                {!editHinweis ? (
+                  <div className="flex items-start gap-2 mt-0.5">
+                    <div className="text-sm text-gray-600">
+                      <p className="whitespace-pre-wrap">{td.patientHinweis || "\u2014"}</p>
+                      {td.patientBetrag && <p className="mt-0.5 font-medium text-gray-700">Betrag: {fmtBetrag(td.patientBetrag)} &euro;</p>}
+                    </div>
+                    <button className={editBtnCls + " flex-shrink-0 mt-0.5"} title="Hinweis bearbeiten" onClick={() => { setInlineTempHinweis(td.patientHinweis || ""); setInlineTempBetrag(td.patientBetrag || ""); setEditHinweis(true); }}>{pencilIcon}</button>
+                  </div>
+                ) : (
+                  <div className="mt-0.5">
+                    <textarea className="w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" rows={3} placeholder="Erscheint auf dem PDF" value={inlineTempHinweis} onChange={(e) => setInlineTempHinweis(e.target.value)} />
+                    <div className="relative w-36 mt-1.5">
+                      <input type="text" inputMode="decimal" className="w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 pr-7 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" placeholder="Betrag, z.B. 45,00" value={inlineTempBetrag} onChange={(e) => setInlineTempBetrag(e.target.value)} />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">&euro;</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Mit Betrag werden Deine Bankdaten aus den Praxis-Einstellungen mitgedruckt.</p>
+                    <div className="flex gap-2 mt-1">
+                      <button className="px-2 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600 transition" onClick={() => { saveInlineField("hinweis", { text: inlineTempHinweis, betrag: inlineTempBetrag }); setEditHinweis(false); }}>Speichern</button>
+                      <button className="px-2 py-1 text-xs rounded border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" onClick={() => setEditHinweis(false)}>Abbrechen</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notizen (intern) */}
+              <div>
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notizen (intern)</span>
                 {!editNotes ? (
                   <div className="flex items-start gap-2 mt-0.5">
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{td.notes || "\u2014"}</p>

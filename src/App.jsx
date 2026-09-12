@@ -4299,6 +4299,7 @@ export default function EphiaInvoice() {
                     practice={viewPractice}
                     patient={viewingInvoice.patient}
                     treatmentDoc={viewingInvoice.treatmentDoc}
+                    showPatientHinweis={!!viewingInvoice._standalone}
                     einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
                     facePhoto={previewFacePhoto}
                   />
@@ -4333,6 +4334,7 @@ export default function EphiaInvoice() {
                       practice={viewPractice}
                       patient={viewingInvoice.patient}
                       treatmentDoc={viewingInvoice.treatmentDoc}
+                      showPatientHinweis={!!viewingInvoice._standalone}
                       einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
                       facePhoto={previewFacePhoto}
                     />
@@ -4348,6 +4350,7 @@ export default function EphiaInvoice() {
                       practice={viewPractice}
                       patient={viewingInvoice.patient}
                       treatmentDoc={viewingInvoice.treatmentDoc}
+                      showPatientHinweis={!!viewingInvoice._standalone}
                       einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
                       facePhoto={previewFacePhoto}
                     />
@@ -4382,6 +4385,7 @@ export default function EphiaInvoice() {
                         practice={viewPractice}
                         patient={viewingInvoice.patient}
                         treatmentDoc={viewingInvoice.treatmentDoc}
+                        showPatientHinweis={!!viewingInvoice._standalone}
                         einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
                         facePhoto={previewFacePhoto}
                       />

@@ -23,6 +23,9 @@ export default function BehandlungAddPanel({
   setViewingTreatment, setPendingQuickInvoice,
 }) {
   const activeEinheit = newTreatmentEinheit;
+  // Patient-facing note + optional amount (printed on the Behandlungsdoku PDF, unlike internal Notizen)
+  const [patientHinweis, setPatientHinweis] = React.useState(editingTreatmentInv?.treatmentDoc?.patientHinweis || "");
+  const [patientBetrag, setPatientBetrag] = React.useState(editingTreatmentInv?.treatmentDoc?.patientBetrag || "");
 
   const docLabel = (d) => {
     const datum = d.invoiceMeta?.datum ? fmtDate(d.invoiceMeta.datum) : "";
@@ -96,6 +99,33 @@ export default function BehandlungAddPanel({
             value={newTreatmentNotes}
             onChange={(e) => setNewTreatmentNotes(e.target.value)}
           />
+          <p className="text-[10px] text-gray-400 mt-1 mb-3">Notizen sind intern und erscheinen nicht auf dem PDF.</p>
+
+          <div className="flex items-center gap-1 mb-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Hinweis f&uuml;r Patient:in</p>
+            <InfoTooltip>Dieser Text wird auf die Behandlungsdokumentation gedruckt. Mit Betrag erscheinen zus&auml;tzlich Deine Bankdaten aus den Praxis-Einstellungen, z.B. wenn nur Materialkosten ohne Rechnung bezahlt werden.</InfoTooltip>
+          </div>
+          <textarea
+            className="w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+            rows={3}
+            placeholder="Optional, z.B. „Bitte überweise die Materialkosten innerhalb von 14 Tagen.“"
+            value={patientHinweis}
+            onChange={(e) => setPatientHinweis(e.target.value)}
+          />
+          <div className="mt-2">
+            <label className="block text-xs font-medium text-gray-500 mb-0.5">Zu zahlender Betrag (optional)</label>
+            <div className="relative w-36">
+              <input
+                type="text"
+                inputMode="decimal"
+                className="w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 pr-7 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                placeholder="z.B. 45,00"
+                value={patientBetrag}
+                onChange={(e) => setPatientBetrag(e.target.value)}
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">&euro;</span>
+            </div>
+          </div>
         </div>
 
         {/* Right column: Praeparat + Injektionspunkte */}
@@ -162,6 +192,8 @@ export default function BehandlungAddPanel({
             praeparat: newTreatmentPraeparat,
             einheit: activeEinheit,
             notes: newTreatmentNotes.trim() || "",
+            patientHinweis: patientHinweis.trim() || "",
+            patientBetrag: patientBetrag.trim() || "",
             amount: effectiveAmount || "",
             facePhoto: newTreatmentFacePhoto || "",
           };
@@ -193,6 +225,8 @@ export default function BehandlungAddPanel({
           setNewTreatmentEinheit("SE");
           setNewTreatmentDate(new Date().toISOString().slice(0, 10));
           setNewTreatmentNotes("");
+          setPatientHinweis("");
+          setPatientBetrag("");
           setNewTreatmentAmount("");
           if (setNewTreatmentBehId) setNewTreatmentBehId(null);
           setEditingTreatmentInv(null);
