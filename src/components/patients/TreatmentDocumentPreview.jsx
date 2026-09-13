@@ -47,7 +47,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const pat = patient || {};
   const hinweis = showPatientHinweis ? (td.patientHinweis || "").trim() : "";
   const betrag = showPatientHinweis ? (td.patientBetrag || "").trim() : "";
-  const hasBank = !!(practice.iban || practice.bankName);
+  const hasBank = !!(practice.iban || practice.bankName || practice.paypal);
   const patName = [pat.vorname, pat.nachname].filter(Boolean).join(" ") || pat.name || "";
 
   // Pre-generate dot images for all markers (memoized on their content)
@@ -167,6 +167,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
                   {practice.bankName && <div>{practice.bankName}</div>}
                   {practice.iban && <div>IBAN: {practice.iban}</div>}
                   {practice.bic && <div>BIC: {practice.bic}</div>}
+                  {practice.paypal && <div>PayPal: {practice.paypal}</div>}
                   <div>Verwendungszweck: Behandlung {datumStr}{patName ? `, ${patName}` : ""}</div>
                 </div>
               )}
