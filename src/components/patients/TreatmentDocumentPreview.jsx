@@ -8,7 +8,7 @@ import { MARKER_COLORS, markerColor, markerLabel, fmtNum } from "../treatment/ma
 // Pre-render a labelled pill as a tiny canvas → data URL image
 // html2canvas renders <img> tags perfectly, unlike CSS text centering.
 // Returns { src, w, h } in CSS pixels (drawn at 2x for sharpness).
-export function makeDotImage(label, color = "#ef4444") {
+export function makeDotImage(label, color = "#dc2626") {
   const h = 40; // 2x of 20px
   const fontPx = Math.round(h * 0.5);
   const c = document.createElement("canvas");

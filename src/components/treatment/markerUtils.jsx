@@ -5,24 +5,42 @@ import { evalAmount } from "../../utils/helpers";
 // Markers are stored as { x, y, amount, color? }. `color` is optional and new;
 // older documents without it render in the classic red.
 
+// All shades give white labels at least 4.5:1 contrast (WCAG AA), which matters
+// because the unit numbers inside the dots are only ~9px.
 export const MARKER_COLORS = [
-  { hex: "#ef4444", name: "Rot" },
-  { hex: "#3b82f6", name: "Blau" },
-  { hex: "#22c55e", name: "Grün" },
-  { hex: "#f59e0b", name: "Orange" },
-  { hex: "#a855f7", name: "Lila" },
-  { hex: "#14b8a6", name: "Türkis" },
-  { hex: "#ec4899", name: "Pink" },
-  { hex: "#6366f1", name: "Indigo" },
+  { hex: "#dc2626", name: "Rot" },
+  { hex: "#2563eb", name: "Blau" },
+  { hex: "#15803d", name: "Grün" },
+  { hex: "#c2410c", name: "Orange" },
+  { hex: "#9333ea", name: "Lila" },
+  { hex: "#0f766e", name: "Türkis" },
+  { hex: "#db2777", name: "Pink" },
+  { hex: "#4f46e5", name: "Indigo" },
   { hex: "#92400e", name: "Braun" },
   { hex: "#6b7280", name: "Grau" },
 ];
 export const DEFAULT_MARKER_COLOR = MARKER_COLORS[0].hex;
 
-export const markerColor = (m) => (m && m.color) || DEFAULT_MARKER_COLOR;
+// Earlier palette shades were too light for white text; documents that stored
+// them are rendered with the matching darker shade instead.
+const LEGACY_COLORS = {
+  "#ef4444": "#dc2626",
+  "#3b82f6": "#2563eb",
+  "#22c55e": "#15803d",
+  "#f59e0b": "#c2410c",
+  "#a855f7": "#9333ea",
+  "#14b8a6": "#0f766e",
+  "#ec4899": "#db2777",
+  "#6366f1": "#4f46e5",
+};
+
+export const markerColor = (m) => {
+  const c = (m && m.color) || DEFAULT_MARKER_COLOR;
+  return LEGACY_COLORS[c.toLowerCase()] || c;
+};
 
 export const nextMarkerColor = (hex) => {
-  const i = MARKER_COLORS.findIndex((c) => c.hex === hex);
+  const i = MARKER_COLORS.findIndex((c) => c.hex === markerColor({ color: hex }));
   return MARKER_COLORS[(i + 1) % MARKER_COLORS.length].hex;
 };
 
