@@ -12,6 +12,10 @@ export const MARKER_COLORS = [
   { hex: "#f59e0b", name: "Orange" },
   { hex: "#a855f7", name: "Lila" },
   { hex: "#14b8a6", name: "Türkis" },
+  { hex: "#ec4899", name: "Pink" },
+  { hex: "#6366f1", name: "Indigo" },
+  { hex: "#92400e", name: "Braun" },
+  { hex: "#6b7280", name: "Grau" },
 ];
 export const DEFAULT_MARKER_COLOR = MARKER_COLORS[0].hex;
 
