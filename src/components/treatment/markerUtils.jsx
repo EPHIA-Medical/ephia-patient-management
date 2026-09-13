@@ -83,6 +83,64 @@ export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false
   );
 }
 
+// Dose presets offered as one-tap chips in the editor, per unit
+export const DOSE_PRESETS = {
+  ml: ["0,1", "0,2", "0,3", "0,5", "1"],
+  SE: ["1", "2", "2,5", "3", "4", "5", "6", "8", "10"],
+  IE: ["1", "2", "2,5", "3", "4", "5", "6", "8", "10"],
+};
+export const dosePresetsFor = (einheit) => DOSE_PRESETS[einheit] || DOSE_PRESETS.SE;
+
+// Two amounts are the same dose when they evaluate to the same number ("2,5" == "2.5")
+export const sameAmount = (a, b) => {
+  const va = evalAmount(a), vb = evalAmount(b);
+  return va > 0 && Math.abs(va - vb) < 1e-9;
+};
+
+// Dose chip row: pick the amount that new points receive. Selecting the active
+// chip again clears the preset; anything else goes into the free-text field.
+export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte" }) {
+  const presets = dosePresetsFor(einheit);
+  const isPreset = presets.some((d) => sameAmount(d, value));
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-xs text-gray-500 mr-0.5">{label}:</span>
+      {presets.map((d) => {
+        const active = sameAmount(d, value);
+        return (
+          <button
+            key={d}
+            type="button"
+            onClick={() => onChange(active ? "" : d)}
+            className="text-xs font-semibold rounded-full transition"
+            style={{
+              minWidth: 34,
+              height: 26,
+              padding: "0 9px",
+              background: active ? color : "#f3f4f6",
+              color: active ? "#fff" : "#374151",
+              outline: active ? `2px solid ${color}` : "none",
+              outlineOffset: 2,
+            }}
+          >
+            {d}
+          </button>
+        );
+      })}
+      <input
+        type="text"
+        inputMode="text"
+        className="px-2 py-1 text-xs border border-[#DFE3EB] rounded-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+        style={{ width: 88 }}
+        placeholder="Andere, z.B. 2x3"
+        value={isPreset ? "" : value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span className="text-xs text-gray-400">{einheit}</span>
+    </div>
+  );
+}
+
 // Colour swatch row used in the editor
 export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte" }) {
   return (

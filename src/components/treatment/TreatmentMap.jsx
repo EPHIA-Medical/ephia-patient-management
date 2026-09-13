@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
-import { MarkerDot, ColorSwatches, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor } from "./markerUtils";
+import { trackEvent } from "../../lib/analytics";
+import { MarkerDot, ColorSwatches, DoseChips, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -40,6 +41,17 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   const modalRef = React.useRef(null);
   // Colour applied to newly placed points; starts with the colour of the last existing point
   const [activeColor, setActiveColor] = React.useState(markers.length > 0 ? markerColor(markers[markers.length - 1]) : DEFAULT_MARKER_COLOR);
+  // Dose applied to newly placed points; starts with the dose of the last existing point
+  const [activeAmount, setActiveAmount] = React.useState(markers.length > 0 ? (markers[markers.length - 1].amount || "") : "");
+
+  // Picking a dose that already exists on the face adopts that dose's colour,
+  // so one region keeps one colour without re-selecting it every time
+  const selectDose = (val) => {
+    setActiveAmount(val);
+    if (!val) return;
+    const existing = [...markers].reverse().find((m) => sameAmount(m.amount, val));
+    if (existing) setActiveColor(markerColor(existing));
+  };
 
   // Pinch-to-zoom state for the modal face map
   const [zoom, setZoom] = React.useState(1);
@@ -114,7 +126,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const faceH = rect.height;
     const x = (rawX / faceW) * 100;
     const y = (rawY / faceH) * 100;
-    setMarkers([...markers, { id: Date.now(), x, y, amount: "", color: activeColor }]);
+    setMarkers([...markers, { id: Date.now(), x, y, amount: activeAmount, color: activeColor }]);
   };
 
   const updateAmount = (id, val) => {
@@ -236,10 +248,11 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 }} />
               )}
               <p className="text-xs text-gray-400 mb-1">
-                <span className="hidden sm:inline">Klicke auf das Gesicht, um Injektionspunkte zu setzen.</span>
-                <span className="sm:hidden">Tippe auf das Gesicht um Punkte zu setzen. Zwei Finger zum Zoomen.</span>
+                <span className="hidden sm:inline">Dosis und Farbe wählen, dann auf das Gesicht klicken. Jeder neue Punkt übernimmt beides.</span>
+                <span className="sm:hidden">Dosis und Farbe wählen, dann auf das Gesicht tippen. Zwei Finger zum Zoomen.</span>
               </p>
-              <p className="text-xs text-amber-500 mb-2">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <p className="text-xs text-amber-500 mb-2">Die Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <div className="mb-2"><DoseChips value={activeAmount} onChange={selectDose} einheit={einheit} color={activeColor} /></div>
               <div className="mb-3"><ColorSwatches value={activeColor} onChange={setActiveColor} /></div>
               {zoom > 1 && (
                 <button className="text-xs text-blue-500 hover:text-blue-700 mb-2 sm:hidden" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Zoom zurücksetzen</button>
