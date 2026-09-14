@@ -1,7 +1,7 @@
 import React from "react";
 import { fmtDate, fmtPhone, evalAmount, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
-import { MARKER_COLORS, markerColor, markerLabel, fmtNum } from "../treatment/markerUtils";
+import { MARKER_COLORS, markerColor, markerLabel, markerTextColor, fmtNum } from "../treatment/markerUtils";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
@@ -28,7 +28,7 @@ export function makeDotImage(label, color = "#dc2626") {
   ctx2.closePath();
   ctx2.fillStyle = color;
   ctx2.fill();
-  ctx2.fillStyle = "white";
+  ctx2.fillStyle = markerTextColor(color);
   ctx2.font = `bold ${fontPx}px Arial, sans-serif`;
   ctx2.textAlign = "center";
   ctx2.textBaseline = "middle";

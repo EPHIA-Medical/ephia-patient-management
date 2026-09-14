@@ -5,38 +5,49 @@ import { evalAmount } from "../../utils/helpers";
 // Markers are stored as { x, y, amount, color? }. `color` is optional and new;
 // older documents without it render in the classic red.
 
-// All shades give white labels at least 4.5:1 contrast (WCAG AA), which matters
-// because the unit numbers inside the dots are only ~9px.
+// Vivid palette. Bright shades (yellow, orange, green, ...) can't hold white
+// text at readable contrast, so MarkerDot picks white or near-black per colour
+// (markerTextColor); every entry reaches at least 4.5:1 (WCAG AA) that way.
 export const MARKER_COLORS = [
-  { hex: "#dc2626", name: "Rot" },
+  { hex: "#ef4444", name: "Rot" },
+  { hex: "#f97316", name: "Orange" },
+  { hex: "#facc15", name: "Gelb" },
+  { hex: "#22c55e", name: "Grün" },
+  { hex: "#06b6d4", name: "Türkis" },
   { hex: "#2563eb", name: "Blau" },
-  { hex: "#15803d", name: "Grün" },
-  { hex: "#c2410c", name: "Orange" },
-  { hex: "#9333ea", name: "Lila" },
-  { hex: "#0f766e", name: "Türkis" },
-  { hex: "#db2777", name: "Pink" },
-  { hex: "#4f46e5", name: "Indigo" },
-  { hex: "#92400e", name: "Braun" },
+  { hex: "#7c3aed", name: "Lila" },
+  { hex: "#ec4899", name: "Pink" },
+  { hex: "#84cc16", name: "Limette" },
   { hex: "#6b7280", name: "Grau" },
 ];
 export const DEFAULT_MARKER_COLOR = MARKER_COLORS[0].hex;
 
-// Earlier palette shades were too light for white text; documents that stored
-// them are rendered with the matching darker shade instead.
+// Two stored shades from earlier palettes fail contrast with both white and
+// dark text; they render with the nearest passing shade instead.
 const LEGACY_COLORS = {
-  "#ef4444": "#dc2626",
-  "#3b82f6": "#2563eb",
-  "#22c55e": "#15803d",
-  "#f59e0b": "#c2410c",
-  "#a855f7": "#9333ea",
-  "#14b8a6": "#0f766e",
-  "#ec4899": "#db2777",
+  "#a855f7": "#7c3aed",
   "#6366f1": "#4f46e5",
 };
 
 export const markerColor = (m) => {
   const c = (m && m.color) || DEFAULT_MARKER_COLOR;
   return LEGACY_COLORS[c.toLowerCase()] || c;
+};
+
+const relLuminance = (hex) => {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((ch) => ch + ch).join("") : h;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255);
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+};
+
+// White text on dark colours, near-black on bright ones (whichever contrasts more)
+export const markerTextColor = (hex) => {
+  const L = relLuminance(hex);
+  const withWhite = 1.05 / (L + 0.05);
+  const withDark = (L + 0.05) / (relLuminance("#111827") + 0.05);
+  return withWhite >= withDark ? "#ffffff" : "#111827";
 };
 
 export const nextMarkerColor = (hex) => {
@@ -62,15 +73,17 @@ export const serializeMarkers = (markers) => (markers || []).map((m) => {
 // Pill-shaped dot that grows with its label (e.g. "12,5")
 export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false, style = {} }) {
   const label = markerLabel(marker, idx);
+  const bg = markerColor(marker);
   return (
     <span
-      className="flex items-center justify-center text-white font-bold select-none flex-shrink-0"
+      className="flex items-center justify-center font-bold select-none flex-shrink-0"
       style={{
         minWidth: size,
         height: size,
         padding: label.length > 2 ? `0 ${Math.round(size * 0.3)}px` : 0,
         borderRadius: 999,
-        background: markerColor(marker),
+        background: bg,
+        color: markerTextColor(bg),
         fontSize,
         lineHeight: 1,
         boxShadow: shadow ? "0 0 3px rgba(0,0,0,0.35)" : "none",
@@ -84,11 +97,12 @@ export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false
 }
 
 // Dose presets offered as one-tap chips in the editor, per unit
+// `main` is always visible, `more` unfolds behind a "Mehr" button
 export const DOSE_PRESETS = {
-  ml: ["0,1", "0,2", "0,3", "0,5", "1"],
-  SE: ["1", "2", "2,5", "3", "4", "5", "6", "8", "10"],
-  IE: ["1", "2", "2,5", "3", "4", "5", "6", "8", "10"],
+  ml: { main: ["0,1", "0,2", "0,3", "0,5", "1"], more: ["0,05", "0,15", "0,25", "0,4", "0,7", "1,5", "2"] },
+  SE: { main: ["2", "2,5", "5", "7,5", "10"], more: ["1", "1,5", "3", "4", "6", "8", "12", "15", "20"] },
 };
+DOSE_PRESETS.IE = DOSE_PRESETS.SE;
 export const dosePresetsFor = (einheit) => DOSE_PRESETS[einheit] || DOSE_PRESETS.SE;
 
 // Two amounts are the same dose when they evaluate to the same number ("2,5" == "2.5")
@@ -100,7 +114,11 @@ export const sameAmount = (a, b) => {
 // Dose chip row: pick the amount that new points receive. Selecting the active
 // chip again clears the preset; anything else goes into the free-text field.
 export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte" }) {
-  const presets = dosePresetsFor(einheit);
+  const { main, more } = dosePresetsFor(einheit);
+  const inMore = more.some((d) => sameAmount(d, value));
+  const [expanded, setExpanded] = React.useState(false);
+  const showMore = expanded || inMore;
+  const presets = showMore ? [...main, ...more] : main;
   const isPreset = presets.some((d) => sameAmount(d, value));
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
@@ -118,7 +136,7 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
               height: 26,
               padding: "0 9px",
               background: active ? color : "#f3f4f6",
-              color: active ? "#fff" : "#374151",
+              color: active ? markerTextColor(color) : "#374151",
               outline: active ? `2px solid ${color}` : "none",
               outlineOffset: 2,
             }}
@@ -127,6 +145,14 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
           </button>
         );
       })}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="text-xs text-blue-500 hover:text-blue-700 px-1"
+        style={{ height: 26 }}
+      >
+        {showMore ? "Weniger" : "Mehr"}
+      </button>
       <input
         type="text"
         inputMode="text"
@@ -153,7 +179,7 @@ export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte
           title={c.name}
           onClick={() => onChange(c.hex)}
           className="rounded-full transition"
-          style={{ width: 22, height: 22, background: c.hex, outline: value === c.hex ? `2px solid ${c.hex}` : "none", outlineOffset: 2, opacity: value === c.hex ? 1 : 0.75 }}
+          style={{ width: 22, height: 22, background: c.hex, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.12)", outline: value === c.hex ? `2px solid ${c.hex}` : "none", outlineOffset: 2, opacity: value === c.hex ? 1 : 0.8 }}
         />
       ))}
     </div>
