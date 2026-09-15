@@ -9,6 +9,7 @@ import PatientTimeline from "./PatientTimeline";
 import BehandlungDetailPanel from "./BehandlungDetailPanel";
 import BehandlungAddPanel from "./BehandlungAddPanel";
 import PatientBehandlungenSidebar from "./PatientBehandlungenSidebar";
+import Spinner from "../ui/Spinner";
 
 // ═══════════════════ Patient Detail View ═══════════════════
 
@@ -21,6 +22,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   // ── Shared state ──
   const [confirmDeleteTreatment, setConfirmDeleteTreatment] = useState(null);
   const [confirmDeleteBeh, setConfirmDeleteBeh] = useState(null);
+  const [behDeleting, setBehDeleting] = useState(null); // "keep" | "all" while the delete runs
   const [editingTreatmentInv, setEditingTreatmentInv] = useState(null);
   const [viewingTreatment, setViewingTreatment] = useState(null);
 
@@ -353,6 +355,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
       {confirmDeleteBeh && (() => {
         const behDocCount = matchingInvoices.filter((inv) => inv._behandlungId === confirmDeleteBeh._id).length;
         const runDelete = async (deleteDocs) => {
+          if (behDeleting) return;
+          setBehDeleting(deleteDocs ? "all" : "keep");
           try {
             await onDeleteBehandlung(confirmDeleteBeh._id, { deleteDocs });
             showToast(deleteDocs && behDocCount > 0 ? "Behandlung und Dokumente gelöscht" : "Behandlung gelöscht");
@@ -360,6 +364,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
           } catch (e) {
             console.error("Delete Behandlung error:", e);
             showToast("Fehler beim Löschen: " + (e?.message || e), { error: true });
+          } finally {
+            setBehDeleting(null);
           }
         };
         return (
@@ -373,12 +379,16 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               </p>
               <div className="flex flex-col gap-2">
                 {behDocCount > 0 && (
-                  <button className="px-3 py-2 text-xs rounded border border-[#DFE3EB] text-gray-700 hover:bg-gray-50" onClick={() => runDelete(false)}>Nur Behandlung l&ouml;schen, Dokumente behalten</button>
+                  <button className="px-3 py-2 text-xs rounded border border-[#DFE3EB] text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5" disabled={!!behDeleting} onClick={() => runDelete(false)}>
+                    {behDeleting === "keep" && <Spinner className="h-3.5 w-3.5" />}
+                    {behDeleting === "keep" ? "Wird gelöscht…" : "Nur Behandlung löschen, Dokumente behalten"}
+                  </button>
                 )}
-                <button className="px-3 py-2 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={() => runDelete(true)}>
-                  {behDocCount > 0 ? `Behandlung mit ${behDocCount} Dokument${behDocCount === 1 ? "" : "en"} löschen` : "Behandlung löschen"}
+                <button className="px-3 py-2 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-1.5" disabled={!!behDeleting} onClick={() => runDelete(true)}>
+                  {behDeleting === "all" && <Spinner className="h-3.5 w-3.5" />}
+                  {behDeleting === "all" ? "Wird gelöscht…" : (behDocCount > 0 ? `Behandlung mit ${behDocCount} Dokument${behDocCount === 1 ? "" : "en"} löschen` : "Behandlung löschen")}
                 </button>
-                <button className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700" onClick={() => setConfirmDeleteBeh(null)}>Abbrechen</button>
+                <button className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!!behDeleting} onClick={() => setConfirmDeleteBeh(null)}>Abbrechen</button>
               </div>
             </div>
           </div>

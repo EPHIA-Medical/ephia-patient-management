@@ -33,6 +33,7 @@ import PreviewScaler from "./components/ui/PreviewScaler";
 import { spawnConfetti } from "./components/ui/ConfettiBurst";
 import PraeparatAutocomplete from "./components/ui/PraeparatAutocomplete";
 import InfoTooltip from "./components/ui/InfoTooltip";
+import Spinner from "./components/ui/Spinner";
 import ConsentFormPreview, { ConsentFormView } from "./components/consent/ConsentFormComponents";
 import { CONSENT_TEMPLATES } from "./components/consent/consentTemplates";
 import SignaturePad, { SignatureModal } from "./components/consent/SignaturePad";
@@ -164,6 +165,8 @@ export default function EphiaInvoice() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteVoucher, setConfirmDeleteVoucher] = useState(null);
   const [confirmDeletePatient, setConfirmDeletePatient] = useState(null);
+  // Label shown while a delete runs against the server (false = idle). Disables the confirm modals meanwhile.
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showConsentDoctorSign, setShowConsentDoctorSign] = useState(false);
@@ -1143,7 +1146,8 @@ export default function EphiaInvoice() {
 
   const confirmVoucherDelete = async () => {
     const v = confirmDeleteVoucher;
-    if (!v) return;
+    if (!v || deleteBusy) return;
+    setDeleteBusy("Wird gelöscht…");
     try {
       if (session && v.id) await supabaseDeleteVoucher(session.access_token, v.id);
       setVouchers((prev) => prev.filter((x) => x.id !== v.id));
@@ -1153,6 +1157,8 @@ export default function EphiaInvoice() {
       console.error("Delete voucher failed:", e);
       setConfirmDeleteVoucher(null);
       showErrorToast("Löschen fehlgeschlagen: " + (e?.message || e));
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -1538,8 +1544,10 @@ export default function EphiaInvoice() {
   const handleDelete = (id) => setConfirmDeleteId(id);
 
   const confirmDelete = async () => {
+    if (deleteBusy) return;
     const toDelete = invoices.find((inv) => inv.id === confirmDeleteId);
-
+    setDeleteBusy("Wird gelöscht…");
+    try {
     // Delete from Supabase
     if (session && toDelete && toDelete._supabaseId) {
       try {
@@ -1577,11 +1585,16 @@ export default function EphiaInvoice() {
       navigate("/rechnungen");
       setViewingInvoice(null);
     }
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const confirmDeleteKeepHV = async () => {
     const toConvert = invoices.find((inv) => inv.id === confirmDeleteId);
-    if (!toConvert) return;
+    if (!toConvert || deleteBusy) return;
+    setDeleteBusy("Wird gelöscht…");
+    try {
 
     // Convert to standalone HV: keep GOÄ line items, remove invoice-specific data
     const converted = {
@@ -1612,10 +1625,15 @@ export default function EphiaInvoice() {
       setViewingInvoice(converted);
       setPreviewTab("honorar");
     }
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const confirmDeletePatientAction = async () => {
-    if (!confirmDeletePatient) return;
+    if (!confirmDeletePatient || deleteBusy) return;
+    setDeleteBusy("Wird gelöscht…");
+    try {
     const patientEmail = (confirmDeletePatient.data?.email || confirmDeletePatient.email || "").toLowerCase();
     const patientDbId = confirmDeletePatient.id;
 
@@ -1631,13 +1649,20 @@ export default function EphiaInvoice() {
     // Every call throws on failure so a rejected delete never disappears only locally.
     if (session) {
       try {
+        if (matchingInvoices.length > 0) setDeleteBusy(`Dokumente werden gelöscht… (0/${matchingInvoices.length})`);
+        let done = 0;
         for (const inv of matchingInvoices) {
           if (inv._supabaseId) await deleteDocAdapter(inv._supabaseId);
+          done += 1;
+          setDeleteBusy(`Dokumente werden gelöscht… (${done}/${matchingInvoices.length})`);
         }
         if (patientDbId) {
           if (docsMigrated.current) await supabaseDeleteDocumentsByPatient(session.access_token, patientDbId);
+          setDeleteBusy("Behandlungen werden gelöscht…");
           await supabaseDeleteBehandlungenByPatient(session.access_token, patientDbId);
+          setDeleteBusy("Verlauf wird gelöscht…");
           await supabaseDeleteActivityLogByPatient(session.access_token, patientDbId);
+          setDeleteBusy("Patient:in wird gelöscht…");
           await supabaseDeletePatient(session.access_token, patientDbId);
         }
       } catch (err) {
@@ -1657,6 +1682,9 @@ export default function EphiaInvoice() {
     setConfirmDeletePatient(null);
     setSelectedPatient(null);
     navigate("/patients");
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const handleView = (inv) => {
@@ -2508,11 +2536,14 @@ export default function EphiaInvoice() {
                 }
               </p>
               <div className="flex flex-wrap gap-2 justify-end">
-                <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50" onClick={() => setConfirmDeleteId(null)}>Abbrechen</button>
+                <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!!deleteBusy} onClick={() => setConfirmDeleteId(null)}>Abbrechen</button>
                 {delHasHV && (
-                  <button className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100" onClick={confirmDeleteKeepHV}>Nur Rechnung löschen</button>
+                  <button className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!!deleteBusy} onClick={confirmDeleteKeepHV}>Nur Rechnung löschen</button>
                 )}
-                <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={confirmDelete}>{delHasHV ? "Beides löschen" : "Löschen"}</button>
+                <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5" disabled={!!deleteBusy} onClick={confirmDelete}>
+                  {deleteBusy && <Spinner className="h-3.5 w-3.5" />}
+                  {deleteBusy ? deleteBusy : (delHasHV ? "Beides löschen" : "Löschen")}
+                </button>
               </div>
             </div>
           </div>
@@ -2528,8 +2559,11 @@ export default function EphiaInvoice() {
               Möchtest Du den Gutschein <span className="font-mono">{confirmDeleteVoucher.code}</span> wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
             </p>
             <div className="flex flex-wrap gap-2 justify-end">
-              <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50" onClick={() => setConfirmDeleteVoucher(null)}>Abbrechen</button>
-              <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={confirmVoucherDelete}>Löschen</button>
+              <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!!deleteBusy} onClick={() => setConfirmDeleteVoucher(null)}>Abbrechen</button>
+              <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-1.5" disabled={!!deleteBusy} onClick={confirmVoucherDelete}>
+                {deleteBusy && <Spinner className="h-3.5 w-3.5" />}
+                {deleteBusy ? deleteBusy : "Löschen"}
+              </button>
             </div>
           </div>
         </div>
@@ -2582,9 +2616,15 @@ export default function EphiaInvoice() {
               <p className="text-xs text-gray-500 mb-4">
                 <strong>{pName}</strong> wird mit allen Behandlungen ({pBehCount}) und Dokumenten ({pInvoices.length}, davon {pHVs.length} Honorarvereinbarungen) unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
               </p>
+              {deleteBusy && (
+                <div className="flex items-center gap-2 text-xs text-gray-600 mb-4" role="status" aria-live="polite">
+                  <Spinner className="h-4 w-4 text-red-600" />
+                  <span>{deleteBusy}</span>
+                </div>
+              )}
               <div className="flex gap-2 justify-end">
-                <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50" onClick={() => setConfirmDeletePatient(null)}>Abbrechen</button>
-                <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700" onClick={confirmDeletePatientAction}>Löschen</button>
+                <button className="px-3 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled={!!deleteBusy} onClick={() => setConfirmDeletePatient(null)}>Abbrechen</button>
+                <button className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed" disabled={!!deleteBusy} onClick={confirmDeletePatientAction}>{deleteBusy ? "Löscht…" : "Löschen"}</button>
               </div>
             </div>
           </div>
@@ -3328,12 +3368,7 @@ export default function EphiaInvoice() {
                   onClick={handleSubmit}
                   disabled={isSaving}
                 >
-                  {isSaving && (
-                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  )}
+                  {isSaving && <Spinner className="h-4 w-4 text-white" />}
                   {isSaving ? "Wird gespeichert…" : (hvOnlyMode ? (amendingId ? "Änderung speichern" : "Dokument erstellen") : (amendingId ? "Änderung speichern" : (effectiveMaxSteigerung > 3.5 && !fromHvId) ? "Dokumente erstellen" : "Rechnung erstellen"))}
                 </button>
               </div>
