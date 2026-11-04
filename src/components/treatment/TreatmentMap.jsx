@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { trackEvent } from "../../lib/analytics";
-import { MarkerDot, ColorSwatches, DoseChips, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
+import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
+import { markerPraepIdx } from "../../utils/praeparate";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -32,8 +33,17 @@ export function compressImage(file, maxSize = 400, quality = 0.7) {
   });
 }
 
-export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, notes, autoOpen, onAutoSave, onAutoCancel, facePhoto, onFacePhotoChange, planMode }) {
+export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, notes, autoOpen, onAutoSave, onAutoCancel, facePhoto, onFacePhotoChange, planMode, praeparate }) {
   const faceImg = facePhoto || FACE_IMAGE_B64;
+  // Several Präparate on one document: each point belongs to one of them (marker.p)
+  const praepList = Array.isArray(praeparate) ? praeparate : [];
+  const praepCount = praepList.length;
+  const multiPraep = praepCount > 1;
+  const [activePraep, setActivePraep] = React.useState(markers.length > 0 ? markerPraepIdx(markers[markers.length - 1], praepCount || Infinity) : 0);
+  React.useEffect(() => { if (praepCount > 0 && activePraep > praepCount - 1) setActivePraep(praepCount - 1); }, [praepCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Unit shown for a point: its Präparat's unit, else the document unit
+  const unitFor = (m) => (multiPraep ? (praepList[markerPraepIdx(m, praepCount)]?.einheit || einheit) : einheit);
+  const activeEinheit = multiPraep ? (praepList[activePraep]?.einheit || einheit) : einheit;
   const photoInputRef = React.useRef(null);
   const [modalOpen, setModalOpen] = React.useState(!!autoOpen);
   const [saved, setSaved] = React.useState(markers.length > 0);
@@ -126,7 +136,13 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const faceH = rect.height;
     const x = (rawX / faceW) * 100;
     const y = (rawY / faceH) * 100;
-    setMarkers([...markers, { id: Date.now(), x, y, amount: activeAmount, color: activeColor }]);
+    const point = { id: Date.now(), x, y, amount: activeAmount, color: activeColor };
+    if (multiPraep && activePraep > 0) point.p = activePraep;
+    setMarkers([...markers, point]);
+  };
+
+  const setPraep = (id, p) => {
+    setMarkers(markers.map((m) => (m.id === id ? { ...m, p } : m)));
   };
 
   const updateAmount = (id, val) => {
@@ -160,7 +176,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
           <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
           {markers.map((m, idx) => (
             <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-              <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow />
+              <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow praepCount={praepCount} />
             </div>
           ))}
         </div>
@@ -171,9 +187,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 {markers.map((m, idx) => (
                   <div key={m.id} className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-400 w-5 text-right flex-shrink-0">{idx + 1}.</span>
-                    <MarkerDot marker={m} idx={idx} size={20} fontSize={10} />
+                    <MarkerDot marker={m} idx={idx} size={20} fontSize={10} praepCount={praepCount} />
                     <input type="text" inputMode="decimal" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded bg-gray-50" value={m.amount} readOnly />
-                    <span className="text-xs text-gray-400">{einheit}</span>
+                    <span className="text-xs text-gray-400">{unitFor(m)}</span>
                   </div>
                 ))}
               </div>
@@ -204,13 +220,13 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
               <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
               {markers.map((m, idx) => (
                 <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                  <MarkerDot marker={m} idx={idx} size={15} fontSize={8} shadow />
+                  <MarkerDot marker={m} idx={idx} size={15} fontSize={8} shadow praepCount={praepCount} />
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-2 mt-1.5">
               <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              <span className="text-xs text-gray-500">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && ` · ${totalStr} ${einheit}`} dokumentiert</span>
+              <span className="text-xs text-gray-500">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && !multiPraep && ` · ${totalStr} ${einheit}`} dokumentiert</span>
               <button className="text-xs text-blue-500 hover:text-blue-700" onClick={() => setModalOpen(true)}>Bearbeiten</button>
             </div>
           </div>
@@ -248,11 +264,12 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 }} />
               )}
               <p className="text-xs text-gray-400 mb-1">
-                <span className="hidden sm:inline">Dosis und Farbe wählen, dann auf das Gesicht klicken. Jeder neue Punkt übernimmt beides.</span>
-                <span className="sm:hidden">Dosis und Farbe wählen, dann auf das Gesicht tippen. Zwei Finger zum Zoomen.</span>
+                <span className="hidden sm:inline">{multiPraep ? "Präparat, Dosis und Farbe wählen" : "Dosis und Farbe wählen"}, dann auf das Gesicht klicken. Jeder neue Punkt übernimmt die Auswahl.</span>
+                <span className="sm:hidden">{multiPraep ? "Präparat, Dosis und Farbe wählen" : "Dosis und Farbe wählen"}, dann auf das Gesicht tippen. Zwei Finger zum Zoomen.</span>
               </p>
               <p className="text-xs text-amber-500 mb-2">Die Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
-              <div className="mb-2"><DoseChips value={activeAmount} onChange={selectDose} einheit={einheit} color={activeColor} /></div>
+              {multiPraep && <div className="mb-2"><PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} /></div>}
+              <div className="mb-2"><DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} /></div>
               <div className="mb-3"><ColorSwatches value={activeColor} onChange={setActiveColor} /></div>
               {zoom > 1 && (
                 <button className="text-xs text-blue-500 hover:text-blue-700 mb-2 sm:hidden" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Zoom zurücksetzen</button>
@@ -278,7 +295,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                       {markers.map((m, idx) => (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                          <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow />
+                          <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
                         </div>
                       ))}
                     </div>
@@ -321,10 +338,11 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       <div key={m.id} className="flex items-center gap-1.5">
                         <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
                         <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
-                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} />
+                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
                         </button>
+                        <PraeparatBadge marker={m} praeparate={praepList} onCycle={(p) => setPraep(m.id, p)} />
                         <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => updateAmount(m.id, e.target.value)} />
-                        <span className="text-xs text-gray-400">{einheit}</span>
+                        <span className="text-xs text-gray-400">{unitFor(m)}</span>
                         <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => removeMarker(m.id)} title="Löschen">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>

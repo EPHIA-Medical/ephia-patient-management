@@ -1,5 +1,6 @@
 import React from "react";
 import { evalAmount } from "../../utils/helpers";
+import { praepLetter, markerPraepIdx } from "../../utils/praeparate";
 
 // ═══════════════════ Shared injection-point helpers ═══════════════════
 // Markers are stored as { x, y, amount, color? }. `color` is optional and new;
@@ -57,22 +58,26 @@ export const nextMarkerColor = (hex) => {
 
 export const fmtNum = (v) => (v % 1 === 0 ? String(v) : v.toFixed(2).replace(/0+$/, "").replace(".", ","));
 
-// Label shown inside a dot: the evaluated units if entered, else the running number
-export const markerLabel = (m, idx) => {
+// Label shown inside a dot: the evaluated units if entered, else the running
+// number. With several Präparate on the document, the Präparat letter follows
+// the units ("5A", "2,5B") so the face shows which product went where.
+export const markerLabel = (m, idx, praepCount = 1) => {
   const v = evalAmount(m.amount);
-  return v > 0 ? fmtNum(v) : String(idx + 1);
+  const base = v > 0 ? fmtNum(v) : String(idx + 1);
+  return praepCount > 1 ? `${base}${praepLetter(markerPraepIdx(m, praepCount))}` : base;
 };
 
-// Strip runtime ids before persisting (keeps colour when set)
+// Strip runtime ids before persisting (keeps colour and Präparat when set)
 export const serializeMarkers = (markers) => (markers || []).map((m) => {
   const out = { x: m.x, y: m.y, amount: m.amount };
   if (m.color) out.color = m.color;
+  if (Number.isInteger(m.p) && m.p > 0) out.p = m.p;
   return out;
 });
 
 // Pill-shaped dot that grows with its label (e.g. "12,5")
-export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false, style = {} }) {
-  const label = markerLabel(marker, idx);
+export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false, style = {}, praepCount = 1 }) {
+  const label = markerLabel(marker, idx, praepCount);
   const bg = markerColor(marker);
   return (
     <span
@@ -164,6 +169,48 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
       />
       <span className="text-xs text-gray-400">{einheit}</span>
     </div>
+  );
+}
+
+// Präparat chip row: which Präparat newly placed points belong to
+export function PraeparatChips({ praeparate, value, onChange, label = "Präparat für neue Punkte" }) {
+  if (!praeparate || praeparate.length < 2) return null;
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-xs text-gray-500 mr-0.5">{label}:</span>
+      {praeparate.map((p, i) => {
+        const active = value === i;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChange(i)}
+            className={`text-xs rounded-full transition px-2.5 ${active ? "bg-gray-800 text-white font-semibold" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            style={{ height: 26 }}
+          >
+            <span className="font-bold mr-1">{praepLetter(i)}</span>{p.name || `Präparat ${praepLetter(i)}`}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Small letter badge on a marker row; clicking moves the point to the next Präparat
+export function PraeparatBadge({ marker, praeparate, onCycle }) {
+  if (!praeparate || praeparate.length < 2) return null;
+  const idx = markerPraepIdx(marker, praeparate.length);
+  const name = praeparate[idx]?.name || `Präparat ${praepLetter(idx)}`;
+  return (
+    <button
+      type="button"
+      className="flex-shrink-0 text-[10px] font-bold rounded bg-gray-800 text-white hover:bg-gray-600 transition"
+      style={{ width: 18, height: 18, lineHeight: "18px" }}
+      title={`${name} – klicken für nächstes Präparat`}
+      onClick={() => onCycle && onCycle((idx + 1) % praeparate.length)}
+    >
+      {praepLetter(idx)}
+    </button>
   );
 }
 

@@ -1756,16 +1756,57 @@ export default function EphiaInvoice() {
     return created.id;
   };
 
-  const handleUpdateBehandlung = async (behId, behData) => {
+  const persistBehandlung = async (behId, behData) => {
     let serverData = behData, serverIv = null, serverEncVer = null;
     if (currentMEK) {
       const enc = await encryptData(behData, currentMEK);
       serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
     }
     await supabaseUpdateBehandlung(session.access_token, behId, serverData, serverIv, serverEncVer);
-    const beh = behandlungen.find(b => b._id === behId);
     setBehandlungen(prev => prev.map(b => b._id === behId ? { ...behData, _id: behId, _patientId: b._patientId, _createdAt: b._createdAt } : b));
-    logActivity(beh?._patientId, "behandlung", behId, "updated", `Behandlung aktualisiert`);
+  };
+
+  const isBehandlungsdoku = (inv) => !!(inv && (inv._standalone || inv._treatmentDocOnly || inv._docType === "behandlungsdoku"));
+
+  // Behandlungstermin and the date of its Behandlungsdoku stay in step: editing the
+  // Behandlung moves its Behandlungsdoku(s) along (only those, never Rechnungen,
+  // Honorarvereinbarungen or Aufklärungen), editing the Behandlungsdoku moves the Behandlung.
+  const handleUpdateBehandlung = async (behId, behData) => {
+    const beh = behandlungen.find(b => b._id === behId);
+    await persistBehandlung(behId, behData);
+    const dateChanged = !!(beh && behData.datum && beh.datum !== behData.datum);
+    logActivity(beh?._patientId, "behandlung", behId, "updated", dateChanged ? `Behandlungstermin auf ${fmtDate(behData.datum)} geändert` : `Behandlung aktualisiert`);
+    if (!dateChanged) return;
+    const docs = invoices.filter(inv => inv._behandlungId === behId && isBehandlungsdoku(inv));
+    // A lone Behandlungsdoku always follows; with several, only those that still matched the old date
+    const toSync = docs.filter(d => docs.length === 1 || (d.treatmentDoc?.behandlungsDatum || "") === (beh.datum || ""));
+    let synced = 0;
+    for (const d of toSync) {
+      const updatedDoc = { ...d, treatmentDoc: { ...(d.treatmentDoc || {}), behandlungsDatum: behData.datum }, lastModifiedAt: new Date().toISOString() };
+      try {
+        if (session && d._supabaseId) await updateDocAdapter(d._supabaseId, updatedDoc);
+        setInvoices(prev => prev.map(inv => inv.id === d.id ? updatedDoc : inv));
+        synced += 1;
+      } catch (e) { console.error("Failed to sync Behandlungsdoku date:", e); }
+    }
+    if (synced > 0) showToast(`Datum der Behandlungsdoku ebenfalls auf ${fmtDate(behData.datum)} gesetzt`);
+  };
+
+  // After a Behandlungsdoku was saved with a new date: move its Behandlung to that date
+  const syncBehandlungToDoc = async (doc, previousDate) => {
+    const newDate = doc?.treatmentDoc?.behandlungsDatum;
+    if (!isBehandlungsdoku(doc) || !doc._behandlungId || !newDate || newDate === previousDate) return;
+    const beh = behandlungen.find(b => b._id === doc._behandlungId);
+    if (!beh || beh.datum === newDate) return;
+    const data = Object.fromEntries(Object.entries(beh).filter(([k]) => !k.startsWith("_")));
+    try {
+      await persistBehandlung(beh._id, { ...data, datum: newDate });
+      logActivity(beh._patientId, "behandlung", beh._id, "updated", `Behandlungstermin auf ${fmtDate(newDate)} geändert`);
+      showToast(`Behandlungstermin in der Übersicht auf ${fmtDate(newDate)} angepasst`);
+    } catch (e) {
+      console.error("Failed to sync Behandlung date:", e);
+      showErrorToast("Behandlungstermin konnte nicht angepasst werden: " + (e?.message || e));
+    }
   };
 
   const handleDeleteBehandlung = async (behId, { deleteDocs = false } = {}) => {
@@ -3994,19 +4035,22 @@ export default function EphiaInvoice() {
                     logActivity(tdPatientId, "behandlungsdoku", created.id, "created", "Behandlungsdoku erstellt");
                   } catch (e) { console.error("Failed to persist standalone treatment:", e); }
                 }
-                setInvoices([updated, ...invoices]);
+                setInvoices(prev => [updated, ...prev]);
+                await syncBehandlungToDoc(updated, null);
               }
               else {
-                setInvoices(invoices.map(inv => inv.id === updated.id ? updated : inv));
+                const previous = invoices.find(inv => inv.id === updated.id);
+                setInvoices(prev => prev.map(inv => inv.id === updated.id ? updated : inv));
                 if (session && updated._supabaseId) {
                   try {
                     await updateDocAdapter(updated._supabaseId, updated);
                     logActivity(updated._patientDbId, updated._docType || "behandlungsdoku", updated._supabaseId, "updated", "Dokument aktualisiert");
                   } catch (e) { console.error("Failed to persist treatment update:", e); }
                 }
+                await syncBehandlungToDoc(updated, previous?.treatmentDoc?.behandlungsDatum);
               }
             }}
-            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, attachTreatmentPdf: qAttachTreatment }) => {
+            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
               try {
                 // Resolve decrypted patient data: _raw.data (from edit flows) > .data (from list) > top-level fields
                 const rawData = selectedPatient._raw?.data;
@@ -4029,7 +4073,7 @@ export default function EphiaInvoice() {
                   preisProMlStr: String(qPpm).replace(".", ","),
                   wunschGesamtStr: String(wunschGesamt).replace(".", ","),
                   selectedZuschlaege: [],
-                  sachkosten: [],
+                  sachkosten: qSachkosten || [],
                   treatmentDoc: treatment.treatmentDoc || null,
                   attachTreatmentPdf: !!qAttachTreatment,
                   begruendung: (customS && (customS.s1 > 2.3 || customS.s5 > 2.3 || customS.s267 > 2.3) && Math.max(customS.s1, customS.s5, customS.s267) <= 3.5) ? "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten." : "",
@@ -4051,7 +4095,7 @@ export default function EphiaInvoice() {
                   logActivity(qiPatientId, "rechnung", created.id, "created", `Schnellrechnung ${nummer} erstellt`);
                 }
 
-                setInvoices([entry, ...invoices]);
+                setInvoices(prev => [entry, ...prev]);
 
                 // Link the treatment to the new invoice by updating it
                 const updatedTreatment = { ...treatment, invoiceMeta: { ...treatment.invoiceMeta, nummer } };

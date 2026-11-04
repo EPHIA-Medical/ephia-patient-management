@@ -2,6 +2,14 @@ import React, { useState } from "react";
 import { fmtDate, fmt, evalAmount } from "../../utils/helpers";
 import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
 import { spawnConfetti } from "../ui/ConfettiBurst";
+import { getPraeparate } from "../../utils/praeparate";
+
+// All Präparate of a document, e.g. "Bocouture, Relfydess"
+const praepNames = (inv) => {
+  const td = inv.treatmentDoc;
+  const names = td ? getPraeparate(td).map((p) => p.name).filter(Boolean) : [];
+  return names.length > 0 ? names.join(", ") : (inv.praeparat || "");
+};
 
 // ═══════════════════ Invoice List View ═══════════════════
 
@@ -126,7 +134,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
     vorname: (inv) => safePatient(inv).vorname || (safePatient(inv).name || "").split(" ")[0] || "",
     nachname: (inv) => safePatient(inv).nachname || (safePatient(inv).name || "").split(" ").slice(1).join(" ") || "",
     behandlungsDatum: (inv) => (inv.treatmentDoc || {}).behandlungsDatum || inv.invoiceMeta.datum || "",
-    praeparat: (inv) => (inv.treatmentDoc || {}).praeparat || inv.praeparat || "",
+    praeparat: (inv) => praepNames(inv),
     nummer: (inv) => parseNummer(inv.invoiceMeta.nummer),
     erstelltAm: (inv) => inv._createdAt || inv.savedAt || "",
   };
@@ -381,7 +389,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                 const vorname = p.vorname || (p.name || "").split(" ")[0] || "";
                 const nachname = p.nachname || (p.name || "").split(" ").slice(1).join(" ") || "";
                 const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : fmtDate(inv.invoiceMeta.datum);
-                const praep = td.praeparat || inv.praeparat || "–";
+                const praep = praepNames(inv) || "–";
                 const hasInvoice = inv.invoiceMeta.nummer && inv.invoiceMeta.nummer !== "—";
                 const createdAt = inv._createdAt ? fmtDate(inv._createdAt.slice(0, 10)) : (inv.savedAt ? fmtDate(inv.savedAt.slice(0, 10)) : "–");
                 return (

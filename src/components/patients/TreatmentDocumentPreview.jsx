@@ -2,6 +2,7 @@ import React from "react";
 import { fmtDate, fmtPhone, evalAmount, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { MARKER_COLORS, markerColor, markerLabel, markerTextColor, fmtNum } from "../treatment/markerUtils";
+import { getPraeparate, praeparatTotals, praepMengeStr } from "../../utils/praeparate";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
@@ -41,6 +42,13 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const markers = td.markers || [];
   const praep = td.praeparat || "";
   const einh = einheit || td.einheit || "SE";
+  // Several Präparate in one session: each point carries its Präparat letter
+  const praeparate = getPraeparate(td);
+  const praepCount = praeparate.length;
+  const multiPraep = praepCount > 1;
+  const praepTotals = praeparatTotals(td);
+  const allEinh = praepTotals.map((t) => t.einheit);
+  const sameEinh = allEinh.every((e) => e === allEinh[0]);
   const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : "–";
   const totalUnits = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
   const totalStr = totalUnits % 1 === 0 ? totalUnits.toString() : totalUnits.toFixed(2).replace(/0+$/, "").replace(".", ",");
@@ -51,8 +59,8 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const patName = [pat.vorname, pat.nachname].filter(Boolean).join(" ") || pat.name || "";
 
   // Pre-generate dot images for all markers (memoized on their content)
-  const markersKey = JSON.stringify(markers.map((m) => [m.amount, m.color || ""]));
-  const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i), markerColor(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const markersKey = JSON.stringify(markers.map((m) => [m.amount, m.color || "", m.p || 0])) + praepCount;
+  const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i, praepCount), markerColor(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Legend grouped by colour: count of points and units per colour
   const colorGroups = (() => {
@@ -112,8 +120,19 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
       <div style={{ fontSize: "15px", fontWeight: "700", color: "#222", marginBottom: "4px" }}>Behandlungsdokumentation</div>
       <div style={{ fontSize: "11px", color: "#444", marginBottom: "20px" }}>Datum: {datumStr}</div>
 
-      {/* Präparat + Menge */}
-      {praep && (
+      {/* Präparat(e) + Menge */}
+      {multiPraep ? (
+        <div style={{ marginBottom: "16px" }}>
+          <div style={S.sectionTitle}>Präparate</div>
+          {praepTotals.map((t) => (
+            <div key={t.idx} style={{ fontSize: "11px", color: "#333", display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+              <span style={{ display: "inline-block", minWidth: 14, height: 14, lineHeight: "14px", textAlign: "center", borderRadius: 3, background: "#1f2937", color: "#fff", fontSize: "9px", fontWeight: 700 }}>{t.letter}</span>
+              <span>{t.name || "Präparat"}{praepMengeStr(t) ? ` — ${praepMengeStr(t)}` : ""}{t.count > 0 ? ` (${t.count} ${t.count === 1 ? "Punkt" : "Punkte"})` : ""}</span>
+            </div>
+          ))}
+          {totalUnits > 0 && sameEinh && <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>Gesamt: {totalStr} {einh}</div>}
+        </div>
+      ) : praep && (
         <div style={{ marginBottom: "16px" }}>
           <div style={S.sectionTitle}>Präparat</div>
           <div style={{ fontSize: "11px", color: "#333" }}>
@@ -139,7 +158,14 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
             </div>
             {/* Legend: the dots show the units per point; summarise per colour */}
             <div style={{ fontSize: "11px", color: "#333", lineHeight: "1.6" }}>
-              <div style={{ color: "#666", marginBottom: "6px" }}>Die Zahl im Punkt ist die Menge in {einh}.</div>
+              <div style={{ color: "#666", marginBottom: "6px" }}>{multiPraep ? `Die Zahl im Punkt ist die Menge${sameEinh ? ` in ${einh}` : ""}, der Buchstabe das Präparat.` : `Die Zahl im Punkt ist die Menge in ${einh}.`}</div>
+              {multiPraep && praepTotals.map((t) => (
+                <div key={t.idx} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                  <span style={{ display: "inline-block", minWidth: 14, height: 14, lineHeight: "14px", textAlign: "center", borderRadius: 3, background: "#1f2937", color: "#fff", fontSize: "9px", fontWeight: 700, flexShrink: 0 }}>{t.letter}</span>
+                  <span>{t.name || "Präparat"} · {t.count} {t.count === 1 ? "Punkt" : "Punkte"}{t.units > 0 ? ` · ${fmtNum(t.units)} ${t.einheit}` : ""}</span>
+                </div>
+              ))}
+              {multiPraep && <div style={{ height: 4 }} />}
               {multiColor && colorGroups.map((g) => (
                 <div key={g.hex} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
                   <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: g.hex, flexShrink: 0 }} />
@@ -147,7 +173,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
                 </div>
               ))}
               <div style={{ marginTop: multiColor ? "6px" : 0, fontWeight: 600 }}>
-                {markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 ? ` · ${totalStr} ${einh} gesamt` : ""}
+                {markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && (!multiPraep || sameEinh) ? ` · ${totalStr} ${einh} gesamt` : ""}
               </div>
             </div>
           </div>

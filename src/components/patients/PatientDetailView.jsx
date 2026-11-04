@@ -10,6 +10,7 @@ import BehandlungDetailPanel from "./BehandlungDetailPanel";
 import BehandlungAddPanel from "./BehandlungAddPanel";
 import PatientBehandlungenSidebar from "./PatientBehandlungenSidebar";
 import Spinner from "../ui/Spinner";
+import { emptyPraeparat } from "../../utils/praeparate";
 
 // ═══════════════════ Patient Detail View ═══════════════════
 
@@ -36,11 +37,10 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   // New treatment states (shared between add and detail panels via pendingQuickInvoice flow)
   const [newTreatmentMarkers, setNewTreatmentMarkers] = useState([]);
   const [newTreatmentInvoiceId, setNewTreatmentInvoiceId] = useState(null);
-  const [newTreatmentEinheit, setNewTreatmentEinheit] = useState("SE");
-  const [newTreatmentPraeparat, setNewTreatmentPraeparat] = useState("");
+  // Präparate used in the session: [{ name, einheit, amount }], at least one
+  const [newTreatmentPraeparate, setNewTreatmentPraeparate] = useState([emptyPraeparat()]);
   const [newTreatmentDate, setNewTreatmentDate] = useState(new Date().toISOString().slice(0, 10));
   const [newTreatmentNotes, setNewTreatmentNotes] = useState("");
-  const [newTreatmentAmount, setNewTreatmentAmount] = useState("");
   const [newTreatmentFacePhoto, setNewTreatmentFacePhoto] = useState("");
   const [newTreatmentBehId, setNewTreatmentBehId] = useState(null);
 
@@ -160,6 +160,13 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     else { onView && onView(inv); }
   };
 
+  // "+ Behandlungsdoku" inside a Behandlung: the document starts on the Behandlungstermin
+  const openBehandlungsdokuFor = (beh) => {
+    setNewTreatmentBehId(beh ? beh._id : null);
+    setNewTreatmentDate((beh && beh.datum) || new Date().toISOString().slice(0, 10));
+    setCenterView("behandlungen_add");
+  };
+
   const downloadTreatmentDoc = async (inv) => {
     setTreatmentDocTarget(inv);
     await new Promise(r => setTimeout(r, 150));
@@ -256,8 +263,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                 newBehDatum={newBehDatum} setNewBehDatum={setNewBehDatum}
                 newBehZeit={newBehZeit} setNewBehZeit={setNewBehZeit}
                 expandedBeh={expandedBeh} setExpandedBeh={setExpandedBeh}
-                onCreateBehandlung={onCreateBehandlung} onDeleteBehandlung={onDeleteBehandlung}
-                onStartConsent={onStartConsent} onNewHV={onNewHV} onCreateInvoice={onCreateInvoice}
+                onCreateBehandlung={onCreateBehandlung} onDeleteBehandlung={onDeleteBehandlung} onUpdateBehandlung={onUpdateBehandlung}
+                onStartConsent={onStartConsent} onNewHV={onNewHV} onCreateInvoice={onCreateInvoice} onAddBehandlungsdoku={openBehandlungsdokuFor}
                 setCenterView={setCenterView} setNewTreatmentBehId={setNewTreatmentBehId}
                 onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
                 setViewingTreatment={setViewingTreatment} setConfirmDeleteBeh={setConfirmDeleteBeh}
@@ -311,11 +318,9 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               editingTreatmentInv={editingTreatmentInv} setEditingTreatmentInv={setEditingTreatmentInv}
               newTreatmentMarkers={newTreatmentMarkers} setNewTreatmentMarkers={setNewTreatmentMarkers}
               newTreatmentInvoiceId={newTreatmentInvoiceId} setNewTreatmentInvoiceId={setNewTreatmentInvoiceId}
-              newTreatmentEinheit={newTreatmentEinheit} setNewTreatmentEinheit={setNewTreatmentEinheit}
-              newTreatmentPraeparat={newTreatmentPraeparat} setNewTreatmentPraeparat={setNewTreatmentPraeparat}
+              newTreatmentPraeparate={newTreatmentPraeparate} setNewTreatmentPraeparate={setNewTreatmentPraeparate}
               newTreatmentDate={newTreatmentDate} setNewTreatmentDate={setNewTreatmentDate}
               newTreatmentNotes={newTreatmentNotes} setNewTreatmentNotes={setNewTreatmentNotes}
-              newTreatmentAmount={newTreatmentAmount} setNewTreatmentAmount={setNewTreatmentAmount}
               newTreatmentFacePhoto={newTreatmentFacePhoto} setNewTreatmentFacePhoto={setNewTreatmentFacePhoto}
               newTreatmentBehId={newTreatmentBehId} setNewTreatmentBehId={setNewTreatmentBehId}
               onUpdateInvoice={onUpdateInvoice}

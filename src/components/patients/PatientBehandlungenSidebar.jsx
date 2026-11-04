@@ -6,7 +6,7 @@ export default function PatientBehandlungenSidebar({
   patientBeh, matchingInvoices, patientDbId, patient,
   newBehandlungOpen, setNewBehandlungOpen, newBehDatum, setNewBehDatum, newBehZeit, setNewBehZeit,
   expandedBeh, setExpandedBeh,
-  onCreateBehandlung, onDeleteBehandlung, onStartConsent, onNewHV, onCreateInvoice,
+  onCreateBehandlung, onDeleteBehandlung, onUpdateBehandlung, onStartConsent, onNewHV, onCreateInvoice, onAddBehandlungsdoku,
   setCenterView, setNewTreatmentBehId,
   onViewConsent, onViewHV, onView,
   setViewingTreatment, setConfirmDeleteBeh,
@@ -14,6 +14,28 @@ export default function PatientBehandlungenSidebar({
   onLinkDocToBehandlung, onDelete,
 }) {
   const [dragOverBehId, setDragOverBehId] = useState(null);
+  // Inline editing of a Behandlungstermin (date + time)
+  const [editingBehId, setEditingBehId] = useState(null);
+  const [editDatum, setEditDatum] = useState("");
+  const [editZeit, setEditZeit] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  const startEditBeh = (beh) => {
+    setEditDatum(beh.datum || "");
+    setEditZeit(beh.zeit || "");
+    setEditingBehId(beh._id);
+  };
+  const saveEditBeh = async (beh) => {
+    if (!editDatum || editSaving) return;
+    // Persist the decrypted payload without the runtime `_` fields
+    const data = Object.fromEntries(Object.entries(beh).filter(([k]) => !k.startsWith("_")));
+    setEditSaving(true);
+    try {
+      await onUpdateBehandlung(beh._id, { ...data, datum: editDatum, zeit: editZeit || "" });
+      setEditingBehId(null);
+    } catch (e) { showToast("Fehler: " + e.message, { error: true }); }
+    finally { setEditSaving(false); }
+  };
 
   const handleDragStart = (e, doc) => {
     e.dataTransfer.setData("text/plain", doc._supabaseId || doc.id);
@@ -114,6 +136,33 @@ export default function PatientBehandlungenSidebar({
 
               {isExpanded && (
                 <div className="border-t border-gray-100">
+                  {/* Behandlungstermin: editable in place */}
+                  <div className="px-4 py-2.5 border-b border-gray-50 bg-gray-50/60">
+                    {editingBehId === beh._id ? (
+                      <div className="flex items-end gap-2 flex-wrap">
+                        <div>
+                          <label className="text-[10px] text-gray-500 block mb-0.5">Datum</label>
+                          <input type="date" value={editDatum} onChange={(e) => setEditDatum(e.target.value)} className="border border-[#DFE3EB] rounded-md px-2 py-1 text-sm bg-white" style={{ WebkitAppearance: "none", appearance: "none", colorScheme: "light" }} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 block mb-0.5">Uhrzeit</label>
+                          <input type="time" value={editZeit} onChange={(e) => setEditZeit(e.target.value)} className="border border-[#DFE3EB] rounded-md px-2 py-1 text-sm bg-white" style={{ WebkitAppearance: "none", appearance: "none", colorScheme: "light" }} />
+                        </div>
+                        <button className="px-2.5 py-1.5 text-xs rounded bg-blue-500 text-white hover:bg-blue-600 transition disabled:opacity-50" disabled={!editDatum || editSaving} onClick={() => saveEditBeh(beh)}>{editSaving ? "Speichert…" : "Speichern"}</button>
+                        <button className="px-2.5 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" disabled={editSaving} onClick={() => setEditingBehId(null)}>Abbrechen</button>
+                        <p className="w-full text-[10px] text-gray-400">Das Datum einer zugeordneten Behandlungsdoku wird mit angepasst, Rechnungen und Aufklärungen nicht.</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Termin: {fmtDate(beh.datum)}{beh.zeit ? `, ${beh.zeit} Uhr` : ""}</span>
+                        {onUpdateBehandlung && (
+                          <button className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Termin bearbeiten" onClick={() => startEditBeh(beh)}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   {behDocs.length === 0 && (
                     <div className="px-4 py-5 text-center text-gray-400 text-sm">Noch keine Dokumente in dieser Behandlung.</div>
                   )}
@@ -146,7 +195,7 @@ export default function PatientBehandlungenSidebar({
                   <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-4 flex-wrap">
                     <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { onStartConsent && onStartConsent(patient, beh._id); }}>+ Aufkl&auml;rung</button>
                     <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { onNewHV && onNewHV(beh._id); }}>+ HV</button>
-                    <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { if (setNewTreatmentBehId) setNewTreatmentBehId(beh._id); setCenterView("behandlungen_add"); }}>+ Behandlungsdoku</button>
+                    <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { if (onAddBehandlungsdoku) { onAddBehandlungsdoku(beh); return; } if (setNewTreatmentBehId) setNewTreatmentBehId(beh._id); setCenterView("behandlungen_add"); }}>+ Behandlungsdoku</button>
                     <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { onCreateInvoice && onCreateInvoice(patient, beh._id); }}>+ Rechnung</button>
                   </div>
                   {/* Delete Behandlung */}
