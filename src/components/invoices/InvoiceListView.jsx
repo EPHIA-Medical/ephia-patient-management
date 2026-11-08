@@ -78,7 +78,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
   const thClsR = "text-right px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide cursor-pointer hover:text-gray-600 select-none whitespace-nowrap";
 
   const tabBtnCls = (active) =>
-    `px-4 py-2 text-sm font-medium border-b-2 transition ${
+    `px-3 py-2 text-sm font-medium border-b-2 rounded-t transition outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${
       active ? "border-blue-500 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300"
     }`;
 
@@ -142,18 +142,18 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
   return (
     <div className="bg-white rounded-lg border border-[#DFE3EB]">
       <div className="px-3 sm:px-5 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 relative z-10">
-        <div className="flex items-center gap-4 overflow-x-auto">
+        <div className="flex items-center gap-1 min-w-0 overflow-x-auto hide-scrollbar">
           <button className={tabBtnCls(tab === "rechnungen") + " whitespace-nowrap flex-shrink-0"} onClick={() => { setTab("rechnungen"); setSortKey(null); if (onTabChange) onTabChange("rechnungen"); }}>
             Rechnungen
           </button>
           <button className={tabBtnCls(tab === "hv") + " whitespace-nowrap flex-shrink-0"} onClick={() => { setTab("hv"); setSortKey(null); if (onTabChange) onTabChange("hv"); }}>
-            <span className="sm:hidden">HV</span><span className="hidden sm:inline">Honorarvereinbarungen</span>
+            <span className="xl:hidden">HV</span><span className="hidden xl:inline">Honorarvereinbarungen</span>
           </button>
           <button className={tabBtnCls(tab === "td") + " whitespace-nowrap flex-shrink-0"} onClick={() => { setTab("td"); setSortKey(null); if (onTabChange) onTabChange("td"); }}>
-            <span className="sm:hidden">Behandl.</span><span className="hidden sm:inline">Behandlungsdokumentationen</span>
+            <span className="xl:hidden">Behandl.</span><span className="hidden xl:inline">Behandlungsdokumentationen</span>
           </button>
           <button className={tabBtnCls(tab === "consent") + " whitespace-nowrap flex-shrink-0"} onClick={() => { setTab("consent"); setSortKey(null); if (onTabChange) onTabChange("consent"); }}>
-            <span className="sm:hidden">Aufkl.</span><span className="hidden sm:inline">Aufklärungsbögen</span>
+            <span className="xl:hidden">Aufkl.</span><span className="hidden xl:inline">Aufklärungsbögen</span>
           </button>
         </div>
         <div className="flex items-center gap-2">
