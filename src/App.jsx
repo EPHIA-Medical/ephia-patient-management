@@ -30,6 +30,8 @@ import { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen, R
 import ImpressumPage from "./components/legal/Impressum";
 import DatenschutzPage from "./components/legal/Datenschutz";
 import AGBPage from "./components/legal/AGB";
+import AVVPage, { AVVAcceptScreen } from "./components/legal/AVV";
+import { AVV_VERSION, avvDocumentHash } from "./components/legal/avvText";
 import PreviewScaler from "./components/ui/PreviewScaler";
 import { spawnConfetti } from "./components/ui/ConfettiBurst";
 import PraeparatAutocomplete from "./components/ui/PraeparatAutocomplete";
@@ -83,6 +85,11 @@ export default function EphiaInvoice() {
   // reset): { sess, profile, password }, kept in memory until the escrow
   // release code completes the login. See docs/escrow-recovery-plan.md 3.2.
   const [pendingRecovery, setPendingRecovery] = useState(null);
+  // Auftragsverarbeitungsvertrag: null = not accepted for AVV_VERSION, object = the acceptance row.
+  const [avvAcceptance, setAvvAcceptance] = useState(null);
+  const [avvChecked, setAvvChecked] = useState(false);
+  const [avvSaving, setAvvSaving] = useState(false);
+  const [avvError, setAvvError] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState(false);
   const [authSuccessEmail, setAuthSuccessEmail] = useState("");
@@ -112,7 +119,7 @@ export default function EphiaInvoice() {
   const settingsSection = isSettingsPage ? (pathname.split("/")[2] || "praxis") : null;
   const settingsTemplateId = isSettingsPage ? (pathname.split("/")[3] || null) : null;
   const isKnownRoute = pathname === "/" || pathname === "/patients" || pathname === "/erstellen"
-    || pathname === "/agb" || pathname === "/impressum" || pathname === "/datenschutz"
+    || pathname === "/agb" || pathname === "/impressum" || pathname === "/datenschutz" || pathname === "/avv"
     || isPatientDetail || isCreatePage || isListPage || isPreviewPage || isConsentPage
     || isVoucherListPage || isVoucherCreatePage || isVoucherPreviewPage || isSettingsPage;
   const activeDocId = isPreviewPage ? pathname.split("/")[2] : null;
@@ -495,6 +502,17 @@ export default function EphiaInvoice() {
   // ─── Load user data from Supabase (with E2EE decryption) ───
   const loadUserData = async (accessToken, userId, userEmail) => {
     try {
+      // AVV acceptance for the current version (blocks the app until accepted)
+      try {
+        const avvRes = await fetch(`${SUPABASE_URL}/rest/v1/avv_acceptances?user_id=eq.${pgv(userId)}&version=eq.${encodeURIComponent(AVV_VERSION)}&select=version,document_sha256,accepted_at`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+        });
+        const rows = avvRes.ok ? await avvRes.json() : [];
+        setAvvAcceptance(rows.length > 0 ? rows[0] : null);
+        setAvvChecked(avvRes.ok);
+      } catch (e) {
+        console.error("[AVV] Failed to load acceptance:", e);
+      }
       // Load practice data
       const profiles = await supabaseFetchProfiles(accessToken, userId);
       if (profiles.length > 0 && profiles[0].practice_data) {
@@ -995,6 +1013,34 @@ export default function EphiaInvoice() {
     }
   };
 
+  const handleAcceptAvv = async () => {
+    if (!session || !user) return;
+    setAvvSaving(true);
+    setAvvError("");
+    try {
+      const document_sha256 = await avvDocumentHash();
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/avv_acceptances`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
+        body: JSON.stringify({
+          user_id: user.id,
+          version: AVV_VERSION,
+          document_sha256,
+          practice_snapshot: { name: practice.name || "", address1: practice.address1 || "", address2: practice.address2 || "", address3: practice.address3 || "", email: user.email || "" },
+          user_agent: navigator.userAgent.slice(0, 300),
+        }),
+      });
+      const rows = res.ok ? await res.json() : [];
+      if (!res.ok || rows.length !== 1) throw new Error("Der Vertrag konnte nicht gespeichert werden. Bitte versuche es noch einmal.");
+      setAvvAcceptance(rows[0]);
+      trackEvent("avv_accepted", { version: AVV_VERSION }, session.access_token);
+    } catch (err) {
+      setAvvError(err.message);
+    } finally {
+      setAvvSaving(false);
+    }
+  };
+
   const handleSignOut = async () => {
     if (session) {
       try {
@@ -1017,6 +1063,8 @@ export default function EphiaInvoice() {
     setDataLoaded(false);
     docsMigrated.current = false;
     setSelectedPatient(null);
+    setAvvAcceptance(null);
+    setAvvChecked(false);
     setAuthPage("login");
     setAuthError("");
     // Leave any record URL behind, so the next login on this browser never
@@ -2738,6 +2786,20 @@ export default function EphiaInvoice() {
     );
   }
 
+  // ─── AVV gate: nothing else until the current version is accepted ───
+  if (dataLoaded && avvChecked && !avvAcceptance) {
+    return (
+      <AVVAcceptScreen
+        practice={practice}
+        email={user?.email || ""}
+        onAccept={handleAcceptAvv}
+        onLogout={handleSignOut}
+        isLoading={avvSaving}
+        error={avvError}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F8FA]" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", overflowX: "clip" }}>
       <style>{`.hide-scrollbar::-webkit-scrollbar{display:none} .hide-scrollbar{scrollbar-width:none;-ms-overflow-style:none} @keyframes plz-flash{0%{background-color:#d1fae5}100%{background-color:transparent}} .plz-autofilled{animation:plz-flash 1.2s ease-out}`}</style>
@@ -2974,6 +3036,7 @@ export default function EphiaInvoice() {
       })()}
 
       {pathname === "/agb" && <AGBPage onBack={() => navigate("/patients")} />}
+      {pathname === "/avv" && <AVVPage onBack={() => navigate("/einstellungen/sicherheit")} practice={practice} acceptance={avvAcceptance} />}
       {pathname === "/impressum" && <ImpressumPage onBack={() => navigate("/patients")} />}
       {pathname === "/datenschutz" && <DatenschutzPage onBack={() => navigate("/patients")} />}
 
@@ -3037,7 +3100,7 @@ export default function EphiaInvoice() {
         />
       )}
 
-      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || isVoucherListPage || isSettingsPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
+      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && pathname !== "/avv" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || isVoucherListPage || isSettingsPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
         {/* ═══ PRAXISEINSTELLUNGEN ═══ */}
         {isSettingsPage && (
           <SettingsPage
@@ -3045,7 +3108,7 @@ export default function EphiaInvoice() {
             draft={settingsDraft ?? practice} setDraft={updateSettingsDraft} dirty={settingsDirty}
             onSave={savePracticeSettings} onDiscard={() => setSettingsDraft(null)}
             section={settingsSection} templateId={settingsTemplateId} onNavigate={(to) => navigate(to)}
-            isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id}
+            isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id} avvAcceptance={avvAcceptance}
             patients={patients} invoices={invoices} behandlungen={behandlungen}
           />
         )}
@@ -4803,7 +4866,7 @@ export default function EphiaInvoice() {
         })()}
 
         <div className="mt-8 text-center text-xs text-gray-300">
-          EPHIA Rechnungs-Prototyp · Version {APP_VERSION} · Daten von Patient:innen werden gemäß DSGVO gespeichert · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/agb")}>AGB</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/datenschutz")}>Datenschutz</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/impressum")}>Impressum</button>
+          EPHIA Rechnungs-Prototyp · Version {APP_VERSION} · Daten von Patient:innen werden gemäß DSGVO gespeichert · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/agb")}>AGB</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/avv")}>AVV</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/datenschutz")}>Datenschutz</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/impressum")}>Impressum</button>
         </div>
       </div>}
     </div>

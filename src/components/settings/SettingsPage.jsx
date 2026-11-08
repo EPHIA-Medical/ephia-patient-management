@@ -36,7 +36,7 @@ const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleDateString("de-DE", { 
 // `practice` is the saved state, `draft` the edited copy (lifted into App so it
 // survives leaving the page). Nothing is stored until "Speichern".
 
-export default function SettingsPage({ practice, setPractice, draft, setDraft, dirty, onSave, onDiscard, section, templateId, onNavigate, isFirstTime, session, currentMEK, userId, patients, invoices, behandlungen }) {
+export default function SettingsPage({ practice, setPractice, draft, setDraft, dirty, onSave, onDiscard, section, templateId, onNavigate, isFirstTime, session, currentMEK, userId, patients, invoices, behandlungen, avvAcceptance }) {
   const [pwCurrent, setPwCurrent] = React.useState("");
   const [pwNew, setPwNew] = React.useState("");
   const [pwConfirm, setPwConfirm] = React.useState("");
@@ -580,6 +580,17 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
           <p className="text-xs text-red-500 mt-1">Die PIN muss mindestens 4 Ziffern haben. Kürzere PINs werden nicht aktiv.</p>
         )}
       </div>
+      {!isFirstTime && session && (
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-700 mb-1">Auftragsverarbeitungsvertrag</p>
+          <p className="text-xs text-gray-400 mb-2">
+            {avvAcceptance
+              ? `Abgeschlossen am ${new Date(avvAcceptance.accepted_at).toLocaleDateString("de-DE")} (Version ${avvAcceptance.version}).`
+              : "Noch nicht abgeschlossen."}
+          </p>
+          <button className="text-xs text-blue-600 hover:text-blue-700 font-medium" onClick={() => onNavigate("/avv")}>Vertrag anzeigen und als PDF speichern</button>
+        </div>
+      )}
       {!isFirstTime && session && (
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-700 mb-1">Passwort ändern</p>
