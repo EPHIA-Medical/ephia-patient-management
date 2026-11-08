@@ -4423,6 +4423,7 @@ export default function EphiaInvoice() {
         {/* ═══ PATIENT DETAIL PAGE ═══ */}
         {isPatientDetail && selectedPatient && (
           <PatientDetailView
+            accessToken={session?.access_token}
             patient={selectedPatient}
             invoices={invoices}
             behandlungen={behandlungen}
@@ -4827,7 +4828,7 @@ export default function EphiaInvoice() {
               </div>
               {/* Action buttons */}
               <div className="flex gap-1.5">
-                {previewTab === "rechnung" && viewHasTD && !isStandaloneTD && (
+                {((previewTab === "rechnung" && !isStandaloneTD) || (isStandaloneTD && viewHasTD)) && (
                   <button className="px-3 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition" onClick={() => setShowSendToPatient(true)}>
                     An Patient:in senden
                   </button>
@@ -4952,16 +4953,31 @@ export default function EphiaInvoice() {
             {showSendToPatient && (
               <SendToPatientDialog
                 docs={[
-                  { key: "rechnung", label: "Rechnung", elementId: "invoice-preview", filename: `Rechnung_${viewingInvoice.invoiceMeta?.nummer || "X"}.pdf` },
-                  { key: "behandlung", label: "Behandlungsdokumentation", elementId: "invoice-treatment-doc-preview", filename: `Behandlungsdokumentation_${viewingInvoice.invoiceMeta?.nummer || "X"}.pdf` },
+                  ...(isStandaloneTD ? [] : [{ key: "rechnung", label: `Rechnung ${viewingInvoice.invoiceMeta?.nummer || ""}`.trim(), elementId: "invoice-preview", filename: `Rechnung_${viewingInvoice.invoiceMeta?.nummer || "X"}.pdf`, ref: viewingInvoice._supabaseId || String(viewingInvoice.id) }]),
+                  ...(viewHasTD ? [{ key: "behandlung", label: "Behandlungsdokumentation", elementId: "invoice-treatment-doc-preview", filename: `Behandlungsdokumentation_${viewingInvoice.treatmentDoc?.behandlungsDatum || viewingInvoice.invoiceMeta?.nummer || "X"}.pdf`, ref: viewingInvoice._supabaseId || String(viewingInvoice.id) }] : []),
                 ]}
+                secure={session ? (() => {
+                  // Recipient defaults from the patient record (decrypted in this browser)
+                  const rec = (patients.find((p) => p.id === viewingInvoice._patientDbId) || {}).data || {};
+                  const pat = viewingInvoice.patient || {};
+                  return {
+                    token: session.access_token,
+                    email: rec.email || pat.email || "",
+                    firstName: rec.vorname || pat.vorname || "",
+                    dob: rec.geburtsdatum || pat.geburtsdatum || "",
+                    practice: { name: viewPractice.name || "", email: viewPractice.email || "", phone: viewPractice.phone || "" },
+                  };
+                })() : null}
                 makeFile={async (elementId, filename) => {
                   const result = await generatePDFBlob(elementId);
                   if (!result) throw new Error(`Element ${elementId} not found`);
                   return new File([result.blob], filename, { type: "application/pdf" });
                 }}
                 onClose={() => setShowSendToPatient(false)}
-                onDone={(how, types) => trackEvent(how === "shared" ? "pdf_shared" : "pdf_downloaded", { type: types.join("+"), source: "send_to_patient" }, session?.access_token)}
+                onDone={(how, types, extra) => {
+                  trackEvent(how === "emailed" ? "document_share_sent" : how === "shared" ? "pdf_shared" : "pdf_downloaded", { type: types.join("+"), source: "send_to_patient", ...(extra || {}) }, session?.access_token);
+                  if (how === "emailed") logActivity(viewingInvoice._patientDbId, types.includes("rechnung") ? "rechnung" : "behandlungsdoku", viewingInvoice._supabaseId, "updated", `Per E-Mail-Link gesendet: ${types.map((t) => (t === "rechnung" ? "Rechnung" : "Behandlungsdoku")).join(", ")}`);
+                }}
               />
             )}
             {/* Hidden file input for HV upload */}

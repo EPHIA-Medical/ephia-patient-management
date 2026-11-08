@@ -11,6 +11,8 @@ needs a secret: today the Supabase auth mails, next the Stripe integration.
       src/lib/auth-hook.ts                 signature, payload, link planning (tested)
       src/lib/auth-emails.ts               German copy of the seven auth mails
       src/lib/email-layout.ts              EPHIA email layout (port of ephia-admin's)
+      src/app/api/shares/...               secure document sending (below)
+      src/lib/shares.ts                    its crypto, storage, email (tested)
       scripts/auth-hook-test.ts            fires a signed test request
 
 ## Local
@@ -70,3 +72,36 @@ together.
   own templates at any time.
 - `AUTH_EMAIL_HOOK_SECRET=... npx tsx scripts/auth-hook-test.ts <url> <to>`
   sends a real recovery mail through a running instance.
+
+## Secure document sending
+
+Practices send documents to patients as a link (concept: "Sicherer
+Dokumentenversand, Version A"). The browser encrypts the PDFs with
+K = HKDF(halfA ‖ halfB ‖ F); see `src/lib/shareCrypto.js` in the app.
+This service stores the ciphertext (bucket `document-shares`) and halfB
+(encrypted with `SHARE_KEY_SECRET`), checks a PBKDF2 verifier of the date of
+birth or code (stored as scrypt hash), and sends the email via Resend.
+halfA and the recipient address pass through the send call into the email
+and are never stored.
+
+| Route | Who | Does |
+|---|---|---|
+| `POST /api/shares` | practice (Supabase token) | store files + halfB, send the email |
+| `GET /api/shares?docs=a,b` | practice | status of the links of these documents |
+| `GET /api/shares/:id` | public | practice name, factor type, state |
+| `POST /api/shares/:id/unlock` | public, 5 tries per link, 20 per IP and hour | verifier → halfB + 5-minute file URLs |
+| `POST /api/shares/:id/revoke` | practice | delete files and secrets |
+| `POST /api/resend/webhook` | Resend (signed) | bounce / complaint → status |
+
+Setup (once):
+
+1. Run `supabase/migrations/0005_document_shares.sql` in the Supabase SQL editor.
+2. Railway variables: `SUPABASE_SERVICE_ROLE_KEY`, `SHARE_KEY_SECRET`
+   (`openssl rand -base64 32`), optionally `SHARE_EMAIL_FROM_ADDRESS`.
+   `RESEND_API_KEY` is shared with the auth mails; a sending-only key is enough.
+3. Resend → Webhooks → endpoint `https://<api domain>/api/resend/webhook`,
+   events delivered, bounced, complained, failed; secret → `RESEND_WEBHOOK_SECRET`.
+4. `GET /api/health`: all `configured` flags true.
+
+Expired links lose files and secrets lazily on the next send (at most every
+10 minutes); status rows are deleted after a year.

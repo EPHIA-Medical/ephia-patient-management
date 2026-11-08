@@ -1,5 +1,8 @@
 import { showToast } from "../../utils/toast";
 import React, { useState, useRef, useEffect } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import SendToPatientDialog from "../invoice/SendToPatientDialog";
 import { treatmentCopySources } from "../../utils/copySources";
 import { fmtDate } from "../../utils/helpers";
 import { resolveConsentTemplate } from "../consent/consentTemplateStore";
@@ -18,7 +21,7 @@ import { emptyPraeparat } from "../../utils/praeparate";
 
 // ═══════════════════ Patient Detail View ═══════════════════
 
-export default function PatientDetailView({ patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, onSetPaymentStatus, onStartHvFromValues, activityLog = [], onLogActivity }) {
+export default function PatientDetailView({ accessToken, patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, onSetPaymentStatus, onStartHvFromValues, activityLog = [], onLogActivity }) {
   // ── Derived data ──
   const rawData = (patient._raw && typeof patient._raw.data === "object" && patient._raw.data) ? patient._raw.data : {};
   const email = (rawData.email || patient.email || "").toLowerCase();
@@ -67,6 +70,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
 
   // Treatment doc PDF state
   const [treatmentDocTarget, setTreatmentDocTarget] = useState(null);
+  // Behandlungsdoku being sent to the patient (its hidden preview is rendered via treatmentDocTarget)
+  const [sendTdInv, setSendTdInv] = useState(null);
 
   // Sidebar collapsible states
 
@@ -441,6 +446,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               onUpdateInvoice={onUpdateInvoice} onQuickInvoice={onQuickInvoice}
               setConfirmDeleteTreatment={setConfirmDeleteTreatment}
               downloadTreatmentDoc={downloadTreatmentDoc}
+              onSendTreatmentDoc={accessToken ? (inv) => { setTreatmentDocTarget(inv); setSendTdInv(inv); } : null}
               pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
               onStartHvFromValues={onStartHvFromValues}
             />
@@ -539,6 +545,31 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
           </div>
         );
       })()}
+
+      {sendTdInv && (
+        <SendToPatientDialog
+          docs={[{ key: "behandlung", label: "Behandlungsdokumentation", elementId: "treatment-doc-preview", filename: `Behandlungsdokumentation_${sendTdInv.treatmentDoc?.behandlungsDatum || "Behandlung"}.pdf`, ref: sendTdInv._supabaseId || String(sendTdInv.id) }]}
+          makeFile={async (elementId, filename) => {
+            // The hidden preview mounts with treatmentDocTarget; wait until it is in the DOM
+            let el = null;
+            for (let i = 0; i < 40 && !el; i++) { await new Promise((r) => setTimeout(r, 50)); el = document.getElementById(elementId); }
+            if (!el) throw new Error(`Element ${elementId} not found`);
+            const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+            const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+            pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+            return new File([pdf.output("blob")], filename, { type: "application/pdf" });
+          }}
+          secure={{
+            token: accessToken,
+            email: rawData.email || patient.email || "",
+            firstName: rawData.vorname || patient.vorname || "",
+            dob: rawData.geburtsdatum || "",
+            practice: { name: (sendTdInv._practice || practice).name || "", email: (sendTdInv._practice || practice).email || "", phone: (sendTdInv._practice || practice).phone || "" },
+          }}
+          onClose={() => { setSendTdInv(null); setTreatmentDocTarget(null); }}
+          onDone={(how) => { if (how === "emailed" && onLogActivity) onLogActivity(patient._raw?.id || patient.id, "behandlungsdoku", sendTdInv._supabaseId, "updated", "Per E-Mail-Link gesendet: Behandlungsdoku"); }}
+        />
+      )}
 
       {/* Hidden treatment document preview for PDF generation */}
       {treatmentDocTarget && (() => {

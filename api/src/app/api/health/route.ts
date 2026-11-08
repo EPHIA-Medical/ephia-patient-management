@@ -13,6 +13,10 @@ export function GET() {
       resendApiKey: Boolean(process.env.RESEND_API_KEY),
       // false = EMAIL_FROM is set but malformed; mails go out from the default sender.
       emailFromValid: resolveSender(process.env.EMAIL_FROM).valid,
+      // Secure document sending
+      supabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      shareKeySecret: Buffer.from(process.env.SHARE_KEY_SECRET || "", "base64").length === 32,
+      resendWebhookSecret: Boolean(process.env.RESEND_WEBHOOK_SECRET),
     },
   });
 }
