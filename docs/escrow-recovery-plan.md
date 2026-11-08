@@ -1,8 +1,9 @@
 # Plan: replace the plaintext recovery key with EPHIA key escrow
 
-Status: approved 2026-11-08. Release A code (step 2), the migration SQL (step 1) and the
-recovery script are written and committed locally, not pushed: the push waits for step 0
-(key pair in Bitwarden, public key in `src/lib/escrow.js`) and step 1 (migration applied).
+Status 2026-11-08: steps 0 to 2 done. Key pair in the EPHIA Bitwarden organisation (Marc,
+Sophia), migration 0002 applied, release A live (c5c0b18 and later), step 2 gate passed on
+Marc's account and the test account (`escrow-recover.mjs verify` -> OK for both). Next: step 3
+with `scripts/escrow-migrate.mjs`.
 
 ## 1. Why
 
@@ -152,7 +153,8 @@ verified. Each step has a gate that must pass before the next one starts.
 4. Export the key columns of all profiles (`id, encrypted_mek, mek_iv, mek_salt, mek_params,
    recovery_wrapped_mek, recovery_iv, recovery_key, encryption_version`) from the dashboard.
    Encrypt the file with `age` using a passphrase stored in Bitwarden, keep it until step 7 is
-   done, then delete it. This is the rollback for steps 3 to 6.
+   done, then delete it. This is the rollback for steps 5 and 6; step 3 does not modify the
+   old columns, so the export is required before step 5, not before step 3.
 5. Backup retention is 7 daily backups (checked 2026-11-08). The plaintext keys survive 7 days
    after step 5.
 
