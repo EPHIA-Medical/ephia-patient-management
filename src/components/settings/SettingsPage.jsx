@@ -10,6 +10,7 @@ import { supabaseCreateBehandlung, supabaseDeleteBehandlung } from "../../lib/su
 import { supabaseCreateDocument, supabaseDeleteDocument } from "../../lib/supabase/documents";
 import { showToast } from "../../utils/toast";
 import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
+import { autoLogoutMinutes, AUTO_LOGOUT_MIN_MINUTES, AUTO_LOGOUT_MAX_MINUTES } from "../../constants";
 import Select from "../ui/Select";
 import {
   getAvailableConsentTemplates, getPracticeTemplates, isBuiltinTemplate, consentTemplateLabel,
@@ -334,7 +335,7 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
         return;
       }
     }
-    const next = { ...draft };
+    const next = { ...draft, autoLogoutMinutes: autoLogoutMinutes(draft) };
     if (Array.isArray(draft.consentTemplates)) next.consentTemplates = finalizePracticeTemplates(draft.consentTemplates, getPracticeTemplates(practice));
     setSaving(true);
     try { await onSave(next); } finally { setSaving(false); }
@@ -534,13 +535,50 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
 
   const renderSicherheit = () => (
     <div className="space-y-4">
-      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400 mt-0.5" checked={draft.autoLogoutEnabled !== false} onChange={(e) => set({ autoLogoutEnabled: e.target.checked })} />
-        <div>
-          <span className="text-sm text-gray-700">Automatischer Logout nach 15 Min. Inaktivität</span>
-          <p className="text-xs text-gray-400 mt-0.5">Empfohlen zum Schutz von Patient:innendaten</p>
-        </div>
-      </label>
+      <div className="p-3 rounded-lg bg-gray-50">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400 mt-0.5" checked={draft.autoLogoutEnabled !== false} onChange={(e) => set({ autoLogoutEnabled: e.target.checked })} />
+          <div>
+            <span className="text-sm text-gray-700">Automatischer Logout bei Inaktivität</span>
+            <p className="text-xs text-gray-400 mt-0.5">Empfohlen zum Schutz von Patient:innendaten</p>
+          </div>
+        </label>
+        {draft.autoLogoutEnabled !== false && (
+          <div className="mt-3 ml-7">
+            <label className="block text-xs font-medium text-gray-500 mb-1" htmlFor="auto-logout-minutes">Abmelden nach</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="auto-logout-minutes"
+                type="number"
+                inputMode="numeric"
+                min={AUTO_LOGOUT_MIN_MINUTES}
+                max={AUTO_LOGOUT_MAX_MINUTES}
+                className={inputCls2 + " !w-24 bg-white"}
+                value={draft.autoLogoutMinutes ?? 15}
+                onChange={(e) => set({ autoLogoutMinutes: e.target.value === "" ? "" : parseInt(e.target.value, 10) })}
+                onBlur={() => set({ autoLogoutMinutes: autoLogoutMinutes(draft) })}
+              />
+              <span className="text-sm text-gray-600">Minuten ohne Aktivität</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[5, 10, 15, 30, 60].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={`px-2.5 py-1 text-xs rounded-full transition ${autoLogoutMinutes(draft) === m ? "bg-blue-500 text-white" : "bg-white text-gray-600 hover:bg-gray-100"}`}
+                  onClick={() => set({ autoLogoutMinutes: m })}
+                >
+                  {m} Min.
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Zwischen {AUTO_LOGOUT_MIN_MINUTES} und {AUTO_LOGOUT_MAX_MINUTES} Minuten.
+              {autoLogoutMinutes(draft) > 30 && <span className="text-amber-700"> Längere Zeiten erhöhen das Risiko, dass Unbefugte an einem offenen Gerät Patient:innendaten sehen.</span>}
+            </p>
+          </div>
+        )}
+      </div>
       {draft.autoLogoutEnabled === false && (
         <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
           <strong>Achtung:</strong> Ohne Auto-Logout bist Du selbst dafür verantwortlich, dass keine unbefugten Personen Zugriff erhalten.

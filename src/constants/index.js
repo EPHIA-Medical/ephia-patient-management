@@ -42,6 +42,7 @@ export const DEFAULT_PRACTICE = {
   steuernummer: "",
   kleinunternehmer: false,
   autoLogoutEnabled: true,
+  autoLogoutMinutes: 15,
   logo: "",
   city: "",
   zahlungsfrist: 14,
@@ -50,7 +51,14 @@ export const DEFAULT_PRACTICE = {
   kioskPin: "", // 4-6 digit code gating exit from patient-facing kiosk views (empty = disabled)
 };
 
-export const AUTO_LOGOUT_MS = 15 * 60 * 1000; // 15 minutes
+export const AUTO_LOGOUT_MIN_MINUTES = 1;
+export const AUTO_LOGOUT_MAX_MINUTES = 480;
+// Minutes the practice chose (older settings have none: 15), clamped to 1–480
+export function autoLogoutMinutes(practice) {
+  const m = parseInt(practice?.autoLogoutMinutes, 10);
+  if (!Number.isFinite(m)) return 15;
+  return Math.min(AUTO_LOGOUT_MAX_MINUTES, Math.max(AUTO_LOGOUT_MIN_MINUTES, m));
+}
 
 export const ICD10_CODES = [
   { diagnosis: "Bruxismus", icd10: "F45.8", keywords: ["bruxismus","zähneknirschen","zähnepressen","masseter","kieferpressen"], description: "Unwillkürliches Zähnepressen oder -knirschen, häufig mit Schmerzen im Kiefer oder vergrößertem Masseter-Muskel." },

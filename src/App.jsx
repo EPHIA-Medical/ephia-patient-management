@@ -22,7 +22,7 @@ import {
   computePatientHash, getPatientIdentifier
 } from "./lib/crypto";
 import { escrowConfigured, buildEscrowFields } from "./lib/escrow";
-import { DEFAULT_PRACTICE, AUTO_LOGOUT_MS, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "./constants";
+import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "./constants";
 import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
@@ -477,7 +477,7 @@ export default function EphiaInvoice() {
       if (autoLogoutTimerRef.current) clearTimeout(autoLogoutTimerRef.current);
       autoLogoutTimerRef.current = setTimeout(() => {
         if (handleSignOutRef.current) handleSignOutRef.current();
-      }, AUTO_LOGOUT_MS);
+      }, autoLogoutMinutes(practice) * 60 * 1000);
     };
     const events = ["mousedown", "keydown", "touchstart", "scroll", "mousemove"];
     events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
@@ -486,7 +486,7 @@ export default function EphiaInvoice() {
       events.forEach((ev) => window.removeEventListener(ev, resetTimer));
       if (autoLogoutTimerRef.current) clearTimeout(autoLogoutTimerRef.current);
     };
-  }, [session, practice.autoLogoutEnabled]);
+  }, [session, practice.autoLogoutEnabled, practice.autoLogoutMinutes]);
 
   // ─── Load user data from Supabase (with E2EE decryption) ───
   const loadUserData = async (accessToken, userId, userEmail) => {
