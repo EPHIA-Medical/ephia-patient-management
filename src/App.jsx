@@ -4589,14 +4589,16 @@ export default function EphiaInvoice() {
                 }}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 </button>
-                <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition flex items-center gap-1.5" onClick={() => {
-                  if (docModalOpen) { closeDocModal(); return; }
-                  setViewingInvoice(null);
-                  const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
-                  navigate(patId ? `/patients/${patId}` : "/patients");
-                }}>
-                  Speichern & schließen
-                </button>
+                {/* Nothing is saved on close: the modal has its X, the page view gets a back button. */}
+                {!docModalOpen && (
+                  <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition" onClick={() => {
+                    setViewingInvoice(null);
+                    const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
+                    navigate(patId ? `/patients/${patId}` : "/patients");
+                  }}>
+                    Zurück
+                  </button>
+                )}
               </div>
             </div>
             {/* A4 Preview: desktop shows full size, mobile uses scaled preview */}
@@ -4715,14 +4717,16 @@ export default function EphiaInvoice() {
                 <button className="p-2 rounded-lg border border-[#DFE3EB] text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition" onClick={handlePrintCurrentDoc} title="Drucken">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 </button>
-                <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition" onClick={() => {
-                  if (docModalOpen) { closeDocModal(); return; }
-                  setViewingInvoice(null);
-                  const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
-                  navigate(patId ? `/patients/${patId}` : "/patients");
-                }}>
-                  Speichern & schließen
-                </button>
+                {/* Nothing is saved on close: the modal has its X, the page view gets a back button. */}
+                {!docModalOpen && (
+                  <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition" onClick={() => {
+                    setViewingInvoice(null);
+                    const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
+                    navigate(patId ? `/patients/${patId}` : "/patients");
+                  }}>
+                    Zurück
+                  </button>
+                )}
               </div>
             </div>
             {previewTab === "honorar" && viewHasHV && !isHvOnly && (
