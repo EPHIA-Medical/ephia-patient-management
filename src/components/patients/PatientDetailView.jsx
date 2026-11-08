@@ -37,6 +37,22 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [historieOpen, setHistorieOpen] = useState(false);
   const [noteEditing, setNoteEditing] = useState(false);
 
+  // Behandlungsdoku view modal: close via X, backdrop or Escape (an overlay
+  // opened inside it, e.g. a confirmation, takes Escape first)
+  const treatmentModalRef = useRef(null);
+  const closeTreatmentModal = () => { setViewingTreatment(null); setCenterView("timeline"); };
+  const treatmentModalOpen = centerView === "behandlung_detail" && !!viewingTreatment;
+  useEffect(() => {
+    if (!treatmentModalOpen) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (treatmentModalRef.current?.querySelector(".fixed.inset-0") || confirmDeleteTreatment) return;
+      closeTreatmentModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [treatmentModalOpen, confirmDeleteTreatment]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Close the Historie drawer with Escape
   useEffect(() => {
     if (!historieOpen) return;
@@ -177,6 +193,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
       if (sigs?.patient) return { label: "Ärzt:in fehlt", color: "text-amber-500" };
       return { label: "—", color: "text-gray-400" };
     }
+    // A Behandlungsdoku has no payment of its own: once saved it is documented
+    if ((inv._standalone || inv._treatmentDocOnly) || inv._docType === "behandlungsdoku") return { label: "Dokumentiert", color: "text-green-600", done: true };
     if (inv.paymentStatus === "bezahlt") return { label: "Bezahlt", color: "text-green-600" };
     return { label: "Ausstehend", color: "text-amber-500" };
   };
@@ -333,10 +351,9 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
             </button>
           </div>
 
-          {/* Behandlungen or Detail view */}
+          {/* Behandlungen (a Behandlungsdoku opens in a modal on top) */}
           <div className="bg-white rounded-lg border border-[#DFE3EB] shadow-sm overflow-hidden lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto">
-            {(centerView === "timeline" || centerView === "behandlungen_add") && (
-              <PatientBehandlungenSidebar
+            <PatientBehandlungenSidebar
                 patientBeh={patientBeh} matchingInvoices={matchingInvoices} patientDbId={patientDbId} patient={patient}
                 newBehandlungOpen={newBehandlungOpen} setNewBehandlungOpen={setNewBehandlungOpen}
                 newBehDatum={newBehDatum} setNewBehDatum={setNewBehDatum}
@@ -351,20 +368,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                 onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
                 titleSuggestions={behTitleSuggestions}
               />
-            )}
 
-            {centerView === "behandlung_detail" && viewingTreatment && (
-              <BehandlungDetailPanel
-                viewingTreatment={viewingTreatment} setViewingTreatment={setViewingTreatment}
-                setCenterView={setCenterView}
-                patient={patient} rawData={rawData} invoices={invoices}
-                kleinunternehmer={kleinunternehmer} practice={practice}
-                onUpdateInvoice={onUpdateInvoice} onQuickInvoice={onQuickInvoice}
-                setConfirmDeleteTreatment={setConfirmDeleteTreatment}
-                downloadTreatmentDoc={downloadTreatmentDoc}
-                pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
-              />
-            )}
           </div>
         </div>
 
@@ -384,6 +388,31 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
               setViewingTreatment={setViewingTreatment} setCenterView={setCenterView}
               onClose={() => setHistorieOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Behandlungsdoku view modal (like Rechnung, HV and Aufklärungsbogen) */}
+      {centerView === "behandlung_detail" && viewingTreatment && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex items-start justify-center overflow-y-auto py-6 px-4" onMouseDown={(e) => { if (e.target === e.currentTarget) closeTreatmentModal(); }}>
+          <div ref={treatmentModalRef} className="bg-white rounded-xl shadow-2xl w-full max-w-5xl" role="dialog" aria-modal="true" aria-label="Behandlungsdokumentation">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">Behandlungsdokumentation</h2>
+              <button className="p-1 text-gray-400 hover:text-gray-600 transition" onClick={closeTreatmentModal} aria-label="Schließen">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <BehandlungDetailPanel
+              inModal
+              viewingTreatment={viewingTreatment} setViewingTreatment={setViewingTreatment}
+              setCenterView={setCenterView}
+              patient={patient} rawData={rawData} invoices={invoices}
+              kleinunternehmer={kleinunternehmer} practice={practice}
+              onUpdateInvoice={onUpdateInvoice} onQuickInvoice={onQuickInvoice}
+              setConfirmDeleteTreatment={setConfirmDeleteTreatment}
+              downloadTreatmentDoc={downloadTreatmentDoc}
+              pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
             />
           </div>
         </div>
