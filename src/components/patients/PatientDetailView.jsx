@@ -33,6 +33,15 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [newBehDatum, setNewBehDatum] = useState(new Date().toISOString().slice(0, 10));
   const [newBehZeit, setNewBehZeit] = useState("");
   const [expandedBeh, setExpandedBeh] = useState(null);
+  const [historieOpen, setHistorieOpen] = useState(false);
+
+  // Close the Historie drawer with Escape
+  useEffect(() => {
+    if (!historieOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setHistorieOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [historieOpen]);
 
   // New treatment states (shared between add and detail panels via pendingQuickInvoice flow)
   const [newTreatmentMarkers, setNewTreatmentMarkers] = useState([]);
@@ -219,7 +228,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
         <button className="text-sm text-gray-400 hover:text-gray-600 transition" onClick={onBack}>&larr; Zur&uuml;ck zur Patient:innenliste</button>
       </div>
 
-      {/* Three-column layout — separate cards */}
+      {/* Two-column layout: Stammdaten + Behandlungen; Historie opens as a drawer */}
       <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
         {/* ═══════════════════ LEFT SIDEBAR ═══════════════════ */}
         <div className="w-full lg:w-auto bg-white rounded-lg border border-[#DFE3EB] shadow-sm overflow-hidden flex-shrink-0">
@@ -236,22 +245,27 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
 
         {/* ═══════════════════ CENTER: Behandlungen ═══════════════════ */}
         <div className="w-full lg:flex-1 min-w-0">
-          {/* Data Highlights */}
-          <div className="bg-white rounded-lg border border-[#DFE3EB] shadow-sm mb-5 lg:mb-6">
-            <div className="grid grid-cols-3 gap-6 px-6 py-5">
-              <div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Erstellt am</div>
-                <div className="text-sm text-gray-800 font-medium mt-1.5">{fmtDate(patient._raw?.created_at?.slice(0, 10))}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Behandlungen</div>
-                <div className="text-sm text-gray-800 font-medium mt-1.5">{patientBeh.length}</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Letzte Aktivit&auml;t</div>
-                <div className="text-sm text-gray-800 font-medium mt-1.5">{lastActivity ? fmtDate(lastActivity._createdAt?.slice(0, 10)) : "--"}</div>
-              </div>
+          {/* Data Highlights + Historie trigger */}
+          <div className="bg-white rounded-lg border border-[#DFE3EB] shadow-sm mb-5 lg:mb-6 flex flex-wrap items-center gap-x-8 gap-y-4 px-6 py-4">
+            <div>
+              <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Erstellt am</div>
+              <div className="text-sm text-gray-800 font-medium mt-1">{fmtDate(patient._raw?.created_at?.slice(0, 10))}</div>
             </div>
+            <div>
+              <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Behandlungen</div>
+              <div className="text-sm text-gray-800 font-medium mt-1">{patientBeh.length}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Letzte Aktivit&auml;t</div>
+              <div className="text-sm text-gray-800 font-medium mt-1">{lastActivity ? fmtDate(lastActivity._createdAt?.slice(0, 10)) : "--"}</div>
+            </div>
+            <button
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 rounded-md border border-[#DFE3EB] hover:bg-gray-50 hover:text-gray-800 transition"
+              onClick={() => setHistorieOpen(true)}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Historie
+            </button>
           </div>
 
           {/* Behandlungen or Detail view */}
@@ -288,19 +302,26 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
           </div>
         </div>
 
-        {/* ═══════════════════ RIGHT SIDEBAR: Historie ═══════════════════ */}
-        <div className="w-full lg:w-96 xl:w-[28rem] bg-white rounded-lg border border-[#DFE3EB] shadow-sm overflow-hidden flex-shrink-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
-          <PatientTimeline
-            patient={patient} patientDbId={patientDbId}
-            matchingInvoices={matchingInvoices} patientBeh={patientBeh}
-            activityLog={activityLog} lastActivity={lastActivity}
-            onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
-            setViewingTreatment={setViewingTreatment} setCenterView={setCenterView}
-          />
-        </div>
       </div>
 
       {/* ═══════════════════ MODALS ═══════════════════ */}
+
+      {/* Historie slide-over: on demand instead of a permanent column */}
+      {historieOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label="Historie">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setHistorieOpen(false)} />
+          <div className="relative w-full sm:w-[28rem] h-full bg-white shadow-2xl overflow-y-auto">
+            <PatientTimeline
+              patient={patient} patientDbId={patientDbId}
+              matchingInvoices={matchingInvoices} patientBeh={patientBeh}
+              activityLog={activityLog} lastActivity={lastActivity}
+              onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
+              setViewingTreatment={setViewingTreatment} setCenterView={setCenterView}
+              onClose={() => setHistorieOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Behandlungsdoku create/edit modal */}
       {centerView === "behandlungen_add" && (

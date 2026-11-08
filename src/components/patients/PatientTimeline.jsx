@@ -4,7 +4,7 @@ import { fmtDate } from "../../utils/helpers";
 export default function PatientTimeline({
   patient, patientDbId, matchingInvoices, patientBeh, activityLog, lastActivity,
   onViewConsent, onViewHV, onView,
-  setViewingTreatment, setCenterView,
+  setViewingTreatment, setCenterView, onClose,
 }) {
   const [timelineSearch, setTimelineSearch] = useState("");
   const [timelineFilter, setTimelineFilter] = useState("alle");
@@ -76,6 +76,9 @@ export default function PatientTimeline({
   };
 
   const handleTimelineClick = (entry) => {
+    const inv = entry._inv || (entry.entityId && matchingInvoices.find(i => i._supabaseId === entry.entityId));
+    // Opening a document closes the drawer so the document is not hidden behind it
+    if (inv && onClose) onClose();
     if (entry._inv) {
       const inv = entry._inv;
       if (inv._consentForm || inv._docType === "aufklaerung") { onViewConsent && onViewConsent(inv); }
@@ -96,8 +99,15 @@ export default function PatientTimeline({
   return (
     <>
       {/* Timeline header */}
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Historie</h3>
+      <div className="px-5 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Historie</h3>
+          {onClose && (
+            <button className="p-1 -mr-1 text-gray-400 hover:text-gray-600 transition" onClick={onClose} aria-label="Historie schließen">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
         <div className="flex flex-col gap-2">
           <input type="text" placeholder="Durchsuchen..." className="w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" value={timelineSearch} onChange={e => setTimelineSearch(e.target.value)} />
           <select className="w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" value={timelineFilter} onChange={e => setTimelineFilter(e.target.value)}>
