@@ -70,7 +70,10 @@ const shorten = (x1, y1, x2, y2, by) => {
 };
 
 // SVG overlay for the face box (which is square). `preview` draws the line being placed.
-export function VectorLayer({ markers, preview, scale = 1 }) {
+// With `onSelect`, every line, fan and Markierung gets a wide invisible click area and the
+// selected one (`selectedId`) is underlaid in blue.
+const SELECT_COLOR = "#2563eb";
+export function VectorLayer({ markers, preview, scale = 1, onSelect, selectedId }) {
   const vecs = (markers || []).filter(isVector);
   const guides = (markers || []).filter(isGuide);
   if (!vecs.length && !guides.length && !preview) return null;
@@ -89,9 +92,20 @@ export function VectorLayer({ markers, preview, scale = 1 }) {
           );
         });
       })}
+      {(markers || []).filter((m) => m.id != null && m.id === selectedId && (isVector(m) || isGuide(m))).map((m) => (
+        <polyline key="selected" points={(isGuide(m) ? guidePoints(m) : (m.to || []).flatMap((p) => [{ x: m.x, y: m.y }, p])).map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={SELECT_COLOR} strokeWidth={sw * 5} strokeLinecap="round" strokeLinejoin="round" opacity={0.3} />
+      ))}
       {guides.map((m, i) => (
         <polyline key={`g-${m.id ?? i}`} points={guidePoints(m).map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={GUIDE_COLOR} strokeWidth={sw * 1.15} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={`${2 * scale} ${1.3 * scale}`} opacity={0.9} />
       ))}
+      {onSelect && [...vecs, ...guides].map((m, i) => {
+        const segs = isGuide(m) ? [guidePoints(m)] : (m.to || []).map((p) => [{ x: m.x, y: m.y }, p]);
+        return segs.map((pts, j) => (
+          <polyline key={`hit-${m.id ?? i}-${j}`} points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="transparent" strokeWidth={3.2 * scale} strokeLinecap="round" strokeLinejoin="round"
+            style={{ pointerEvents: "stroke", cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); onSelect(m.id); }} />
+        ));
+      })}
       {preview && (
         <line x1={preview.from.x} y1={preview.from.y} x2={preview.to.x} y2={preview.to.y} stroke={preview.color || "#6b7280"} strokeWidth={sw} strokeDasharray={`${1 * scale} ${1 * scale}`} opacity={0.7} />
       )}
@@ -252,7 +266,7 @@ export function vectorInstruction(vt) {
   if (vt.mode === "linie") return vt.lineStart ? `${k} auf das Ende der Linie.` : `${k} auf den Eintrittspunkt, dann auf das Ende der Linie. Der Pfeil zeigt die Vorschubrichtung.`;
   if (vt.mode === "markierung") return vt.activeGuide ? `${k} entlang der Struktur auf den nächsten Punkt. Zum Abschließen auf Fertig, Enter oder noch einmal auf den letzten Punkt.` : `${k} auf den Anfang, dann Punkt für Punkt entlang einer Struktur, die Du beim nächsten Mal wiederfinden möchtest, zum Beispiel eine markante Falte. Markierungen haben keine Menge.`;
   if (vt.mode === "faecher") return vt.activeFan ? `${k} auf das Ende des nächsten Arms. Zum Abschließen auf den Eintrittspunkt oder auf Fertig.` : `${k} auf den Eintrittspunkt, dann auf das Ende jedes Arms.`;
-  return `${k} auf das Gesicht, um einen Punkt zu setzen.`;
+  return `${k} auf das Gesicht, um einen Punkt zu setzen, oder auf einen gesetzten Punkt oder eine Linie, um sie zu bearbeiten oder zu löschen.`;
 }
 
 export function VectorToolbar({ vt }) {

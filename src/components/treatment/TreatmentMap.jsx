@@ -221,6 +221,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const faceH = rect.height;
     const x = (rawX / faceW) * 100;
     const y = (rawY / faceH) * 100;
+    // With a selection, a click on the empty chart only deselects
+    if (selected && !vt.drawing) { setSelectedId(null); return; }
     if (vt.handleClick(x, y)) return;
     const point = { id: Date.now(), x, y, amount: activeAmount, color: activeColor };
     if (multiPraep && activePraep > 0) point.p = activePraep;
@@ -242,7 +244,35 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
 
   const removeMarker = (id) => {
     setMarkers(markers.filter((m) => m.id !== id));
+    if (id === selectedId) setSelectedId(null);
   };
+
+  // Clicking a point, line or Markierung on the chart selects it for editing (not while drawing)
+  const [selectedId, setSelectedId] = React.useState(null);
+  const selected = selectedId != null ? markers.find((m) => m.id === selectedId) || null : null;
+  const selectedIdx = selected ? markers.indexOf(selected) : -1;
+  const selectMarker = (id) => {
+    if (vt.drawing || justDragged.current || justPinched.current) return;
+    setSelectedId((cur) => (cur === id ? null : id));
+  };
+  // Delete or Backspace removes the selection, Escape deselects (captured so the dialog stays open)
+  React.useEffect(() => {
+    if (!selected || !modalOpen) return undefined;
+    const onKey = (e) => {
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); e.stopPropagation(); removeMarker(selected.id); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setSelectedId(null); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep the selected row of the point list in view
+  React.useEffect(() => {
+    if (selectedId == null) return;
+    const row = document.querySelector(`[data-marker-row="${selectedId}"]`);
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: "nearest" });
+  }, [selectedId]);
+  React.useEffect(() => { setSelectedId(null); }, [modalOpen, view]);
 
   const handleSave = () => {
     vt.finish();
@@ -433,17 +463,41 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isMobile && !isPinching.current ? "transform 0.15s ease-out" : "none" }}
                   >
                     <img src={chartImage(view, facePhoto)} alt={chartById(view).label} className="w-full h-full object-contain pointer-events-none" draggable={false} />
-                    <VectorLayer markers={markers.filter(inView)} preview={vt.preview} scale={1 / zoom} />
+                    <VectorLayer markers={markers.filter(inView)} preview={vt.preview} scale={1 / zoom} onSelect={vt.drawing ? undefined : selectMarker} selectedId={selectedId} />
                     {vt.lineStart && (
                       <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12 / zoom, height: 12 / zoom, transform: "translate(-50%, -50%)", zIndex: 11 }} />
                     )}
                     {markers.map((m, idx) => inView(m) && !isGuide(m) && (
-                      <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
+                      <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10, cursor: vt.drawing ? "crosshair" : "pointer", borderRadius: 999, outline: m.id === selectedId ? `${2.5 / zoom}px solid #2563eb` : "none", outlineOffset: 2 / zoom }}
+                        onClick={(e) => { if (vt.drawing) return; e.stopPropagation(); selectMarker(m.id); }}>
                         <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
                       </div>
                     ))}
                   </div>
                   <VectorDrawingBar vt={vt} />
+                  {selected && !vt.drawing && (
+                    <div className="absolute left-1/2 top-2 -translate-x-1/2 flex items-center gap-2 rounded-xl bg-white shadow-lg ring-1 ring-black/5 px-2.5 py-1.5 text-xs text-gray-700"
+                      style={{ zIndex: 30, cursor: "default", maxWidth: "calc(100% - 16px)" }}
+                      onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      {isGuide(selected) ? (
+                        <VectorSummary marker={selected} className="text-xs font-medium text-gray-700" />
+                      ) : (
+                        <>
+                          <span className="font-medium whitespace-nowrap">{isVector(selected) ? (selected.kind === "fan" ? "Fächer" : "Linie") : `Punkt ${selectedIdx + 1}`}</span>
+                          <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern" onClick={() => cycleColor(selected.id)}>
+                            <MarkerDot marker={selected} idx={selectedIdx} size={18} fontSize={9} praepCount={praepCount} />
+                          </button>
+                          <PraeparatBadge marker={selected} praeparate={praepList} onCycle={(p) => setPraep(selected.id, p)} />
+                          <input type="text" inputMode="text" aria-label="Menge" className="w-16 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={selected.amount || ""} onChange={(e) => updateAmount(selected.id, e.target.value)} />
+                          <span className="text-gray-400">{unitFor(selected)}</span>
+                        </>
+                      )}
+                      <button type="button" className="ml-1 px-2 py-1 rounded-md text-red-600 hover:bg-red-50 font-medium whitespace-nowrap" onClick={() => removeMarker(selected.id)}>Löschen</button>
+                      <button type="button" className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100" aria-label="Auswahl aufheben" onClick={() => setSelectedId(null)}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  )}
                   <div className="absolute bottom-2 left-2 flex items-center rounded-lg bg-white/95 shadow-md text-gray-600" style={{ zIndex: 20, cursor: "default" }} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                     <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom <= MIN_ZOOM} onClick={() => stepZoom(-1)} aria-label="Verkleinern" title="Verkleinern">&minus;</button>
                     <button type="button" className="px-1 min-w-[3rem] h-8 text-xs tabular-nums hover:text-gray-900" onClick={resetZoom} title="Zurück auf 100 %">{Math.round(zoom * 100)} %</button>
@@ -467,7 +521,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
                 <div className="space-y-1.5">
                   {markers.map((m, idx) => inView(m) && (isGuide(m) ? (
-                    <div key={m.id} className="flex items-center gap-1.5">
+                    <div key={m.id} data-marker-row={m.id} className={`flex items-center gap-1.5 rounded-md ${m.id === selectedId ? "bg-blue-50 ring-1 ring-blue-200" : ""}`}>
                       <span className="w-4 flex-shrink-0" />
                       <span className="flex-1 min-w-0"><VectorSummary marker={m} className="text-sm text-gray-600" /></span>
                       <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => { if (vt.activeGuide?.id === m.id) vt.finish(); removeMarker(m.id); }} title="Markierung löschen">
@@ -476,7 +530,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     </div>
                   ) : (
                     <React.Fragment key={m.id}>
-                    <div className="flex items-center gap-1.5">
+                    <div data-marker-row={m.id} className={`flex items-center gap-1.5 rounded-md ${m.id === selectedId ? "bg-blue-50 ring-1 ring-blue-200" : ""}`}>
                       <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
                       <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
                         <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
