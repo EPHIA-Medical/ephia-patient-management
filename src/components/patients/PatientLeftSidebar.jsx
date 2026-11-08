@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { fmtPhone, parsePlzOrt, combinePlzOrt, lookupPlz } from "../../utils/helpers";
 import { PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "../../constants";
+import { showToast } from "../../utils/toast";
 
 const inputCls = "border border-[#DFE3EB] rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
 const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-700 text-right hover:bg-gray-50 hover:text-gray-900 cursor-text transition";
@@ -68,7 +69,11 @@ export default function PatientLeftSidebar({
   const data = { ...rawData, ...overrides };
   const save = (patch) => {
     setOverrides((o) => ({ ...o, ...patch }));
-    if (onUpdatePatient) onUpdatePatient({ ...rawData, ...overrides, ...patch });
+    if (onUpdatePatient) {
+      Promise.resolve(onUpdatePatient({ ...rawData, ...overrides, ...patch })).catch((e) => {
+        showToast("Änderung konnte nicht gespeichert werden: " + (e?.message || e), { error: true });
+      });
+    }
   };
 
   const vorname = data.vorname || patient.vorname || "";

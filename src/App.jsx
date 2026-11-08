@@ -1822,7 +1822,8 @@ export default function EphiaInvoice() {
     const beh = behandlungen.find(b => b._id === behId);
     await persistBehandlung(behId, behData);
     const dateChanged = !!(beh && behData.datum && beh.datum !== behData.datum);
-    logActivity(beh?._patientId, "behandlung", behId, "updated", dateChanged ? `Behandlungstermin auf ${fmtDate(behData.datum)} geändert` : `Behandlung aktualisiert`);
+    const noteChanged = !!beh && (beh.notiz || "") !== (behData.notiz || "");
+    logActivity(beh?._patientId, "behandlung", behId, "updated", dateChanged ? `Behandlungstermin auf ${fmtDate(behData.datum)} geändert` : noteChanged ? `Notiz zur Behandlung vom ${fmtDate(behData.datum)} aktualisiert` : `Behandlung aktualisiert`);
     if (!dateChanged) return;
     const docs = invoices.filter(inv => inv._behandlungId === behId && isBehandlungsdoku(inv));
     // A lone Behandlungsdoku always follows; with several, only those that still matched the old date
@@ -4200,11 +4201,15 @@ export default function EphiaInvoice() {
                 if (session && currentMEK && raw) {
                   const newPatientHash = await computePatientHash(getPatientIdentifier(updatedData), currentMEK);
                   const { ciphertext, iv } = await encryptData(updatedData, currentMEK);
-                  await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${pgv(raw.id)}`, {
+                  const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${pgv(raw.id)}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
                     body: JSON.stringify({ data: ciphertext, iv, patient_hash: newPatientHash, encryption_version: 1 }),
                   });
+                  if (!patchRes.ok) throw new Error((await patchRes.text()) || `HTTP ${patchRes.status}`);
+                  const prevData = (typeof raw.data === "object" && raw.data) || {};
+                  const onlyNoteChanged = (prevData.note || "") !== (updatedData.note || "")
+                    && JSON.stringify({ ...prevData, note: "", noteUpdatedAt: "" }) === JSON.stringify({ ...updatedData, note: "", noteUpdatedAt: "" });
                   // Reload patients
                   const patientRecords = await supabaseFetchPatients(session.access_token, user.id);
                   const decryptedPatients = [];
@@ -4220,9 +4225,13 @@ export default function EphiaInvoice() {
                   const updated = decryptedPatients.find(p => p.id === raw.id);
                   const ud = (typeof updated?.data === "object" && updated?.data) || {};
                   if (updated) setSelectedPatient({ vorname: ud.vorname || "", nachname: ud.nachname || "", email: ud.email || "", _raw: updated });
-                  logActivity(raw.id, "patient", raw.id, "updated", "Patient:innendaten aktualisiert");
+                  logActivity(raw.id, "patient", raw.id, "updated", onlyNoteChanged ? "Persönliche Notiz aktualisiert" : "Patient:innendaten aktualisiert");
                 }
-              } catch (e) { console.error("Error updating patient:", e); }
+              } catch (e) {
+                // Callers that await this (e.g. notes) show their own error; the rest only log
+                console.error("Error updating patient:", e);
+                throw e;
+              }
             }}
           />
         )}

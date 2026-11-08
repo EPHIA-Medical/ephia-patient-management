@@ -9,6 +9,7 @@ import PatientTimeline from "./PatientTimeline";
 import BehandlungDetailPanel from "./BehandlungDetailPanel";
 import BehandlungAddPanel from "./BehandlungAddPanel";
 import PatientBehandlungenSidebar from "./PatientBehandlungenSidebar";
+import NoteEditor from "./NoteEditor";
 import Spinner from "../ui/Spinner";
 import { emptyPraeparat } from "../../utils/praeparate";
 
@@ -34,6 +35,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [newBehZeit, setNewBehZeit] = useState("");
   const [expandedBeh, setExpandedBeh] = useState(null);
   const [historieOpen, setHistorieOpen] = useState(false);
+  const [noteEditing, setNoteEditing] = useState(false);
 
   // Close the Historie drawer with Escape
   useEffect(() => {
@@ -117,7 +119,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     }
     if (Object.keys(demoFields).length === 0) return;
     retroSyncDoneRef.current = true;
-    onUpdatePatient({ ...rawData, ...demoFields });
+    Promise.resolve(onUpdatePatient({ ...rawData, ...demoFields })).catch(() => { /* background sync, logged in App */ });
   }, [patientDbId]); // eslint-disable-line
 
   // ── Helper functions (shared across components) ──
@@ -215,7 +217,9 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result;
-      if (onUpdatePatient) onUpdatePatient({ ...rawData, profilePhoto: base64 });
+      if (onUpdatePatient) {
+        Promise.resolve(onUpdatePatient({ ...rawData, profilePhoto: base64 })).catch((err) => showToast("Foto konnte nicht gespeichert werden: " + (err?.message || err), { error: true }));
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -223,10 +227,51 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   // ── Render ──
   return (
     <div>
-      {/* Back button */}
-      <div className="mb-4">
+      {/* Back button + note action */}
+      <div className="mb-4 flex items-center justify-between gap-3">
         <button className="text-sm text-gray-400 hover:text-gray-600 transition" onClick={onBack}>&larr; Zur&uuml;ck zur Patient:innenliste</button>
+        {!rawData.note && !noteEditing && onUpdatePatient && (
+          <button className="inline-flex items-center gap-1.5 text-sm text-blue-500 hover:text-blue-700 font-medium transition" onClick={() => setNoteEditing(true)}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Persönliche Notiz
+          </button>
+        )}
       </div>
+
+      {/* Pinned personal note (encrypted with the patient data, appears on no document) */}
+      {(rawData.note || noteEditing) && (
+        <div className="mb-5 lg:mb-6 rounded-lg bg-amber-50 border border-amber-200/70 px-4 sm:px-5 py-3.5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M16 3a1 1 0 01.7 1.7L15 6.4v4.2l2.7 2.7a1 1 0 01-.7 1.7H13v6a1 1 0 11-2 0v-6H7a1 1 0 01-.7-1.7L9 10.6V6.4L7.3 4.7A1 1 0 018 3h8z" /></svg>
+            <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Persönliche Notiz</span>
+            {!noteEditing && rawData.noteUpdatedAt && (
+              <span className="text-xs text-amber-700/60">· {new Date(rawData.noteUpdatedAt).toLocaleDateString("de-DE")}</span>
+            )}
+            {!noteEditing && (
+              <div className="ml-auto flex items-center gap-1">
+                <button className="px-2 py-1 text-xs rounded text-amber-800/70 hover:text-amber-900 hover:bg-amber-100 transition" onClick={() => setNoteEditing(true)}>Bearbeiten</button>
+                <button className="px-2 py-1 text-xs rounded text-amber-800/70 hover:text-red-600 hover:bg-amber-100 transition" onClick={async () => {
+                  try { await onUpdatePatient({ ...rawData, note: "", noteUpdatedAt: new Date().toISOString() }); }
+                  catch (e) { showToast("Notiz konnte nicht entfernt werden: " + (e?.message || e), { error: true }); }
+                }}>Entfernen</button>
+              </div>
+            )}
+          </div>
+          {noteEditing ? (
+            <NoteEditor
+              value={rawData.note || ""}
+              editing={noteEditing}
+              setEditing={setNoteEditing}
+              rows={3}
+              placeholder="z.B. bevorzugt Termine am Vormittag, reagiert empfindlich auf Kälte …"
+              onSave={(text) => onUpdatePatient({ ...rawData, note: text, noteUpdatedAt: new Date().toISOString() })}
+            />
+          ) : (
+            <p className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{rawData.note}</p>
+          )}
+          {noteEditing && <p className="text-[11px] text-amber-800/60 mt-2">Nur für Dich sichtbar und verschlüsselt gespeichert. Erscheint auf keinem Dokument.</p>}
+        </div>
+      )}
 
       {/* Two-column layout: Stammdaten + Behandlungen; Historie opens as a drawer */}
       <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">

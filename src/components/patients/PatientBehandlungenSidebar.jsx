@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { fmtDate } from "../../utils/helpers";
 import { showToast } from "../../utils/toast";
+import NoteEditor from "./NoteEditor";
 
 export default function PatientBehandlungenSidebar({
   patientBeh, matchingInvoices, patientDbId, patient,
@@ -19,6 +20,12 @@ export default function PatientBehandlungenSidebar({
   const [editDatum, setEditDatum] = useState("");
   const [editZeit, setEditZeit] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  // Free-text note per Behandlung (stored in the encrypted Behandlung payload)
+  const [noteEditingBehId, setNoteEditingBehId] = useState(null);
+  const saveBehNote = async (beh, text) => {
+    const data = Object.fromEntries(Object.entries(beh).filter(([k]) => !k.startsWith("_")));
+    await onUpdateBehandlung(beh._id, { ...data, notiz: text });
+  };
 
   const startEditBeh = (beh) => {
     setEditDatum(beh.datum || "");
@@ -127,6 +134,9 @@ export default function PatientBehandlungenSidebar({
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-sm font-semibold text-gray-800">{fmtDate(beh.datum)}</span>
                   {beh.zeit && <span className="text-sm text-gray-500">{beh.zeit} Uhr</span>}
+                  {beh.notiz && (
+                    <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Hat eine Notiz"><title>Hat eine Notiz</title><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 8l-3 1 1-3V6a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H9l-2 2z" /></svg>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-xs text-gray-400">{behDocs.length} Dok.</span>
@@ -160,9 +170,37 @@ export default function PatientBehandlungenSidebar({
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                         )}
+                        {onUpdateBehandlung && !beh.notiz && noteEditingBehId !== beh._id && (
+                          <button className="ml-auto text-xs text-blue-500 hover:text-blue-700 font-medium transition" onClick={() => setNoteEditingBehId(beh._id)}>+ Notiz</button>
+                        )}
                       </div>
                     )}
                   </div>
+                  {/* Note for this Behandlung */}
+                  {(beh.notiz || noteEditingBehId === beh._id) && (
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Notiz</span>
+                        {noteEditingBehId !== beh._id && onUpdateBehandlung && (
+                          <button className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Notiz bearbeiten" onClick={() => setNoteEditingBehId(beh._id)}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      {noteEditingBehId === beh._id ? (
+                        <NoteEditor
+                          value={beh.notiz || ""}
+                          editing
+                          setEditing={(v) => setNoteEditingBehId(v ? beh._id : null)}
+                          rows={3}
+                          placeholder="z.B. Verlauf, Absprachen, nächste Schritte …"
+                          onSave={(text) => saveBehNote(beh, text)}
+                        />
+                      ) : (
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{beh.notiz}</p>
+                      )}
+                    </div>
+                  )}
                   {behDocs.length === 0 && (
                     <div className="px-4 py-5 text-center text-gray-400 text-sm">Noch keine Dokumente in dieser Behandlung.</div>
                   )}
