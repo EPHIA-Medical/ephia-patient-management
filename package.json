@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check-imports": "node scripts/check-imports.mjs",
-    "deploy": "vite build && gh-pages -d dist"
+    "deploy": "vite build && gh-pages -d dist",
+    "test": "node --test tests/"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
