@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export const metadata = { title: "EPHIA Patient:innenverwaltung API" };
+export const metadata = { title: "EPHIA Patient Management System API" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

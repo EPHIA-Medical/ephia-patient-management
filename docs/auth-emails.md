@@ -1,4 +1,4 @@
-# Auth-Mails (Bestätigung, Passwort zurücksetzen)
+# Auth-Mails des EPHIA Patient Management Systems (Bestätigung, Passwort zurücksetzen)
 
 Das Frontend versendet keine Mails. Supabase Auth (Projekt
 `grfngjgjiipbgntsduom`) löst sie aus, seit November 2026 aber nicht mehr über

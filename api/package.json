@@ -2,7 +2,7 @@
   "name": "ephia-patient-management-api",
   "private": true,
   "version": "0.1.0",
-  "description": "Server side of the EPHIA Patient:innenverwaltung: Supabase auth mails, later Stripe.",
+  "description": "Server side of the EPHIA Patient Management System: Supabase auth mails, later Stripe.",
   "scripts": {
     "dev": "next dev -p 3010",
     "build": "next build",

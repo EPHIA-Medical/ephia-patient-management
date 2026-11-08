@@ -3,7 +3,7 @@ import crypto from "crypto";
 /**
  * Pure helpers for the Supabase Auth "Send Email" hook.
  *
- * The Patient:innenverwaltung frontend is a static SPA; Supabase Auth
+ * The Patient Management System frontend is a static SPA; Supabase Auth
  * posts every auth email it would otherwise send via its built-in SMTP to
  * src/app/api/auth/email-hook/route.ts, which builds the EPHIA mail and
  * sends it through Resend.

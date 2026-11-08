@@ -1,6 +1,6 @@
-# EPHIA Patient:innenverwaltung API
+# EPHIA Patient Management System API
 
-Server side of the Patient:innenverwaltung. The frontend in the repository
+Server side of the EPHIA Patient Management System. The frontend in the repository
 root is a static SPA on GitHub Pages; this folder is a small Next.js service
 (route handlers only, no UI) that runs on Railway and holds everything that
 needs a secret: today the Supabase auth mails, next the Stripe integration.
@@ -40,7 +40,7 @@ needs a secret: today the Supabase auth mails, next the Stripe integration.
    | `EMAIL_FROM` | `EPHIA <noreply@ephia.de>` |
    | `AUTH_EMAIL_HOOK_SECRET` | the secret from step 5, with its `v1,whsec_` prefix |
 
-4. Settings → Networking → Custom Domain, e.g. `api.invoicing.ephia.de`,
+4. Settings → Networking → Custom Domain, e.g. `api.invoicing.ephia.de` (the frontend domain is still invoicing.ephia.de until it moves),
    and the CNAME it shows in Cloudflare (DNS only, not proxied, or proxied
    with the Railway-recommended setting). `GET /api/health` must answer
    `{"ok":true,...}` with every `configured` flag `true` before step 6.

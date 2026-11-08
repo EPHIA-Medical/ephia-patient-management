@@ -13,7 +13,7 @@ import type { AuthMailKind, PlannedAuthMail } from "@/lib/auth-hook";
 // The app registers accounts with email and password only, so there is
 // usually no first name and the greeting falls back to "Hallo,".
 
-export const PRODUCT_NAME = "EPHIA Patient:innenverwaltung";
+export const PRODUCT_NAME = "EPHIA Patient Management System";
 
 interface LinkCopy {
   subject: string;
@@ -26,39 +26,39 @@ const IGNORE = "Wenn Du das nicht warst, kannst Du diese E-Mail einfach ignorier
 export const LINK_COPY: Record<Exclude<AuthMailKind, "reauthentication">, LinkCopy> = {
   signup: {
     subject: "Bitte bestätige Deine E-Mail-Adresse",
-    intro: `Du hast ein Konto für die ${PRODUCT_NAME} angelegt. Bestätige bitte Deine E-Mail-Adresse mit einem Klick auf den Button, danach kannst Du Dich anmelden. Der Link ist eine Stunde gültig. Wenn Du kein Konto angelegt hast, kannst Du diese E-Mail einfach ignorieren.`,
+    intro: `Du hast ein Konto für das ${PRODUCT_NAME} angelegt. Bestätige bitte Deine E-Mail-Adresse mit einem Klick auf den Button, danach kannst Du Dich anmelden. Der Link ist eine Stunde gültig. Wenn Du kein Konto angelegt hast, kannst Du diese E-Mail einfach ignorieren.`,
     button: "E-Mail-Adresse bestätigen",
   },
   recovery: {
     subject: "Passwort zurücksetzen",
-    intro: `Du hast einen Link zum Zurücksetzen Deines Passworts für die ${PRODUCT_NAME} angefordert. Klicke auf den Button unten, um ein neues Passwort zu setzen. Der Link ist eine Stunde gültig. ${IGNORE}`,
+    intro: `Du hast einen Link zum Zurücksetzen Deines Passworts für das ${PRODUCT_NAME} angefordert. Klicke auf den Button unten, um ein neues Passwort zu setzen. Der Link ist eine Stunde gültig. ${IGNORE}`,
     button: "Neues Passwort setzen",
   },
   magiclink: {
     subject: "Dein Anmeldelink",
-    intro: `Mit diesem Link meldest Du Dich ohne Passwort bei der ${PRODUCT_NAME} an. Der Link ist eine Stunde gültig und funktioniert nur einmal. Wenn Du keine Anmeldung angefordert hast, kannst Du diese E-Mail einfach ignorieren.`,
+    intro: `Mit diesem Link meldest Du Dich ohne Passwort beim ${PRODUCT_NAME} an. Der Link ist eine Stunde gültig und funktioniert nur einmal. Wenn Du keine Anmeldung angefordert hast, kannst Du diese E-Mail einfach ignorieren.`,
     button: "Jetzt anmelden",
   },
   invite: {
-    subject: `Deine Einladung zur ${PRODUCT_NAME}`,
-    intro: `Du wurdest zur ${PRODUCT_NAME} eingeladen. Klicke auf den Button, um Dein Konto einzurichten und ein Passwort zu wählen. Der Link ist eine Stunde gültig.`,
+    subject: `Deine Einladung zum ${PRODUCT_NAME}`,
+    intro: `Du wurdest zum ${PRODUCT_NAME} eingeladen. Klicke auf den Button, um Dein Konto einzurichten und ein Passwort zu wählen. Der Link ist eine Stunde gültig.`,
     button: "Einladung annehmen",
   },
   email_change_new: {
     subject: "Bitte bestätige Deine neue E-Mail-Adresse",
-    intro: `Du möchtest Dein Konto bei der ${PRODUCT_NAME} auf die Adresse {{neue_email}} umstellen. Bestätige die neue Adresse bitte mit einem Klick auf den Button. Der Link ist eine Stunde gültig.`,
+    intro: `Du möchtest Dein Konto beim ${PRODUCT_NAME} auf die Adresse {{neue_email}} umstellen. Bestätige die neue Adresse bitte mit einem Klick auf den Button. Der Link ist eine Stunde gültig.`,
     button: "Neue E-Mail-Adresse bestätigen",
   },
   email_change_current: {
     subject: "Änderung Deiner E-Mail-Adresse bestätigen",
-    intro: `Für Dein Konto bei der ${PRODUCT_NAME} wurde eine Änderung der E-Mail-Adresse auf {{neue_email}} angefordert. Bitte bestätige die Änderung auch von Deiner bisherigen Adresse aus. Wenn Du das nicht warst, ändere bitte umgehend Dein Passwort und schreib uns an customerlove@ephia.de.`,
+    intro: `Für Dein Konto beim ${PRODUCT_NAME} wurde eine Änderung der E-Mail-Adresse auf {{neue_email}} angefordert. Bitte bestätige die Änderung auch von Deiner bisherigen Adresse aus. Wenn Du das nicht warst, ändere bitte umgehend Dein Passwort und schreib uns an customerlove@ephia.de.`,
     button: "Änderung bestätigen",
   },
 };
 
 export const CODE_COPY = {
   subject: "Dein Bestätigungscode",
-  intro: `Zur Bestätigung Deiner Identität in der ${PRODUCT_NAME} brauchst Du diesen Code. Gib ihn in der App ein. Er ist nur kurze Zeit gültig. Wenn Du keinen Code angefordert hast, kannst Du diese E-Mail einfach ignorieren.`,
+  intro: `Zur Bestätigung Deiner Identität im ${PRODUCT_NAME} brauchst Du diesen Code. Gib ihn in der App ein. Er ist nur kurze Zeit gültig. Wenn Du keinen Code angefordert hast, kannst Du diese E-Mail einfach ignorieren.`,
   codeLabel: "Dein Code",
 };
 
