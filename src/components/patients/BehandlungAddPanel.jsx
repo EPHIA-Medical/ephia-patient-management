@@ -27,6 +27,10 @@ export default function BehandlungAddPanel({
   const multiPraep = praeparate.length > 1;
   const activeEinheit = praeparate[0].einheit || "SE";
   const hasMarkers = newTreatmentMarkers.length > 0;
+  // Präparate the practice has saved as Dermalfiller need a Chargennummer (Klasse-III-Medizinprodukt)
+  const fillerNames = new Set((practice.praeparate || []).filter((s) => s.typ === "filler" && s.name).map((s) => s.name.trim().toLowerCase()));
+  const isFillerPraep = (p) => fillerNames.has((p.name || "").trim().toLowerCase());
+  const missingCharge = praeparate.some((p) => isFillerPraep(p) && !(p.charge || "").trim());
   // Units per Präparat from the placed points
   const totals = praeparatTotals({ praeparate, markers: newTreatmentMarkers });
 
@@ -162,7 +166,7 @@ export default function BehandlungAddPanel({
             {praeparate.map((p, idx) => {
               const t = totals[idx];
               return (
-                <div key={idx} className="grid gap-2" style={{ gridTemplateColumns: multiPraep ? "18px 1fr 76px 72px 28px" : "1fr 76px 72px" }}>
+                <div key={idx} className="grid gap-2" style={{ gridTemplateColumns: multiPraep ? "18px 1fr 76px 72px 96px 28px" : "1fr 76px 72px 96px" }}>
                   {multiPraep && (
                     <div className="flex items-end pb-1.5">
                       <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center" style={{ width: 18, height: 18, lineHeight: "18px" }}>{praepLetter(idx)}</span>
@@ -176,7 +180,7 @@ export default function BehandlungAddPanel({
                       placeholder="z.B. Bocouture"
                       suggestions={(practice.praeparate || []).filter((s) => s.name)}
                       onChange={(v) => updatePraep(idx, { name: v })}
-                      onSelect={(s) => updatePraep(idx, { name: s.name, ...(s.einheit ? { einheit: s.einheit } : {}) })}
+                      onSelect={(s) => updatePraep(idx, { name: s.name, ...(s.einheit && s.einheit !== "Spritze" ? { einheit: s.einheit } : s.typ === "filler" ? { einheit: "ml" } : {}) })}
                     />
                   </div>
                   <div>
@@ -204,6 +208,15 @@ export default function BehandlungAddPanel({
                       <option value="SE">SE</option>
                       <option value="IE">IE</option>
                     </Select>
+                  </div>
+                  <div>
+                    {idx === 0 && <label className="block text-xs font-medium text-gray-500 mb-0.5">Charge</label>}
+                    <input
+                      className={inputCls + (isFillerPraep(p) && !(p.charge || "").trim() ? " border-amber-400" : "")}
+                      value={p.charge || ""}
+                      placeholder={isFillerPraep(p) ? "Pflicht" : "optional"}
+                      onChange={(e) => updatePraep(idx, { charge: e.target.value })}
+                    />
                   </div>
                   {multiPraep && (
                     <div className="flex items-end">
@@ -282,16 +295,19 @@ export default function BehandlungAddPanel({
 
         const hasPraep = praeparate.every((p) => p.name.trim());
         const hasAmount = hasMarkers || praeparate.every((p) => p.amount);
-        const quickEnabled = !editingTreatmentInv && hasPraep && hasAmount;
+        const quickEnabled = !editingTreatmentInv && hasPraep && hasAmount && !missingCharge;
 
         return (
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <button
-              className="px-4 py-2 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition"
-              onClick={() => saveTreatment(false)}
+              className={`px-4 py-2 text-sm rounded-lg text-white transition ${missingCharge ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
+              disabled={missingCharge}
+              title={missingCharge ? "Bei Dermalfillern ist die Chargennummer Pflicht." : undefined}
+              onClick={() => !missingCharge && saveTreatment(false)}
             >
               Behandlung speichern
             </button>
+            {missingCharge && <span className="text-xs text-amber-600">Bitte die Chargennummer des Fillers eintragen (Rückverfolgbarkeit, § 630f BGB).</span>}
             <button
               className={`px-4 py-2 text-sm rounded-lg text-white transition ${quickEnabled ? "bg-green-500 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"}`}
               disabled={!quickEnabled}

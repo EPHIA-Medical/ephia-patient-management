@@ -10,6 +10,7 @@ import { supabaseCreateBehandlung, supabaseDeleteBehandlung } from "../../lib/su
 import { supabaseCreateDocument, supabaseDeleteDocument } from "../../lib/supabase/documents";
 import { showToast } from "../../utils/toast";
 import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
+import { SPRITZEN_GROESSEN } from "../../constants";
 import { autoLogoutMinutes, AUTO_LOGOUT_MIN_MINUTES, AUTO_LOGOUT_MAX_MINUTES } from "../../constants";
 import Select from "../ui/Select";
 import {
@@ -23,7 +24,7 @@ export const SETTINGS_SECTIONS = [
   { id: "praxis", label: "Praxisdaten", desc: "Name, Adresse und Logo, wie sie auf Deinen Dokumenten erscheinen." },
   { id: "kontakt", label: "Kontakt & Bank", desc: "Kontaktdaten und Bankverbindung für Rechnungen." },
   { id: "rechnungen", label: "Rechnungen", desc: "Umsatzsteuer, Zahlungsfrist und Fußzeile Deiner Rechnungen." },
-  { id: "praeparate", label: "Präparate", desc: "Häufig verwendete Präparate mit Einheit und Preis." },
+  { id: "praeparate", label: "Präparate", desc: "Häufig verwendete Präparate mit Art, Einheit und Preis." },
   { id: "aufklaerung", label: "Aufklärungsbögen", desc: "Die Bögen, die Patient:innen vor der Behandlung lesen, beantworten und unterschreiben." },
   { id: "sicherheit", label: "Sicherheit", desc: "Automatischer Logout, Praxis-PIN und Passwort." },
   { id: "daten", label: "Daten & Backup", desc: "Alle Daten exportieren oder aus einem Backup wiederherstellen.", needsAccount: true },
@@ -438,17 +439,28 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
       <div>
         <p className="text-xs text-gray-400 mb-4 flex items-center gap-1">
           Beim Erstellen einer Rechnung kannst Du sie mit einem Klick auswählen.
-          <InfoTooltip>{"Den Preis pro Einheit berechnest Du, indem Du den Einkaufspreis der Phiole durch die Anzahl der enthaltenen Einheiten teilst.\n\nBeispiel: Kostet eine Phiole mit 100 SE insgesamt 50 €, liegt der Preis pro SE bei 0,50 €."}</InfoTooltip>
+          <InfoTooltip>{"Botulinum: Den Preis pro Einheit berechnest Du, indem Du den Einkaufspreis der Phiole durch die Anzahl der enthaltenen Einheiten teilst. Beispiel: Kostet eine Phiole mit 100 SE insgesamt 50 €, liegt der Preis pro SE bei 0,50 €.\n\nDermalfiller: Preis pro Spritze (Einkaufspreis). Eine angebrochene Spritze darf nicht bei einer anderen Person verwendet werden, deshalb wird immer die ganze Spritze berechnet."}</InfoTooltip>
         </p>
         {list.length === 0 && <p className="text-sm text-gray-400 mb-3">Noch keine Präparate gespeichert.</p>}
         {list.map((p, idx) => (
           <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-2">
-            <input className={inputCls2 + " flex-1 min-w-0"} value={p.name} placeholder="z.B. Relfydess" onChange={(e) => upd(idx, { name: e.target.value })} />
-            <Select className={inputCls2 + " !w-24"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
-              <option value="ml">ml</option>
-              <option value="SE">SE</option>
-              <option value="IE">IE</option>
+            <Select className={inputCls2 + " !w-28 sm:!w-32"} value={p.typ || "botox"} onChange={(e) => { const typ = e.target.value; upd(idx, { typ, ...(typ === "filler" ? { einheit: "Spritze", spritzenGroesse: p.spritzenGroesse || "1 ml" } : typ === "hyaluronidase" ? { einheit: "IE" } : p.einheit === "Spritze" ? { einheit: "SE" } : {}) }); }}>
+              <option value="botox">Botulinum</option>
+              <option value="filler">Dermalfiller</option>
+              <option value="hyaluronidase">Hyaluronidase</option>
             </Select>
+            <input className={inputCls2 + " flex-1 min-w-0"} value={p.name} placeholder={p.typ === "filler" ? "z.B. Juvéderm Volift" : p.typ === "hyaluronidase" ? "z.B. Hylase Dessau" : "z.B. Relfydess"} onChange={(e) => upd(idx, { name: e.target.value })} />
+            {p.typ === "filler" ? (
+              <Select className={inputCls2 + " !w-24"} value={p.spritzenGroesse || "1 ml"} onChange={(e) => upd(idx, { spritzenGroesse: e.target.value })}>
+                {SPRITZEN_GROESSEN.map((g) => <option key={g} value={g}>{g}</option>)}
+              </Select>
+            ) : (
+              <Select className={inputCls2 + " !w-24"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
+                <option value="ml">ml</option>
+                <option value="SE">SE</option>
+                <option value="IE">IE</option>
+              </Select>
+            )}
             <div className="relative">
               <input className={inputCls2 + " !w-24 sm:!w-28 pr-8"} type="text" inputMode="decimal" value={p.preisStr ?? ""} placeholder="0,00" onChange={(e) => upd(idx, { preisStr: e.target.value.replace(/[^\d,.\- ]/g, "") })} />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">€</span>

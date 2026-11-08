@@ -1,4 +1,4 @@
-import { PUNKTWERT, BOTOX_GOA_ITEMS, ICD10_CODES, ZUSCHLAEGE } from "../constants";
+import { PUNKTWERT, BOTOX_GOA_ITEMS, ICD10_CODES, ZUSCHLAEGE, FILLER_GOA_ITEMS, FILLER_INFILTRATION_OPTIONS, FILLER_ANAESTHESIE_OPTIONS, EINHEIT_SPRITZE } from "../constants";
 
 // ═══════════════════ Helpers ═══════════════════
 
@@ -137,17 +137,40 @@ export function toDE(num) {
   return num.toString().replace(".", ",");
 }
 
-export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sachkosten, customS, einheit, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly) {
+// Line options of a Dermalfiller Rechnung (ignored for Botulinum):
+//   treatmentType "filler", infiltrationCode "267" | "268", anaesthesieCode "" | "490" | "491",
+//   spritzenGroesse e.g. "1 ml". For Filler `ml` is the number of syringes and
+//   `preisProMl` the price per syringe; the syringe is billed whole (§ 10 Abs. 1 GOÄ).
+export const isFillerOpts = (opts) => !!opts && opts.treatmentType === "filler";
+
+function fillerGoaSource(opts) {
+  const infl = FILLER_INFILTRATION_OPTIONS.find((o) => o.goaCode === opts.infiltrationCode) || FILLER_INFILTRATION_OPTIONS[0];
+  const base = FILLER_GOA_ITEMS[2];
+  const injection = { ...base, goaCode: infl.goaCode, description: infl.description, punkte: infl.punkte, info: infl.info || base.info };
+  const anaesthesie = FILLER_ANAESTHESIE_OPTIONS.filter((o) => o.goaCode === opts.anaesthesieCode).map((o) => ({ goaCode: o.goaCode, description: o.description, punkte: o.punkte, steigerung: o.steigerung, info: o.info, fixedRate: true }));
+  return [FILLER_GOA_ITEMS[0], FILLER_GOA_ITEMS[1], injection, ...anaesthesie];
+}
+
+export function fillerProductDescription(praeparat, count, spritzenGroesse) {
+  const n = Number(count) || 0;
+  const groesse = spritzenGroesse ? ` (${spritzenGroesse})` : "";
+  return `${n % 1 === 0 ? n : toDE(n)} ${n === 1 ? "Spritze" : "Spritzen"} ${praeparat || "Präparat"}${groesse}`;
+}
+
+export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sachkosten, customS, einheit, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly, opts) {
   // customS can be: { s1, s5, s267 } from calcWeightedForGesamt, or null
   // beratungOnly: consultation-only invoice — GOÄ 1/3 (+ Zuschläge/Sachkosten), no GOÄ 5/267, no product line
-  const goaSource = beratungOnly ? BOTOX_GOA_ITEMS.filter((g) => g.goaCode === "1") : BOTOX_GOA_ITEMS;
+  const filler = isFillerOpts(opts);
+  if (filler) ganzeAmpulle = false;
+  const fullSource = filler ? fillerGoaSource(opts) : BOTOX_GOA_ITEMS;
+  const goaSource = beratungOnly ? fullSource.filter((g) => g.goaCode === "1") : fullSource;
   const goaLines = goaSource.map((g) => {
     // Swap GOÄ 1 → GOÄ 3 if extended consultation
     if (g.goaCode === "1" && useGoa3) {
       g = { ...g, goaCode: "3", description: "Eingehende Beratung (mehr als 10 Min.)", punkte: 150 };
     }
-    if (customS != null) {
-      const sMap = { "1": customS.s1, "3": customS.s1, "5": customS.s5, "267": customS.s267 };
+    if (customS != null && !g.fixedRate) {
+      const sMap = { "1": customS.s1, "3": customS.s1, "5": customS.s5, "267": customS.s267, "268": customS.s267 };
       const s = sMap[g.goaCode] || g.steigerung;
       return { ...g, steigerung: s, betrag: calcGoaBetrag(g.punkte, s), isProduct: false };
     }
@@ -175,7 +198,9 @@ export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sa
 
   const productLine = {
     goaCode: "",
-    description: ganzeAmpulle ? `1 Ampulle ${praeparat || "Präparat"}` : `${ml}${einheit || "ml"} ${praeparat || "Präparat"}`,
+    description: filler
+      ? fillerProductDescription(praeparat, ml, opts.spritzenGroesse)
+      : ganzeAmpulle ? `1 Ampulle ${praeparat || "Präparat"}` : `${ml}${einheit || "ml"} ${praeparat || "Präparat"}`,
     punkte: null,
     steigerung: null,
     betrag: ganzeAmpulle ? Math.round((ampullenpreis || 0) * 100) / 100 : Math.round(ml * preisProMl * 100) / 100,
@@ -183,9 +208,10 @@ export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sa
     isPraeparat: true,
     unitPrice: preisProMl,
     quantity: ml,
-    einheit: einheit || "ml",
+    einheit: filler ? EINHEIT_SPRITZE : (einheit || "ml"),
     praeparatName: praeparat || "Präparat",
     ganzeAmpulle: !!ganzeAmpulle,
+    ...(filler ? { spritzenGroesse: opts.spritzenGroesse || "" } : {}),
   };
 
   // Add Sachkosten lines
@@ -205,16 +231,23 @@ export function buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, sa
 // Compute weighted Steigerungssätze to reach a desired Gesamtbetrag (inkl. MwSt.)
 // Distribution ratio: GOÄ 1/3 and GOÄ 5 get weight 1, GOÄ 267 gets weight 3
 // All start at base 2.3x, then excess is distributed by weight
-export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly) {
+export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useGoa3, ganzeAmpulle, ampullenpreis, beratungOnly, opts) {
+  const filler = isFillerOpts(opts);
+  if (filler) ganzeAmpulle = false;
   const p1 = useGoa3 ? 150 : 80; // GOÄ 1 or 3
   const p5 = 80;                  // GOÄ 5
-  const p267 = 80;                // GOÄ 267
+  // The injection line: GOÄ 267 (80 Punkte), or 268 (130 Punkte) for a Filler session over several regions
+  const p267 = filler && opts.infiltrationCode === "268" ? 130 : 80;
   const productCost = beratungOnly ? 0 : ganzeAmpulle ? Math.round((ampullenpreis || 0) * 100) / 100 : Math.round(ml * preisProMl * 100) / 100;
   const sachkostenTotal = (sachkosten || []).reduce((sum, sk) => sum + parseDE(sk.betragStr), 0);
+  // Fixed-rate lines (Zuschläge at 1,0; Filler Anästhesie at 2,3) are taken off the target first
+  const anaesthesieTotal = filler && !beratungOnly
+    ? FILLER_ANAESTHESIE_OPTIONS.filter((o) => o.goaCode === opts.anaesthesieCode).reduce((sum, o) => sum + calcGoaBetrag(o.punkte, o.steigerung), 0)
+    : 0;
   const zuschlagTotal = (selectedZuschlaege || []).reduce((sum, code) => {
     const z = ZUSCHLAEGE.find((zs) => zs.code === code);
     return z ? sum + calcGoaBetrag(z.punkte, 1.0) : sum;
-  }, 0);
+  }, anaesthesieTotal);
 
   const desiredNetto = noMwst ? desiredGesamt : Math.round((desiredGesamt / 1.19) * 100) / 100;
 

@@ -22,7 +22,7 @@ import {
   computePatientHash, getPatientIdentifier
 } from "./lib/crypto";
 import { escrowConfigured, buildEscrowFields, verifyMekCheck } from "./lib/escrow";
-import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "./constants";
+import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES, TREATMENT_TYPES, treatmentShort, icd10CodesFor, FILLER_INFILTRATION_OPTIONS, FILLER_ANAESTHESIE_OPTIONS, SPRITZEN_GROESSEN } from "./constants";
 import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
@@ -155,6 +155,26 @@ export default function EphiaInvoice() {
   const [ganzeAmpulle, setGanzeAmpulle] = useState(false);
   const [ampullenpreisStr, setAmpullenpreisStr] = useState("");
 
+  // Behandlungstyp: Botulinum (default) or Dermalfiller. It drives the GOÄ set, the product
+  // line (whole syringes as Auslage) and the unit of the Behandlungsdoku (ml).
+  const [treatmentType, setTreatmentType] = useState("botox");
+  const [infiltrationCode, setInfiltrationCode] = useState("267"); // Filler: GOÄ 267 (one region) or 268 (several)
+  const [anaesthesieCode, setAnaesthesieCode] = useState(""); // Filler: "", "490" or "491"
+  const [spritzenGroesse, setSpritzenGroesse] = useState("1 ml"); // Filler: size of the billed syringe
+  const [charge, setCharge] = useState(""); // Chargennummer of the Präparat (required for Filler)
+  const isFiller = treatmentType === "filler";
+  const docEinheit = isFiller ? "ml" : einheit; // unit of the Behandlungsdoku
+  const lineOpts = { treatmentType, infiltrationCode, anaesthesieCode, spritzenGroesse };
+  const switchTreatmentType = (t) => {
+    if (t === treatmentType) return;
+    setTreatmentType(t);
+    setInfiltrationCode("267"); setAnaesthesieCode("");
+    if (t === "filler") { setGanzeAmpulle(false); setAmpullenpreisStr(""); setMlStr("1"); setPreisProMlStr(""); setEinheit("ml"); }
+    else { setEinheit("SE"); setPreisProMlStr(""); }
+    setPraeparat(""); setDiagnose("");
+  };
+  const chipCls = (active) => `px-3 py-1.5 text-xs rounded-lg border transition ${active ? "bg-blue-50 border-blue-300 text-blue-700" : "border-[#DFE3EB] text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`;
+
   // Zuschläge
   const [selectedZuschlaege, setSelectedZuschlaege] = useState([]);
 
@@ -166,12 +186,12 @@ export default function EphiaInvoice() {
   const [treatmentMarkers, setTreatmentMarkers] = useState([]);
   const [treatmentFacePhoto, setTreatmentFacePhoto] = useState("");
 
-  // Sync treatment marker amounts → Menge field
+  // Sync treatment marker amounts → Menge field (Botulinum only: a Filler Rechnung counts syringes, not ml)
   React.useEffect(() => {
-    if (treatmentMarkers.length === 0) return;
+    if (treatmentMarkers.length === 0 || treatmentType === "filler") return;
     const total = treatmentMarkers.reduce((sum, m) => sum + evalAmount(m.amount), 0);
     if (total > 0) setMlStr(total % 1 === 0 ? String(total) : total.toFixed(2).replace(".", ","));
-  }, [treatmentMarkers]);
+  }, [treatmentMarkers, treatmentType]);
 
   // Desired total amount (inkl. MwSt.) → back-compute weighted Steigerungssätze
   const [wunschGesamtStr, setWunschGesamtStr] = useState("");
@@ -1119,11 +1139,11 @@ export default function EphiaInvoice() {
   const wunschGesamt = parseDE(wunschGesamtStr);
   const isBeratungOnly = beratungOnly && !hvOnlyMode;
   const computedS = wunschGesamt > 0
-    ? calcWeightedForGesamt(wunschGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly)
+    ? calcWeightedForGesamt(wunschGesamt, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts)
     : null;
-  const liveItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
+  const liveItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts);
   const zwischensumme = liveItems.reduce((s, it) => s + it.betrag, 0);
-  const defaultItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, [], sachkosten, null, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
+  const defaultItems = buildLineItems(praeparat || "Präparat", ml, preisProMl, [], sachkosten, null, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts);
   const defaultNetto = defaultItems.reduce((s, it) => s + it.betrag, 0);
   const defaultGesamt = noMwst ? defaultNetto : Math.round((defaultNetto * 1.19) * 100) / 100;
   const mwst = noMwst ? 0 : Math.round(zwischensumme * 0.19 * 100) / 100;
@@ -1148,8 +1168,8 @@ export default function EphiaInvoice() {
   const hvBlocked = hvMissing && !hvVerzicht;
   const maxGesamtWithoutHv = hvMissing
     ? maxGesamtWithin((g) => buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten,
-        calcWeightedForGesamt(g, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly),
-        einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly), wunschGesamt)
+        calcWeightedForGesamt(g, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts),
+        einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts), wunschGesamt)
     : null;
 
   // Live voucher deduction for the create-page preview
@@ -1193,6 +1213,8 @@ export default function EphiaInvoice() {
     if (!isBeratungOnly) {
       if (!praeparat.trim()) errors.praeparat = true;
       if (ml <= 0) errors.ml = true;
+      // Filler: Chargennummer is part of the Behandlungsdoku (Klasse-III-Medizinprodukt)
+      if (isFiller && !hvOnlyMode && !charge.trim()) errors.charge = true;
       if (ganzeAmpulle) {
         if (ampullenpreisStr === "" || ampullenpreis <= 0) errors.ampullenpreis = true;
       } else if (preisProMlStr === "" || preisProMl < 0) errors.preisProMl = true;
@@ -1420,7 +1442,7 @@ export default function EphiaInvoice() {
   const handleClearVoucher = () => { setAppliedVoucher(null); setVoucherLookupError(""); };
 
   const handleGenerate = async () => {
-    const items = buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, hvOnlyMode ? [] : sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
+    const items = buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, hvOnlyMode ? [] : sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly, lineOpts);
     // The HV is never created together with the Rechnung any more (it must exist before the
     // treatment); only Rechnungen that already carried one keep it when edited.
     const hasHV = hvOnlyMode ? true : (fromHvId ? false : (legacyEmbeddedHv && items.some((it) => it.steigerung != null && it.steigerung > 3.5)));
@@ -1444,7 +1466,12 @@ export default function EphiaInvoice() {
       _hvOnly: hvOnlyMode || undefined,
       beratungOnly: isBeratungOnly || undefined,
       praeparat: isBeratungOnly ? "" : praeparat,
-      einheit,
+      einheit: isFiller ? "ml" : einheit,
+      treatmentType,
+      infiltrationCode: isFiller ? infiltrationCode : undefined,
+      anaesthesieCode: isFiller && anaesthesieCode ? anaesthesieCode : undefined,
+      spritzenGroesse: isFiller ? spritzenGroesse : undefined,
+      charge: !isBeratungOnly && charge.trim() ? charge.trim() : undefined,
       ml,
       mlStr,
       preisProMl,
@@ -1458,7 +1485,7 @@ export default function EphiaInvoice() {
       begruendung: needsBegruendung ? begruendung.trim() : "",
       selectedZuschlaege: [...selectedZuschlaege],
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
-      treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
+      treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit: docEinheit, charge: charge.trim(), facePhoto: treatmentFacePhoto || "" } : null,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
       // Zahlungseingang: kept when editing, otherwise the invoice date (paid at the practice)
       hvVerzicht: hvWaiverUsed ? { at: new Date().toISOString(), version: HV_WAIVER_VERSION } : undefined,
@@ -1643,6 +1670,7 @@ export default function EphiaInvoice() {
     setMlStr("1");
     setGanzeAmpulle(false);
     setAmpullenpreisStr("");
+    setTreatmentType("botox"); setInfiltrationCode("267"); setAnaesthesieCode(""); setSpritzenGroesse("1 ml"); setCharge("");
     setSelectedZuschlaege([]);
     setSachkosten([]);
     setWunschGesamtStr(""); setUseBeratungLang(false);
@@ -1668,6 +1696,7 @@ export default function EphiaInvoice() {
     setMlStr("1");
     setGanzeAmpulle(false);
     setAmpullenpreisStr("");
+    setTreatmentType("botox"); setInfiltrationCode("267"); setAnaesthesieCode(""); setSpritzenGroesse("1 ml"); setCharge("");
     setSelectedZuschlaege([]);
     setSachkosten([]);
     setWunschGesamtStr(""); setUseBeratungLang(false);
@@ -1697,6 +1726,7 @@ export default function EphiaInvoice() {
     setMlStr("1");
     setGanzeAmpulle(false);
     setAmpullenpreisStr("");
+    setTreatmentType("botox"); setInfiltrationCode("267"); setAnaesthesieCode(""); setSpritzenGroesse("1 ml"); setCharge("");
     setSelectedZuschlaege([]);
     setSachkosten([]);
     setWunschGesamtStr(""); setUseBeratungLang(false);
@@ -1731,12 +1761,13 @@ export default function EphiaInvoice() {
     setInvoiceMeta((m) => ({ ...m, nummer: "", datum: todayLocal() }));
   };
   // From the Schnellrechnung: open the HV form for the patient, prefilled
-  const startHvFromValues = ({ behandlungId, praeparat: p, einheit: e, ml: m, preisProMl: ppm, wunschGesamt: g }) => {
+  const startHvFromValues = ({ behandlungId, praeparat: p, einheit: e, ml: m, preisProMl: ppm, wunschGesamt: g, treatmentType: tt }) => {
     if (!selectedPatient) return;
     pendingDocBehIdRef.current = behandlungId || null;
     handleNewHVForPatient(selectedPatient);
     setPraeparat(p || "");
-    setEinheit(e || "SE");
+    setTreatmentType(tt === "filler" ? "filler" : "botox");
+    setEinheit(tt === "filler" ? "ml" : (e || "SE"));
     setMlStr(m ? String(m).replace(".", ",") : "1");
     setPreisProMlStr(ppm ? String(ppm).replace(".", ",") : "");
     setWunschGesamtStr(g ? g.toFixed(2).replace(".", ",") : "");
@@ -1764,6 +1795,7 @@ export default function EphiaInvoice() {
     setMlStr("1");
     setGanzeAmpulle(false);
     setAmpullenpreisStr("");
+    setTreatmentType("botox"); setInfiltrationCode("267"); setAnaesthesieCode(""); setSpritzenGroesse("1 ml"); setCharge("");
     setSelectedZuschlaege([]);
     setSachkosten([]);
     setWunschGesamtStr(""); setUseBeratungLang(false);
@@ -1796,6 +1828,11 @@ export default function EphiaInvoice() {
     setInvoiceMeta({ zahlungsfrist: practice.zahlungsfrist ?? 14, ...(inv.invoiceMeta || { nummer: "", ort: "", datum: "" }) });
     setPraeparat(inv.praeparat || "");
     setEinheit(inv.einheit || "ml");
+    setTreatmentType(inv.treatmentType === "filler" ? "filler" : "botox");
+    setInfiltrationCode(inv.infiltrationCode || "267");
+    setAnaesthesieCode(inv.anaesthesieCode || "");
+    setSpritzenGroesse(inv.spritzenGroesse || "1 ml");
+    setCharge(inv.charge || inv.treatmentDoc?.charge || "");
     setMlStr(inv.mlStr || (inv.ml != null ? toDE(inv.ml) : ""));
     setPreisProMlStr(inv.preisProMlStr || (inv.preisProMl != null ? toDE(inv.preisProMl) : ""));
     setGanzeAmpulle(!!inv.ganzeAmpulle);
@@ -3177,7 +3214,7 @@ export default function EphiaInvoice() {
             <h2 className="text-base font-semibold text-gray-800 mb-1">
               {hvOnlyMode
                 ? (amendingId ? "Honorarvereinbarung ändern" : createForPatient ? `Honorarvereinbarung für ${patient.vorname} ${patient.nachname}` : "Neue Honorarvereinbarung")
-                : (amendingId ? "Rechnung ändern" : createForPatient ? `Rechnung für ${patient.vorname} ${patient.nachname}` : "Botulinum-Rechnung erstellen")}
+                : (amendingId ? "Rechnung ändern" : createForPatient ? `Rechnung für ${patient.vorname} ${patient.nachname}` : `${treatmentShort(treatmentType)}-Rechnung erstellen`)}
             </h2>
             <p className="text-xs text-gray-400 mb-4">
               {hvOnlyMode
@@ -3213,6 +3250,10 @@ export default function EphiaInvoice() {
               const importFromHV = (hv) => {
                 setPraeparat(hv.praeparat || "");
                 setEinheit(hv.einheit || "SE");
+                setTreatmentType(hv.treatmentType === "filler" ? "filler" : "botox");
+                setInfiltrationCode(hv.infiltrationCode || "267");
+                setAnaesthesieCode(hv.anaesthesieCode || "");
+                setSpritzenGroesse(hv.spritzenGroesse || "1 ml");
                 setMlStr(hv.mlStr || (hv.ml != null ? (hv.ml % 1 === 0 ? String(hv.ml) : hv.ml.toFixed(2).replace(".", ",")) : "1"));
                 setPreisProMlStr(hv.preisProMlStr || (hv.preisProMl != null ? hv.preisProMl.toFixed(2).replace(".", ",") : ""));
                 setGanzeAmpulle(!!hv.ganzeAmpulle);
@@ -3325,14 +3366,14 @@ export default function EphiaInvoice() {
                   <input
                     className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={diagnose}
-                    placeholder="z. B. Bruxismus (F45.8)"
+                    placeholder={isFiller ? "z. B. Lipodystrophie (E88.1)" : "z. B. Bruxismus (F45.8)"}
                     onChange={(e) => setDiagnose(e.target.value)}
                     autoComplete="off"
                   />
                   {(() => {
                     const q = diagnose.toLowerCase().trim();
                     if (!q || q.length < 2) return null;
-                    const matches = ICD10_CODES.filter(c =>
+                    const matches = icd10CodesFor(treatmentType).filter(c =>
                       c.diagnosis.toLowerCase().includes(q) ||
                       c.icd10.toLowerCase().includes(q) ||
                       c.keywords.some(k => k.includes(q))
@@ -3427,6 +3468,27 @@ export default function EphiaInvoice() {
             </div>
             )}
 
+            {/* ─── Behandlungstyp: Botulinum vs. Dermalfiller ─── */}
+            <div className="mb-6 pb-5 border-b border-gray-100">
+              <div className="flex items-center gap-1 mb-3">
+                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Behandlung</p>
+                <InfoTooltip wide>
+                  <div>Der Behandlungstyp bestimmt die GOÄ-Ziffern, die Produktzeile und die Einheit der Behandlungsdokumentation. Beim Dermalfiller wird die ganze Spritze als Auslage nach § 10 GOÄ berechnet, die Injektionspunkte werden in ml dokumentiert und die Chargennummer ist Pflicht.</div>
+                </InfoTooltip>
+              </div>
+              <div className="flex gap-2">
+                {TREATMENT_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    className={`px-4 py-2 text-xs rounded-lg border transition ${treatmentType === t.id ? "bg-blue-50 border-blue-300 text-blue-700 font-medium" : "border-[#DFE3EB] text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                    onClick={() => switchTreatmentType(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* ─── Rechnungsart: Behandlung vs. Nur Beratung ─── */}
             {!hvOnlyMode && (
             <div className="mb-6 pb-5 border-b border-gray-100">
@@ -3482,16 +3544,25 @@ export default function EphiaInvoice() {
                     id="field-praeparat"
                     className={inputCls("praeparat")}
                     value={praeparat}
-                    placeholder="z.B. Bocouture, Botox"
-                    suggestions={(practice.praeparate || []).filter(p => p.name)}
+                    placeholder={isFiller ? "z.B. Juvéderm Volift, Restylane" : "z.B. Bocouture, Botox"}
+                    suggestions={(practice.praeparate || []).filter(p => p.name && (isFiller ? p.typ === "filler" : (!p.typ || p.typ === "botox")))}
                     onChange={(v) => { setPraeparat(v); clearError("praeparat"); }}
                     onSelect={(p) => {
                       setPraeparat(p.name); clearError("praeparat");
-                      if (p.einheit) setEinheit(p.einheit);
+                      if (p.einheit && !isFiller) setEinheit(p.einheit);
+                      if (isFiller && p.spritzenGroesse) setSpritzenGroesse(p.spritzenGroesse);
                       if (p.preisStr) { setPreisProMlStr(p.preisStr); clearError("preisProMl"); }
                     }}
                   />
                 </div>
+                {isFiller ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Spritzengröße</label>
+                  <Select className="w-full border border-[#DFE3EB] rounded px-1.5 sm:px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={spritzenGroesse} onChange={(e) => setSpritzenGroesse(e.target.value)}>
+                    {SPRITZEN_GROESSEN.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </Select>
+                </div>
+                ) : (
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Einheit</label>
                   <Select className="w-full border border-[#DFE3EB] rounded px-1.5 sm:px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={einheit} onChange={(e) => setEinheit(e.target.value)}>
@@ -3500,15 +3571,16 @@ export default function EphiaInvoice() {
                     <option value="IE">IE</option>
                   </Select>
                 </div>
+                )}
               </div>
               {/* ── Behandlungsdokumentation / Injektionsplanung (inside Präparat) ── */}
               <div>
-                <TreatmentMap markers={treatmentMarkers} setMarkers={setTreatmentMarkers} einheit={einheit} facePhoto={treatmentFacePhoto} onFacePhotoChange={setTreatmentFacePhoto} planMode={hvOnlyMode} />
+                <TreatmentMap markers={treatmentMarkers} setMarkers={setTreatmentMarkers} einheit={docEinheit} facePhoto={treatmentFacePhoto} onFacePhotoChange={setTreatmentFacePhoto} planMode={hvOnlyMode} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{hvOnlyMode ? "Geplante Menge" : "Menge"} *</label>
-                  <input id="field-ml" type="text" inputMode="decimal" className={inputCls("ml")} value={mlStr} placeholder="0,45" onChange={(e) => { const v = e.target.value.replace(/[^\d,.+*×x\- ]/g, ""); setMlStr(v); clearError("ml"); }} />
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{isFiller ? (hvOnlyMode ? "Geplante Anzahl Spritzen" : "Anzahl Spritzen") : hvOnlyMode ? "Geplante Menge" : "Menge"} *</label>
+                  <input id="field-ml" type="text" inputMode="decimal" className={inputCls("ml")} value={mlStr} placeholder={isFiller ? "1" : "0,45"} onChange={(e) => { const v = e.target.value.replace(/[^\d,.+*×x\- ]/g, ""); setMlStr(v); clearError("ml"); }} />
                 </div>
                 {ganzeAmpulle ? (
                   <div>
@@ -3517,12 +3589,21 @@ export default function EphiaInvoice() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1"><span className="hidden sm:inline">Preis / </span><span className="sm:hidden">€ / </span>{einheit}<span className="hidden sm:inline"> (€)</span> *</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1"><span className="hidden sm:inline">Preis / </span><span className="sm:hidden">€ / </span>{isFiller ? "Spritze" : einheit}<span className="hidden sm:inline"> (€)</span> *</label>
                     <input id="field-preisProMl" type="text" inputMode="decimal" className={inputCls("preisProMl")} value={preisProMlStr} placeholder="" onChange={(e) => { const v = e.target.value.replace(/[^\d,.+*×x\- ]/g, ""); setPreisProMlStr(v); clearError("preisProMl"); }} />
                   </div>
                 )}
               </div>
+              {/* ── Chargennummer (Rückverfolgbarkeit; Pflicht beim Filler) ── */}
+              {!hvOnlyMode && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Chargennummer{isFiller ? " *" : <span className="text-gray-400 font-normal"> (optional)</span>}</label>
+                <input id="field-charge" className={inputCls("charge")} value={charge} placeholder={isFiller ? "LOT auf der Spritze, z.B. 23A45" : "LOT der Ampulle"} onChange={(e) => { setCharge(e.target.value); clearError("charge"); }} />
+                {isFiller && <p className="text-[10px] text-gray-400 mt-1">Filler sind Medizinprodukte der Klasse III. Die Charge gehört zur Rückverfolgbarkeit in die Behandlungsdokumentation (§ 630f BGB).</p>}
+              </div>
+              )}
               {/* ── Ganze Ampulle berechnen (Verwurf) ── */}
+              {!isFiller && (
               <div className="flex items-start gap-2">
                 <input id="field-ganzeAmpulle" type="checkbox" className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400" checked={ganzeAmpulle} onChange={(e) => { setGanzeAmpulle(e.target.checked); clearError("preisProMl"); clearError("ampullenpreis"); }} />
                 <label htmlFor="field-ganzeAmpulle" className="text-sm text-gray-700 cursor-pointer select-none">
@@ -3530,6 +3611,40 @@ export default function EphiaInvoice() {
                   <span className="block text-xs text-gray-400">Berechnet den vollen Ampullenpreis, unabhängig von der injizierten Menge (Verwurf nach GOÄ §10).</span>
                 </label>
               </div>
+              )}
+              </div>
+            </div>
+            )}
+
+            {/* ── GOÄ-Ziffern der Filler-Injektion ── */}
+            {isFiller && !isBeratungOnly && (
+            <div className="mb-6 pb-5 border-b border-gray-100">
+              <div className="flex items-center gap-1 mb-3">
+                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Injektionsleistung</p>
+                <InfoTooltip wide>
+                  <div>Die Filler-Injektion wird als medikamentöse Infiltrationsbehandlung abgerechnet: GOÄ 267 für eine Körperregion, GOÄ 268 bei mehreren Körperregionen in einer Sitzung. Eine echte Infiltrationsanästhesie (Spritze) kann zusätzlich mit GOÄ 490 oder 491 berechnet werden. Betäubungscreme und Lidocain im Präparat sind nicht gesondert abrechenbar.</div>
+                </InfoTooltip>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {FILLER_INFILTRATION_OPTIONS.map((o) => (
+                  <div key={o.goaCode} className="flex items-center gap-0.5">
+                    <button className={chipCls(infiltrationCode === o.goaCode)} onClick={() => setInfiltrationCode(o.goaCode)}>{o.label}</button>
+                    <InfoTooltip><div><div className="font-semibold mb-1">GOÄ {o.goaCode} · {o.punkte} Punkte</div><div>{o.info}</div></div></InfoTooltip>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mb-1.5">Infiltrationsanästhesie <span className="text-gray-400">(optional, Faktor 2,3)</span></p>
+              <div className="flex flex-wrap gap-2">
+                <button className={chipCls(!anaesthesieCode)} onClick={() => setAnaesthesieCode("")}>Keine</button>
+                {FILLER_ANAESTHESIE_OPTIONS.map((o) => (
+                  <div key={o.goaCode} className="flex items-center gap-0.5">
+                    <button className={chipCls(anaesthesieCode === o.goaCode)} onClick={() => setAnaesthesieCode(o.goaCode)}>
+                      <span>{o.label}</span>
+                      <span className="ml-1.5 text-gray-400">({fmt(calcGoaBetrag(o.punkte, o.steigerung))} €)</span>
+                    </button>
+                    <InfoTooltip><div><div className="font-semibold mb-1">GOÄ {o.goaCode} · {o.punkte} Punkte · Faktor 2,3</div><div>{o.info}</div></div></InfoTooltip>
+                  </div>
+                ))}
               </div>
             </div>
             )}
