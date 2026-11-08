@@ -63,11 +63,24 @@ export default function BehandlungDetailPanel({
   const sameEinh = praepTotals.every((t) => t.einheit === praepTotals[0].einheit);
   const praepSummary = praepTotals.map((t) => [t.name || `Präparat ${t.letter}`, praepMengeStr(t)].filter(Boolean).join(" ")).join(" · ");
 
-  const pencilIcon = (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+  // Click-to-edit: the whole field opens its editor; a click that ends a text selection does not
+  const clickEdit = (open) => ({
+    role: "button",
+    tabIndex: 0,
+    title: "Klicken zum Bearbeiten",
+    onClick: () => { if (window.getSelection && String(window.getSelection()).length > 0) return; open(); },
+    onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); open(); } },
+  });
+  const editableCls = "group/edit block cursor-pointer rounded-md -mx-2 px-2 py-1 hover:bg-gray-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-300 transition";
+  const editHint = (
+    <svg className="w-3.5 h-3.5 text-gray-300 group-hover/edit:text-blue-500 transition flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
   );
-  const editBtnCls = "p-1.5 rounded border border-[#DFE3EB] text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50 transition";
+  const fieldLabel = (text) => (
+    <div className="flex items-center gap-1.5"><span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{text}</span>{editHint}</div>
+  );
   const inputCls = "border border-[#DFE3EB] rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
+
+  const openFaceEditor = () => { setInlineTempMarkers((td.markers || []).map((m, i) => ({ id: Date.now() + i, ...m }))); setEditFace(true); };
 
   const saveInlineField = (field, value) => {
     let updatedTd = { ...td };
@@ -141,7 +154,7 @@ export default function BehandlungDetailPanel({
           <div style={{ flex: "0 1 500px", minWidth: 0, maxWidth: "100%" }}>
             <div className="relative">
               {markerCount > 0 ? (
-                <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }}>
+                <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:border-blue-200 transition" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }} onClick={openFaceEditor} title="Klicken zum Bearbeiten">
                   <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
                   <VectorLayer markers={td.markers || []} />
                   {(td.markers || []).map((m, idx) => (
@@ -151,11 +164,11 @@ export default function BehandlungDetailPanel({
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center justify-center border border-[#DFE3EB] rounded-lg" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }}>
-                  <p className="text-xs text-gray-400">Keine Injektionspunkte dokumentiert</p>
+                <div className="flex items-center justify-center border border-[#DFE3EB] rounded-lg cursor-pointer hover:border-blue-200 transition" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }} onClick={openFaceEditor} title="Klicken zum Bearbeiten">
+                  <p className="text-xs text-gray-400">Keine Injektionspunkte dokumentiert. Klicke, um welche zu setzen.</p>
                 </div>
               )}
-              <button className="absolute bottom-3 right-3 p-1.5 bg-white rounded border border-[#DFE3EB] shadow-sm text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50 transition" title="Injektionspunkte bearbeiten" onClick={() => { setInlineTempMarkers((td.markers || []).map((m, i) => ({ id: Date.now() + i, ...m }))); setEditFace(true); }}>
+              <button className="absolute bottom-3 right-3 p-1.5 bg-white rounded border border-[#DFE3EB] shadow-sm text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50 transition" title="Injektionspunkte bearbeiten" onClick={openFaceEditor}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
               </button>
             </div>
@@ -173,9 +186,9 @@ export default function BehandlungDetailPanel({
             {/* Datum */}
             <div className="mb-4">
               {!editDate ? (
-                <div className="flex items-center gap-2">
+                <div {...clickEdit(() => { setInlineTempDate(td.behandlungsDatum || ""); setEditDate(true); })} className={editableCls + " !inline-flex items-center gap-2"}>
                   <h3 className="text-lg font-semibold text-gray-800">Behandlung vom {datumStr}</h3>
-                  <button className={editBtnCls} title="Datum bearbeiten" onClick={() => { setInlineTempDate(td.behandlungsDatum || ""); setEditDate(true); }}>{pencilIcon}</button>
+                  {editHint}
                 </div>
               ) : (
                 <div>
@@ -192,10 +205,10 @@ export default function BehandlungDetailPanel({
             <div className="space-y-3">
               {/* Praeparat(e) */}
               <div>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{multiPraep ? "Präparate" : "Präparat"}</span>
                 {!editPraep ? (
-                  <div className="flex items-start gap-2 mt-0.5">
-                    <div className="text-sm text-gray-700 space-y-0.5">
+                  <div {...clickEdit(startEditPraep)} className={editableCls}>
+                    {fieldLabel(multiPraep ? "Präparate" : "Präparat")}
+                    <div className="text-sm text-gray-700 space-y-0.5 mt-0.5">
                       {praepTotals.map((t) => (
                         <p key={t.idx} className="flex items-center gap-2">
                           {multiPraep && <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center flex-shrink-0" style={{ width: 18, height: 18, lineHeight: "18px" }}>{t.letter}</span>}
@@ -203,10 +216,10 @@ export default function BehandlungDetailPanel({
                         </p>
                       ))}
                     </div>
-                    <button className={editBtnCls + " flex-shrink-0"} title="Pr&auml;parat bearbeiten" onClick={startEditPraep}>{pencilIcon}</button>
                   </div>
                 ) : (
                   <div className="mt-0.5 space-y-1.5">
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{multiPraep ? "Präparate" : "Präparat"}</span>
                     {inlineTempPraeparate.map((p, idx) => (
                       <div key={idx} className="flex items-center gap-2 flex-wrap">
                         {inlineTempPraeparate.length > 1 && <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center flex-shrink-0" style={{ width: 18, height: 18, lineHeight: "18px" }}>{praepLetter(idx)}</span>}
@@ -243,11 +256,8 @@ export default function BehandlungDetailPanel({
 
               {/* Injektionspunkte */}
               {markerCount > 0 && (
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Injektionspunkte</span>
-                    <button className={editBtnCls} title="Injektionspunkte bearbeiten" onClick={() => { setInlineTempMarkers((td.markers || []).map((m, i) => ({ id: Date.now() + i, ...m }))); setEditFace(true); }}>{pencilIcon}</button>
-                  </div>
+                <div {...clickEdit(openFaceEditor)} className={editableCls}>
+                  {fieldLabel("Injektionspunkte")}
                   <div className="mt-1.5 space-y-1">
                     {(td.markers || []).map((m, idx) => (
                       <div key={idx} className="flex items-center gap-2">
@@ -274,18 +284,18 @@ export default function BehandlungDetailPanel({
 
               {/* Hinweis für Patient:in (printed on the PDF) */}
               <div>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Hinweis f&uuml;r Patient:in</span>
                 {!editHinweis ? (
-                  <div className="flex items-start gap-2 mt-0.5">
-                    <div className="text-sm text-gray-600">
-                      <p className="whitespace-pre-wrap">{td.patientHinweis || "—"}</p>
+                  <div {...clickEdit(() => { setInlineTempHinweis(td.patientHinweis || ""); setInlineTempBetrag(td.patientBetrag || ""); setEditHinweis(true); })} className={editableCls}>
+                    {fieldLabel("Hinweis für Patient:in")}
+                    <div className="text-sm text-gray-600 mt-0.5">
+                      <p className="whitespace-pre-wrap">{td.patientHinweis || <span className="text-gray-400">Hinzufügen …</span>}</p>
                       {td.patientBetrag && <p className="mt-0.5 font-medium text-gray-700">Betrag: {fmtBetrag(td.patientBetrag)} &euro;</p>}
                     </div>
-                    <button className={editBtnCls + " flex-shrink-0 mt-0.5"} title="Hinweis bearbeiten" onClick={() => { setInlineTempHinweis(td.patientHinweis || ""); setInlineTempBetrag(td.patientBetrag || ""); setEditHinweis(true); }}>{pencilIcon}</button>
                   </div>
                 ) : (
                   <div className="mt-0.5">
-                    <textarea className={inputCls + " w-full"} rows={3} placeholder="Erscheint auf dem PDF" value={inlineTempHinweis} onChange={(e) => setInlineTempHinweis(e.target.value)} />
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Hinweis f&uuml;r Patient:in</span>
+                    <textarea autoFocus className={inputCls + " w-full"} rows={3} placeholder="Erscheint auf dem PDF" value={inlineTempHinweis} onChange={(e) => setInlineTempHinweis(e.target.value)} />
                     <div className="relative w-36 mt-1.5">
                       <input type="text" inputMode="decimal" className={inputCls + " w-full pr-7"} placeholder="Betrag, z.B. 45,00" value={inlineTempBetrag} onChange={(e) => setInlineTempBetrag(e.target.value)} />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">&euro;</span>
@@ -301,15 +311,15 @@ export default function BehandlungDetailPanel({
 
               {/* Notizen (intern) */}
               <div>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notizen (intern)</span>
                 {!editNotes ? (
-                  <div className="flex items-start gap-2 mt-0.5">
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{td.notes || "—"}</p>
-                    <button className={editBtnCls + " flex-shrink-0 mt-0.5"} title="Notizen bearbeiten" onClick={() => { setInlineTempNotes(td.notes || ""); setEditNotes(true); }}>{pencilIcon}</button>
+                  <div {...clickEdit(() => { setInlineTempNotes(td.notes || ""); setEditNotes(true); })} className={editableCls}>
+                    {fieldLabel("Notizen (intern)")}
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap mt-0.5">{td.notes || <span className="text-gray-400">Hinzufügen …</span>}</p>
                   </div>
                 ) : (
                   <div className="mt-0.5">
-                    <textarea className={inputCls + " w-full"} rows={3} value={inlineTempNotes} onChange={(e) => setInlineTempNotes(e.target.value)} />
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notizen (intern)</span>
+                    <textarea autoFocus className={inputCls + " w-full"} rows={3} value={inlineTempNotes} onChange={(e) => setInlineTempNotes(e.target.value)} />
                     <div className="flex gap-2 mt-1">
                       <button className="px-2 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600 transition" onClick={() => { saveInlineField("notes", inlineTempNotes); setEditNotes(false); }}>Speichern</button>
                       <button className="px-2 py-1 text-xs rounded border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" onClick={() => setEditNotes(false)}>Abbrechen</button>
