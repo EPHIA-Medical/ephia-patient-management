@@ -59,6 +59,7 @@ import InvoiceListView from "./components/invoices/InvoiceListView";
 import NotFoundPage from "./components/ui/NotFoundPage";
 import Select from "./components/ui/Select";
 import Modal from "./components/ui/Modal";
+import { HV_THRESHOLD, maxSteigerung, checkHvForInvoice, hvProblemText, maxGesamtWithin, hvSignedDate } from "./utils/hvRules";
 
 // Rechnung/HV form: a page of its own, or the shared modal on the patient page
 const CreateFormShell = ({ enabled, title, onClose, children }) => (enabled
@@ -1035,6 +1036,23 @@ export default function EphiaInvoice() {
   const hasAbove23 = computedS != null && (computedS.s1 > 2.3 || computedS.s5 > 2.3 || computedS.s267 > 2.3);
   const needsBegruendung = hasAbove23 && effectiveMaxSteigerung <= 3.5;
 
+  // § 2 Abs. 2 GOÄ: above 3,5-fach only with an HV signed before the treatment
+  const formBehId = pendingDocBehIdRef.current || (amendingId ? invoices.find((i) => i.id === amendingId)?._behandlungId : null) || null;
+  const formTreatmentDate = (formBehId && behandlungen.find((b) => b._id === formBehId)?.datum) || invoiceMeta.datum;
+  const amendingInv = amendingId ? invoices.find((i) => i.id === amendingId) : null;
+  // Rechnungen that already carry their own HV (created before this rule) stay editable
+  const legacyEmbeddedHv = !!(amendingInv && !amendingInv._fromHvId && amendingInv.hasHV);
+  const formAboveHv = !hvOnlyMode && maxSteigerung(liveItems) > HV_THRESHOLD;
+  const formHvCheck = formAboveHv && !legacyEmbeddedHv
+    ? checkHvForInvoice(fromHvId ? invoices.find((i) => i.id === fromHvId) : null, formTreatmentDate, liveItems)
+    : { ok: true };
+  const hvBlocked = formAboveHv && !legacyEmbeddedHv && !formHvCheck.ok;
+  const maxGesamtWithoutHv = hvBlocked
+    ? maxGesamtWithin((g) => buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten,
+        calcWeightedForGesamt(g, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly),
+        einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly), wunschGesamt)
+    : null;
+
   // Live voucher deduction for the create-page preview
   const liveVoucherBetrag = appliedVoucher ? Math.min(Math.round((appliedVoucher.restwert || 0) * 100) / 100, Math.round(gesamt * 100) / 100) : 0;
   const liveVoucherRedemption = (appliedVoucher && liveVoucherBetrag > 0) ? { code: appliedVoucher.code, betrag: liveVoucherBetrag } : undefined;
@@ -1072,6 +1090,7 @@ export default function EphiaInvoice() {
     if (!invoiceMeta.datum) errors.datum = true;
     // § 12 Abs. 3 GOÄ: above 2,3-fach the invoice needs the doctor's own Begründung
     if (!hvOnlyMode && needsBegruendung && !begruendung.trim()) errors.begruendung = true;
+    if (hvBlocked) errors.hvRequired = true;
     if (!isBeratungOnly) {
       if (!praeparat.trim()) errors.praeparat = true;
       if (ml <= 0) errors.ml = true;
@@ -1293,7 +1312,9 @@ export default function EphiaInvoice() {
 
   const handleGenerate = async () => {
     const items = buildLineItems(praeparat, ml, preisProMl, selectedZuschlaege, hvOnlyMode ? [] : sachkosten, computedS, einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly);
-    const hasHV = hvOnlyMode ? true : (fromHvId ? false : items.some((it) => it.steigerung != null && it.steigerung > 3.5));
+    // The HV is never created together with the Rechnung any more (it must exist before the
+    // treatment); only Rechnungen that already carried one keep it when edited.
+    const hasHV = hvOnlyMode ? true : (fromHvId ? false : (legacyEmbeddedHv && items.some((it) => it.steigerung != null && it.steigerung > 3.5)));
     const patientDbId = createForPatient?._raw?.id || createForPatient?.id || null;
     // Effective invoice total (matches InvoicePreview: targetGesamt overrides when MwSt applies)
     const genIsAusland = patient.country && patient.country !== "Deutschland";
@@ -1586,6 +1607,27 @@ export default function EphiaInvoice() {
       setCreateSource("list");
       navigate("/erstellen");
     }
+  };
+
+  // Above 3,5-fach without a signed HV: create the HV first, with the values already entered.
+  // In the Rechnung form the same form switches to HV mode (link to the Behandlung is kept).
+  const switchRechnungFormToHv = () => {
+    setHvOnlyMode(true);
+    setFromHvId(null);
+    setMarkAsPaid(false);
+    setValidationErrors({});
+    setInvoiceMeta((m) => ({ ...m, nummer: "", datum: todayLocal() }));
+  };
+  // From the Schnellrechnung: open the HV form for the patient, prefilled
+  const startHvFromValues = ({ behandlungId, praeparat: p, einheit: e, ml: m, preisProMl: ppm, wunschGesamt: g }) => {
+    if (!selectedPatient) return;
+    pendingDocBehIdRef.current = behandlungId || null;
+    handleNewHVForPatient(selectedPatient);
+    setPraeparat(p || "");
+    setEinheit(e || "SE");
+    setMlStr(m ? String(m).replace(".", ",") : "1");
+    setPreisProMlStr(ppm ? String(ppm).replace(".", ",") : "");
+    setWunschGesamtStr(g ? g.toFixed(2).replace(".", ",") : "");
   };
 
   const handleNewForPatient = (patientObj) => {
@@ -2155,11 +2197,13 @@ export default function EphiaInvoice() {
     setShowSignatureModal(false);
     if (!sigs) return;
     const signatures = {};
-    if (sigs.doctor) signatures.doctor = sigs.doctor;
-    if (sigs.patient) signatures.patient = sigs.patient;
-    // Merge with existing signatures
+    const now = new Date().toISOString();
+    const signedAt = { ...(viewingInvoice?._signedAt || {}) };
+    if (sigs.doctor) { signatures.doctor = sigs.doctor; signedAt.doctor = now; }
+    if (sigs.patient) { signatures.patient = sigs.patient; signedAt.patient = now; }
+    // Merge with existing signatures; _signedAt records when each party signed (§ 2 GOÄ: before the treatment)
     const merged = { ...(viewingInvoice?._signatures || {}), ...signatures };
-    await updateViewingInvoiceData({ _signatures: merged });
+    await updateViewingInvoiceData({ _signatures: merged, _signedAt: signedAt });
     setSaveToast("Unterschrift gespeichert");
     setTimeout(() => setSaveToast(""), 2500);
   };
@@ -2171,7 +2215,18 @@ export default function EphiaInvoice() {
       ? invoices.find((inv) => inv.id === viewingInvoice._fromHvId)
       : viewingInvoice;
     const merged = { ...(targetInv?._signatures || {}), doctor: doctorSigDataUrl };
-    await updateViewingInvoiceData({ _signatures: merged });
+    const signedAt = { ...(targetInv?._signedAt || {}), doctor: new Date().toISOString() };
+    if (targetInv && targetInv.id !== viewingInvoice.id) {
+      // Linked HV: the signature belongs to the HV document, not to the Rechnung being viewed
+      const updatedHv = { ...targetInv, _signatures: merged, _signedAt: signedAt };
+      setInvoices((prev) => prev.map((inv) => (inv.id === updatedHv.id ? updatedHv : inv)));
+      if (session && targetInv._supabaseId) {
+        try { await e2eeFetchModifySave(session.access_token, targetInv._supabaseId, { _signatures: merged, _signedAt: signedAt }); }
+        catch (e) { console.error("Failed to persist HV signature:", e); showErrorToast("Unterschrift konnte nicht gespeichert werden: " + (e?.message || e)); return; }
+      }
+    } else {
+      await updateViewingInvoiceData({ _signatures: merged, _signedAt: signedAt });
+    }
     setSaveToast("Ärzt:in Unterschrift gespeichert");
     setTimeout(() => setSaveToast(""), 2500);
   };
@@ -3046,6 +3101,12 @@ export default function EphiaInvoice() {
                       return (
                         <button key={hv.id} className="w-full text-left px-2.5 py-1.5 bg-white border border-blue-200 rounded hover:bg-blue-100 transition-colors text-xs text-blue-800" onClick={() => importFromHV(hv)}>
                           {hvPatientName ? `${hvPatientName}, ` : ""}{hvPraep}, {hvMl} {hv.einheit || "SE"}{hvDate ? `, ${hvDate.split("-").reverse().join(".")}` : ""}
+                          {(() => {
+                            const signedOn = hvSignedDate(hv);
+                            return signedOn
+                              ? <span className="block text-[11px] text-green-700 mt-0.5">✓ unterschrieben am {signedOn.split("-").reverse().join(".")}</span>
+                              : <span className="block text-[11px] text-amber-700 mt-0.5">noch nicht von Patient:in und Ärzt:in unterschrieben</span>;
+                          })()}
                         </button>
                       );
                     })}
@@ -3445,13 +3506,38 @@ export default function EphiaInvoice() {
                 )
               ) : (
                 <>
-                  {effectiveMaxSteigerung > 3.5 && fromHvId ? (
-                    <div className="mt-2 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
-                      Honorarvereinbarung ist verknüpft. Anforderungen gemäß §2 GOÄ sind erfüllt.
+                  {formAboveHv && legacyEmbeddedHv ? (
+                    <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                      Diese Rechnung enthält eine zusammen mit ihr erstellte Honorarvereinbarung. Eine HV muss vor der Behandlung unterschrieben sein (§ 2 Abs. 2 GOÄ); prüfe, ob das hier der Fall war.
                     </div>
-                  ) : effectiveMaxSteigerung > 3.5 ? (
-                    <div className="mt-2 px-3 py-2 bg-gray-50 border border-[#DFE3EB] rounded text-xs text-gray-500">
-                      Über 3,5-fach: Eine Honorarvereinbarung gemäß §2 GOÄ wird zusätzlich zur Rechnung erstellt und ein Verweis auf die Honorarvereinbarung wird auf der Rechnung vermerkt.
+                  ) : formAboveHv && formHvCheck.ok ? (
+                    <div className="mt-2 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
+                      Honorarvereinbarung verknüpft, unterschrieben am {formHvCheck.signedOn ? formHvCheck.signedOn.split("-").reverse().join(".") : "?"}, vor der Behandlung. Anforderungen gemäß § 2 GOÄ erfüllt.
+                    </div>
+                  ) : hvBlocked ? (
+                    <div id="field-hvRequired" className={`mt-2 px-3 py-2 rounded text-xs border ${validationErrors.hvRequired ? "bg-red-50 border-red-300 text-red-700" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                      <p>{hvProblemText(formHvCheck, formTreatmentDate)}</p>
+                      {formHvCheck.reason === "missing" && (
+                        <>
+                          <button type="button" className="mt-2 px-3 py-1.5 rounded-md bg-white border border-amber-300 font-medium text-amber-900 hover:bg-amber-100 transition" onClick={switchRechnungFormToHv}>
+                            Stattdessen Honorarvereinbarung erstellen
+                          </button>
+                          <p className="mt-1 text-[11px] opacity-80">
+                            {formTreatmentDate && formTreatmentDate < todayLocal()
+                              ? `Achtung: Die Behandlung vom ${formTreatmentDate.split("-").reverse().join(".")} liegt bereits zurück. Eine jetzt erstellte HV gilt nur für Behandlungen nach ihrer Unterschrift.`
+                              : "Übernimmt die eingegebenen Werte. Lass die HV vor der Behandlung unterschreiben und erstelle danach die Rechnung aus der HV."}
+                          </p>
+                        </>
+                      )}
+                      {maxGesamtWithoutHv > 0 && (
+                        <button
+                          type="button"
+                          className="mt-1.5 font-medium underline hover:no-underline"
+                          onClick={() => { setWunschGesamtStr(maxGesamtWithoutHv.toFixed(2).replace(".", ",")); clearError("hvRequired"); }}
+                        >
+                          Gesamtbetrag auf {maxGesamtWithoutHv.toFixed(2).replace(".", ",")} € setzen (höchstens 3,5-fach)
+                        </button>
+                      )}
                     </div>
                   ) : null}
                   {needsBegruendung && (
@@ -4064,6 +4150,7 @@ export default function EphiaInvoice() {
             onUpdateBehandlung={handleUpdateBehandlung}
             onDeleteBehandlung={handleDeleteBehandlung}
             onSetPaymentStatus={setInvoicePaymentStatus}
+            onStartHvFromValues={startHvFromValues}
             onLinkDocToBehandlung={handleLinkDocToBehandlung}
             onBack={() => navigate("/patients")}
             onView={(inv) => openDocModal(inv, "rechnung")}

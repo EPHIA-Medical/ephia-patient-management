@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { fmtDate, parseDE, toDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber, fmtBetrag } from "../../utils/helpers";
+import { fmtDate, todayLocal, parseDE, toDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMarkers, markerColor, nextMarkerColor, fmtNum, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
+import { HV_THRESHOLD, maxGesamtWithin } from "../../utils/hvRules";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -13,7 +14,7 @@ export default function BehandlungDetailPanel({
   onUpdateInvoice, onQuickInvoice,
   setConfirmDeleteTreatment,
   downloadTreatmentDoc,
-  pendingQuickInvoice, setPendingQuickInvoice, inModal = false,
+  pendingQuickInvoice, setPendingQuickInvoice, inModal = false, onStartHvFromValues,
 }) {
   // Inline editing states (local to this component)
   const [editFace, setEditFace] = useState(false);
@@ -365,7 +366,13 @@ export default function BehandlungDetailPanel({
           // § 12 Abs. 3 GOÄ: between 2,3- and 3,5-fach the doctor writes a Begründung (above 3,5 an HV applies)
           const itemMax = Math.max(0, ...lineItems.filter((it) => it.steigerung != null).map((it) => it.steigerung));
           const needsBegruendung = itemMax > 2.3 && itemMax <= 3.5;
-          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0 && (!needsBegruendung || quickInvoiceBegruendung.trim());
+          // § 2 Abs. 2 GOÄ: above 3,5-fach only with an HV signed before the treatment.
+          // The Schnellrechnung cannot create one, so it stops at 3,5-fach.
+          const aboveHv = itemMax > HV_THRESHOLD;
+          const maxOhneHv = aboveHv
+            ? maxGesamtWithin((g) => buildLineItems(praep, qMl, qPreisProMl, [], sachkosten, calcWeightedForGesamt(g, qMl, qPreisProMl, [], sachkosten, noMwst, false), qEinh, false), effectiveWunsch)
+            : null;
+          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0 && !aboveHv && (!needsBegruendung || quickInvoiceBegruendung.trim());
 
           const realInvoices = invoices.filter(i => i.invoiceMeta?.nummer && i.invoiceMeta.nummer !== "—");
           const latestInv = realInvoices.length > 0 ? realInvoices.reduce((best, i) => { const t = i._createdAt || i.savedAt || ""; const bt = best._createdAt || best.savedAt || ""; return t > bt ? i : best; }, realInvoices[0]) : null;
@@ -432,11 +439,35 @@ export default function BehandlungDetailPanel({
                           <div className="text-xs text-gray-500">
                             <span className="text-gray-400">Max. Steigerungssatz: </span>
                             <span className="font-semibold text-gray-700">{effectiveMax.toFixed(2).replace(".", ",")}x</span>
-                            {effectiveMax > 3.5 && <span className="ml-1 text-gray-400 text-xs">&sect;2 GO&Auml;</span>}
+                            {effectiveMax > 3.5 && <span className="ml-1 text-amber-600 text-xs">nur mit HV</span>}
                           </div>
-                          {effectiveMax > 3.5 && (
-                            <div className="mt-1.5 px-2.5 py-1.5 bg-gray-50 border border-[#DFE3EB] rounded text-xs text-gray-500">
-                              &Uuml;ber 3,5-fach: Eine Honorarvereinbarung gem&auml;&szlig; &sect;2 GO&Auml; wird zus&auml;tzlich erstellt.
+                          {aboveHv && (
+                            <div className="mt-1.5 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                              &Uuml;ber 3,5-fach nur mit einer Honorarvereinbarung, die vor der Behandlung unterschrieben wurde (&sect; 2 Abs. 2 GO&Auml;). Erstelle die Rechnung dann &uuml;ber &bdquo;+ Rechnung&ldquo; aus der HV.
+                              {onStartHvFromValues && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="block mt-1.5 px-2.5 py-1 rounded bg-white border border-amber-300 font-medium text-amber-900 hover:bg-amber-100 transition"
+                                    onClick={() => {
+                                      setQuickInvoiceOpen(false);
+                                      onStartHvFromValues({ behandlungId: inv._behandlungId || null, praeparat: praep, einheit: qEinh, ml: qMl, preisProMl: qPreisProMl, wunschGesamt: effectiveWunsch });
+                                      setViewingTreatment(null);
+                                      setCenterView("timeline");
+                                    }}
+                                  >
+                                    Honorarvereinbarung erstellen
+                                  </button>
+                                  {td.behandlungsDatum && td.behandlungsDatum < todayLocal() && (
+                                    <span className="block mt-1 text-[11px] opacity-80">Achtung: Die Behandlung vom {fmtDate(td.behandlungsDatum)} liegt bereits zur&uuml;ck. Eine jetzt erstellte HV gilt nur f&uuml;r Behandlungen nach ihrer Unterschrift.</span>
+                                  )}
+                                </>
+                              )}
+                              {maxOhneHv > 0 && (
+                                <button type="button" className="block mt-1 font-medium underline hover:no-underline" onClick={() => setQuickInvoiceWunschStr(maxOhneHv.toFixed(2).replace(".", ","))}>
+                                  Gesamtbetrag auf {maxOhneHv.toFixed(2).replace(".", ",")} &euro; setzen (h&ouml;chstens 3,5-fach)
+                                </button>
+                              )}
                             </div>
                           )}
                           {effectiveMax <= 0 && quickInvoiceWunschStr && (
@@ -484,7 +515,7 @@ export default function BehandlungDetailPanel({
                           customS,
                           lineItems,
                           gesamt,
-                          hasHV: lineItems.some((it) => it.steigerung != null && it.steigerung > 3.5),
+                          hasHV: false, // never created with the invoice (§ 2 Abs. 2 GOÄ)
                           begruendung: needsBegruendung ? quickInvoiceBegruendung.trim() : "",
                           praeparat: praep,
                           einheit: qEinh,
@@ -506,7 +537,7 @@ export default function BehandlungDetailPanel({
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
                     )}
-                    {quickInvoiceSaving ? "Wird erstellt…" : (effectiveMax > 3.5 ? "Dokumente erstellen" : "Rechnung erstellen")}
+                    {quickInvoiceSaving ? "Wird erstellt…" : "Rechnung erstellen"}
                   </button>
                 </div>
               </div>

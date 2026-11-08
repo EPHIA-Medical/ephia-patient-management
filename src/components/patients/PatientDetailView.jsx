@@ -17,7 +17,7 @@ import { emptyPraeparat } from "../../utils/praeparate";
 
 // ═══════════════════ Patient Detail View ═══════════════════
 
-export default function PatientDetailView({ patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, onSetPaymentStatus, activityLog = [], onLogActivity }) {
+export default function PatientDetailView({ patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, onSetPaymentStatus, onStartHvFromValues, activityLog = [], onLogActivity }) {
   // ── Derived data ──
   const rawData = (patient._raw && typeof patient._raw.data === "object" && patient._raw.data) ? patient._raw.data : {};
   const email = (rawData.email || patient.email || "").toLowerCase();
@@ -436,6 +436,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               setConfirmDeleteTreatment={setConfirmDeleteTreatment}
               downloadTreatmentDoc={downloadTreatmentDoc}
               pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
+              onStartHvFromValues={onStartHvFromValues}
             />
           </div>
         </Modal>
