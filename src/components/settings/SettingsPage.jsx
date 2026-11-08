@@ -442,7 +442,7 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
         {list.map((p, idx) => (
           <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-2">
             <input className={inputCls2 + " flex-1 min-w-0"} value={p.name} placeholder="z.B. Relfydess" onChange={(e) => upd(idx, { name: e.target.value })} />
-            <select className={inputCls2 + " !w-20"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
+            <select className={inputCls2 + " !w-24"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
               <option value="ml">ml</option>
               <option value="SE">SE</option>
               <option value="IE">IE</option>
