@@ -560,18 +560,6 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
               />
               <span className="text-sm text-gray-600">Minuten ohne Aktivität</span>
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {[5, 10, 15, 30, 60].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className={`px-2.5 py-1 text-xs rounded-full transition ${autoLogoutMinutes(draft) === m ? "bg-blue-500 text-white" : "bg-white text-gray-600 hover:bg-gray-100"}`}
-                  onClick={() => set({ autoLogoutMinutes: m })}
-                >
-                  {m} Min.
-                </button>
-              ))}
-            </div>
             <p className="text-xs text-gray-400 mt-2">
               Zwischen {AUTO_LOGOUT_MIN_MINUTES} und {AUTO_LOGOUT_MAX_MINUTES} Minuten.
               {autoLogoutMinutes(draft) > 30 && <span className="text-amber-700"> Längere Zeiten erhöhen das Risiko, dass Unbefugte an einem offenen Gerät Patient:innendaten sehen.</span>}
