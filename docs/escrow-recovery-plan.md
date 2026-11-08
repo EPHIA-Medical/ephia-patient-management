@@ -96,7 +96,7 @@ Phase 1 (manual, break-glass; ships first and stays as the fallback forever):
 2. Doctor logs in. `unlockMEK` fails (MEK is wrapped under the old password). The app shows a
    dedicated screen: "Dein Passwort wurde zurückgesetzt. Damit Deine Patient:innendaten wieder
    entschlüsselt werden können, stellen wir Deinen Schlüssel wieder her. Schreib uns an
-   support@ephia.de, wir melden uns telefonisch." The screen shows the account email and a
+   customerlove@ephia.de, wir melden uns telefonisch." The screen shows the account email and a
    short request id (first 8 chars of the user id) to quote. The app does not touch any key
    columns at this point.
 3. Marc runs `scripts/escrow-recover.mjs` on his Mac. Input: the user id, the escrow blob
@@ -330,7 +330,7 @@ Settled (2026-11-08):
 - Backups: daily physical backups around 02:35 UTC, 7 days retained (Pro plan, no PITR).
   After step 5 the plaintext recovery keys are gone from every backup 7 days later; the
   `age` export from step 0.4 is deleted after that.
-- Recovery channel: requests to `support@ephia.de`, code sent to the account email (no phone
+- Recovery channel: requests to `customerlove@ephia.de`, code sent to the account email (no phone
   line exists).
 - Key storage: the escrow key pair does not exist yet; it is generated in step 0. Marc uses
   Bitwarden personally. Step 0 creates a free Bitwarden organisation for EPHIA with Marc and

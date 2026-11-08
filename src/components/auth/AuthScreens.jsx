@@ -339,7 +339,7 @@ export function RecoveryNeededScreen({ email, requestId, onBackClick }) {
         </div>
 
         <p className="text-sm text-gray-700 mb-3">Dein Passwort wurde zurückgesetzt. Deine Patient:innendaten sind weiterhin sicher verschlüsselt, der Schlüssel muss aber einmal neu freigegeben werden.</p>
-        <p className="text-sm text-gray-700 mb-4">Schreib uns kurz an <a className="text-blue-600 hover:underline" href={`mailto:support@ephia.de?subject=${subject}&body=${body}`}>support@ephia.de</a>. Du bekommst dann einen Wiederherstellungscode an die E-Mail-Adresse Deines Kontos.</p>
+        <p className="text-sm text-gray-700 mb-4">Schreib uns kurz an <a className="text-blue-600 hover:underline" href={`mailto:customerlove@ephia.de?subject=${subject}&body=${body}`}>customerlove@ephia.de</a>. Du bekommst dann einen Wiederherstellungscode an die E-Mail-Adresse Deines Kontos.</p>
 
         <div className="mb-6 px-3 py-2 bg-gray-50 border border-[#DFE3EB] rounded text-xs text-gray-600">
           <div>Konto: <span className="font-medium text-gray-800">{email}</span></div>
@@ -348,7 +348,7 @@ export function RecoveryNeededScreen({ email, requestId, onBackClick }) {
 
         <a
           className="block w-full text-center bg-gray-800 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-gray-700 transition"
-          href={`mailto:support@ephia.de?subject=${subject}&body=${body}`}
+          href={`mailto:customerlove@ephia.de?subject=${subject}&body=${body}`}
         >
           E-Mail an den Support schreiben
         </a>

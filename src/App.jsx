@@ -790,7 +790,7 @@ export default function EphiaInvoice() {
         throw new Error("Der Code ist nicht korrekt. Bitte prüfe die Schreibweise: acht Wörter, durch Bindestriche getrennt.");
       }
       if (!(await verifyMekCheck(mek, profile))) {
-        throw new Error("Der Code passt nicht zu diesem Konto. Bitte wende Dich an support@ephia.de.");
+        throw new Error("Der Code passt nicht zu diesem Konto. Bitte wende Dich an customerlove@ephia.de.");
       }
       // Verified. Re-wrap under the current password and clear the release in one write.
       const newSalt = generateSalt();
