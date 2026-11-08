@@ -57,9 +57,10 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
 
   // Picking a dose that already exists on the face adopts that dose's colour,
   // so one region keeps one colour without re-selecting it every time
-  const selectDose = (val) => {
+  const selectDose = (val, { typed = false } = {}) => {
     setActiveAmount(val);
-    if (!val) return;
+    // Only a chip click picks up the colour of earlier points with that dose; typing must not flicker the colour
+    if (!val || typed) return;
     const existing = [...markers].reverse().find((m) => sameAmount(m.amount, val));
     if (existing) setActiveColor(markerColor(existing));
   };

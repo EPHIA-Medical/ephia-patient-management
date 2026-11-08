@@ -127,24 +127,33 @@ export const sameAmount = (a, b) => {
 };
 
 // Dose chip row: pick the amount that new points receive. Selecting the active
-// chip again clears the preset; anything else goes into the free-text field.
+// chip again clears the preset. The free-text field keeps its own text, so typing
+// "1" on the way to "12" does not jump to the "1" chip and empty the field.
+// onChange(value, { typed }) tells the editor whether the value came from the field.
 export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte", labelWidth }) {
   const { main, more } = dosePresetsFor(einheit);
-  const inMore = more.some((d) => sameAmount(d, value));
+  const all = [...main, ...more];
+  const [text, setText] = React.useState(() => (all.some((d) => sameAmount(d, value)) ? "" : value || ""));
+  // Value changed from outside (e.g. reset or another Präparat): mirror it unless it is what was typed
+  React.useEffect(() => {
+    if (value === text || (text && sameAmount(value, text))) return;
+    setText(all.some((d) => sameAmount(d, value)) ? "" : value || "");
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chipValue = text ? "" : value;
+  const inMore = more.some((d) => sameAmount(d, chipValue));
   const [expanded, setExpanded] = React.useState(false);
   const showMore = expanded || inMore;
-  const presets = showMore ? [...main, ...more] : main;
-  const isPreset = presets.some((d) => sameAmount(d, value));
+  const presets = showMore ? all : main;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <span className="text-xs text-gray-500 mr-0.5 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
       {presets.map((d) => {
-        const active = sameAmount(d, value);
+        const active = sameAmount(d, chipValue);
         return (
           <button
             key={d}
             type="button"
-            onClick={() => onChange(active ? "" : d)}
+            onClick={() => { setText(""); onChange(active ? "" : d, { typed: false }); }}
             className="text-xs font-semibold rounded-full transition"
             style={{
               minWidth: 34,
@@ -170,12 +179,13 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
       </button>
       <input
         type="text"
-        inputMode="text"
-        className="px-2 py-1 text-xs border border-[#DFE3EB] rounded-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-        style={{ width: 88 }}
-        placeholder="Andere, z.B. 2x3"
-        value={isPreset ? "" : value}
-        onChange={(e) => onChange(e.target.value)}
+        inputMode="decimal"
+        className={`px-2.5 py-1 text-xs rounded-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${text ? "border-2 font-semibold" : "border border-[#DFE3EB]"}`}
+        style={{ width: 92, borderColor: text ? color : undefined }}
+        placeholder="Andere"
+        title="Eigene Menge, z.B. 3,5 oder 2x3"
+        value={text}
+        onChange={(e) => { const v = e.target.value.replace(/[^\d,.+*×x\- ]/g, ""); setText(v); onChange(v, { typed: true }); }}
       />
       <span className="text-xs text-gray-400">{einheit}</span>
     </div>
