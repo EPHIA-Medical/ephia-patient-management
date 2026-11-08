@@ -107,7 +107,6 @@ export default function PatientLeftSidebar({
     if (!city && v.length === 5 && country === "Deutschland") city = (await lookupPlz(v)) || "";
     save({ address2: combinePlzOrt(v, city) });
   };
-  const fullAddress = [data.address1, data.address2, country].filter(Boolean).join("\n");
   const countryOptions = [...PRIORITY_COUNTRIES.map((c) => [c, c]), null, ...OTHER_COUNTRIES.map((c) => [c, c])];
 
   return (
@@ -168,10 +167,7 @@ export default function PatientLeftSidebar({
       <div className={detailsOpen ? "" : "hidden lg:block"}>
       {/* Adressdaten section */}
       <div className="border-b border-gray-100">
-        <div className="px-5 pt-3.5 pb-1 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</h3>
-          {(data.address1 || data.address2) && <CopyButton value={fullAddress} label="Ganze Adresse kopieren" />}
-        </div>
+        <h3 className="px-5 pt-3.5 pb-1 text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</h3>
         <div className="px-5 pb-3">
           <InlineField copyable label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
           <InlineField copyable label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
