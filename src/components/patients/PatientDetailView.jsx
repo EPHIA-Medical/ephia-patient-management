@@ -68,10 +68,6 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [treatmentDocTarget, setTreatmentDocTarget] = useState(null);
 
   // Sidebar collapsible states
-  const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
-  const [adressdatenOpen, setAdressdatenOpen] = useState(isDesktop);
-  const [medizinischeOpen, setMedizinischeOpen] = useState(isDesktop);
-  const [anamneseOpen, setAnamneseOpen] = useState(isDesktop);
 
   // Profile photo upload ref
   const profilePhotoInputRef = useRef(null);
@@ -311,18 +307,19 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
           <PatientLeftSidebar
             patient={patient} rawData={rawData} email={email}
             latestFacePhoto={latestFacePhoto} profilePhotoInputRef={profilePhotoInputRef} handleProfilePhotoUpload={handleProfilePhotoUpload}
-            adressdatenOpen={adressdatenOpen} setAdressdatenOpen={setAdressdatenOpen}
-            medizinischeOpen={medizinischeOpen} setMedizinischeOpen={setMedizinischeOpen}
-            anamneseOpen={anamneseOpen} setAnamneseOpen={setAnamneseOpen}
             anamnese={anamnese}
             onUpdatePatient={onUpdatePatient}
+            createdAt={patient._raw?.created_at ? fmtDate(patient._raw.created_at.slice(0, 10)) : ""}
+            behCount={patientBeh.length}
+            lastActivityDate={lastActivity ? fmtDate(lastActivity._createdAt?.slice(0, 10)) : ""}
+            onOpenHistorie={() => setHistorieOpen(true)}
           />
         </div>
 
         {/* ═══════════════════ CENTER: Behandlungen ═══════════════════ */}
         <div className="w-full lg:flex-1 min-w-0">
-          {/* Data Highlights + Historie trigger */}
-          <div className="bg-white rounded-lg border border-[#DFE3EB] shadow-sm mb-5 lg:mb-6 flex flex-wrap items-center gap-x-8 gap-y-4 px-6 py-4">
+          {/* Data Highlights + Historie trigger (phones show these in the patient card row) */}
+          <div className="hidden lg:flex bg-white rounded-lg border border-[#DFE3EB] shadow-sm mb-6 flex-wrap items-center gap-x-8 gap-y-4 px-6 py-4">
             <div>
               <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Erstellt am</div>
               <div className="text-sm text-gray-800 font-medium mt-1">{fmtDate(patient._raw?.created_at?.slice(0, 10))}</div>
@@ -356,7 +353,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                     key={t.id}
                     role="tab"
                     aria-selected={centerTab === t.id}
-                    className={`px-3 py-3.5 text-sm font-semibold border-b-2 transition outline-none focus-visible:ring-2 focus-visible:ring-blue-300 rounded-t ${centerTab === t.id ? "border-blue-500 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                    className={`px-2.5 sm:px-3 py-3.5 text-sm font-semibold whitespace-nowrap border-b-2 transition outline-none focus-visible:ring-2 focus-visible:ring-blue-300 rounded-t ${centerTab === t.id ? "border-blue-500 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-600"}`}
                     onClick={() => setCenterTab(t.id)}
                   >
                     {t.label} <span className={`ml-0.5 text-xs font-medium ${centerTab === t.id ? "text-gray-500" : "text-gray-300"}`}>{t.count}</span>
@@ -369,33 +366,38 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                 onCreateInvoice && <button className="text-sm text-blue-500 hover:text-blue-700 font-medium transition whitespace-nowrap" onClick={() => onCreateInvoice(patient)}><span className="sm:hidden">+ Neu</span><span className="hidden sm:inline">+ Neue Rechnung</span></button>
               )}
             </div>
-            {centerTab === "behandlungen" ? (
-              <PatientBehandlungenSidebar
-                hideHeader
-                onSetPaymentStatus={onSetPaymentStatus}
-                patientBeh={patientBeh} matchingInvoices={matchingInvoices} patientDbId={patientDbId} patient={patient}
-                newBehandlungOpen={newBehandlungOpen} setNewBehandlungOpen={setNewBehandlungOpen}
-                newBehDatum={newBehDatum} setNewBehDatum={setNewBehDatum}
-                newBehZeit={newBehZeit} setNewBehZeit={setNewBehZeit}
-                expandedBeh={expandedBeh} setExpandedBeh={setExpandedBeh}
-                onCreateBehandlung={onCreateBehandlung} onDeleteBehandlung={onDeleteBehandlung} onUpdateBehandlung={onUpdateBehandlung}
-                onStartConsent={onStartConsent} onNewHV={onNewHV} onCreateInvoice={onCreateInvoice} onAddBehandlungsdoku={openBehandlungsdokuFor}
-                setCenterView={setCenterView} setNewTreatmentBehId={setNewTreatmentBehId}
-                onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
-                setViewingTreatment={setViewingTreatment} setConfirmDeleteBeh={setConfirmDeleteBeh}
-                hasConsentRisks={hasConsentRisks} getDocLabel={getDocLabel} getDocStatus={getDocStatus} handleDocClick={handleDocClick}
-                onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
-                titleSuggestions={behTitleSuggestions}
-              />
-            ) : (
-              <PatientInvoicesTab
-                invoices={patientRechnungen}
-                behandlungen={patientBeh}
-                kleinunternehmer={kleinunternehmer}
-                onView={onView}
-                onSetPaymentStatus={onSetPaymentStatus}
-              />
-            )}
+            {/* Both panels share one grid cell, so the box keeps the height of the taller one and
+                switching tabs doesn't make the page jump. The hidden one stays out of view and focus. */}
+            <div className="grid">
+              <div role="tabpanel" className={`[grid-area:1/1] min-w-0 ${centerTab === "behandlungen" ? "" : "invisible"}`} aria-hidden={centerTab !== "behandlungen"}>
+                <PatientBehandlungenSidebar
+                  hideHeader
+                  onSetPaymentStatus={onSetPaymentStatus}
+                  patientBeh={patientBeh} matchingInvoices={matchingInvoices} patientDbId={patientDbId} patient={patient}
+                  newBehandlungOpen={newBehandlungOpen} setNewBehandlungOpen={setNewBehandlungOpen}
+                  newBehDatum={newBehDatum} setNewBehDatum={setNewBehDatum}
+                  newBehZeit={newBehZeit} setNewBehZeit={setNewBehZeit}
+                  expandedBeh={expandedBeh} setExpandedBeh={setExpandedBeh}
+                  onCreateBehandlung={onCreateBehandlung} onDeleteBehandlung={onDeleteBehandlung} onUpdateBehandlung={onUpdateBehandlung}
+                  onStartConsent={onStartConsent} onNewHV={onNewHV} onCreateInvoice={onCreateInvoice} onAddBehandlungsdoku={openBehandlungsdokuFor}
+                  setCenterView={setCenterView} setNewTreatmentBehId={setNewTreatmentBehId}
+                  onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
+                  setViewingTreatment={setViewingTreatment} setConfirmDeleteBeh={setConfirmDeleteBeh}
+                  hasConsentRisks={hasConsentRisks} getDocLabel={getDocLabel} getDocStatus={getDocStatus} handleDocClick={handleDocClick}
+                  onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
+                  titleSuggestions={behTitleSuggestions}
+                />
+              </div>
+              <div role="tabpanel" className={`[grid-area:1/1] min-w-0 ${centerTab === "rechnungen" ? "" : "invisible"}`} aria-hidden={centerTab !== "rechnungen"}>
+                <PatientInvoicesTab
+                  invoices={patientRechnungen}
+                  behandlungen={patientBeh}
+                  kleinunternehmer={kleinunternehmer}
+                  onView={onView}
+                  onSetPaymentStatus={onSetPaymentStatus}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
