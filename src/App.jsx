@@ -4402,16 +4402,16 @@ export default function EphiaInvoice() {
                     )}
                   </div>
                 )}
+                {/* HV status badge */}
+                {(previewTab === "honorar" || isHvOnly) && (() => {
+                  const hvSigs = (linkedHV || viewingInvoice)?._signatures;
+                  const hvSignedUpload = (linkedHV || viewingInvoice)?._signedHvUpload;
+                  if (hvSignedUpload) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Unterschrieben</span>;
+                  if (hvSigs?.patient && hvSigs?.doctor) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Vollständig</span>;
+                  if (hvSigs?.patient && !hvSigs?.doctor) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Ärzt:in fehlt</span>;
+                  return null;
+                })()}
               </div>
-              {/* HV status badge */}
-              {(previewTab === "honorar" || isHvOnly) && (() => {
-                const hvSigs = (linkedHV || viewingInvoice)?._signatures;
-                const hvSignedUpload = (linkedHV || viewingInvoice)?._signedHvUpload;
-                if (hvSignedUpload) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Unterschrieben</span>;
-                if (hvSigs?.patient && hvSigs?.doctor) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Vollständig</span>;
-                if (hvSigs?.patient && !hvSigs?.doctor) return <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Ärzt:in fehlt</span>;
-                return null;
-              })()}
               {/* Action buttons */}
               <div className="flex gap-1.5">
                 {previewTab === "rechnung" && viewHasTD && !isStandaloneTD && (
