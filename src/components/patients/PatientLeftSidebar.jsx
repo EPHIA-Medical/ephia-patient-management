@@ -48,7 +48,11 @@ function useGroupEdit(initial, onSave) {
   const commit = () => { if (done.current) return; stop(); if (JSON.stringify(draft) !== JSON.stringify(initial)) onSave(draft); };
   const groupProps = {
     onBlur: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) commit(); },
-    onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") stop(); },
+    onKeyDown: (e) => {
+      if (e.defaultPrevented) return; // handled by a child, e.g. choosing in the Select list
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") stop();
+    },
   };
   return { editing, draft, setDraft, start, groupProps };
 }
@@ -81,7 +85,7 @@ export default function PatientLeftSidebar({
   const nachname = data.nachname || patient.nachname || "";
   const shownEmail = "email" in overrides ? overrides.email : (email || data.email || "");
   const name = useGroupEdit({ vorname, nachname }, (d) => { if (d.vorname.trim() && d.nachname.trim()) save(d); });
-  const adresse = useGroupEdit({ address1: data.address1 || "", address2: data.address2 || "" }, save);
+  const adresse = useGroupEdit({ address1: data.address1 || "", address2: data.address2 || "", country: data.country || "Deutschland" }, save);
   const { plz, ort } = parsePlzOrt(adresse.draft.address2);
 
   return (
@@ -143,21 +147,31 @@ export default function PatientLeftSidebar({
                         onChange={(e) => {
                           const v = e.target.value;
                           adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort) }));
-                          if (v.length === 5 && !ort && (!data.country || data.country === "Deutschland")) {
+                          if (v.length === 5 && !ort && adresse.draft.country === "Deutschland") {
                             lookupPlz(v).then((city) => { if (city) adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort || city) })); });
                           }
                         }}
                       />
                       <input className={inputCls + " flex-1 min-w-0"} value={ort} placeholder="Ort" onChange={(e) => adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(parsePlzOrt(d.address2).plz, e.target.value) }))} />
                     </div>
+                    <Select className={inputCls + " w-full bg-white"} value={adresse.draft.country} onChange={(e) => adresse.setDraft((d) => ({ ...d, country: e.target.value }))}>
+                      {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      <option disabled>{"────────────"}</option>
+                      {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </Select>
                   </div>
                 ) : (
-                  <button type="button" className={valueBtnCls} title="Klicken zum Bearbeiten" onClick={adresse.start}>
-                    {data.address1 || data.address2 ? [data.address1, data.address2].filter(Boolean).join(", ") : <span className="text-gray-300">--</span>}
+                  <button type="button" className={valueBtnCls + " flex flex-col items-end"} title="Klicken zum Bearbeiten" onClick={adresse.start}>
+                    {data.address1 || data.address2 ? (
+                      <>
+                        {data.address1 && <span>{data.address1}</span>}
+                        {data.address2 && <span>{data.address2}</span>}
+                        <span>{data.country || "Deutschland"}</span>
+                      </>
+                    ) : <span className="text-gray-300">--</span>}
                   </button>
                 )}
               </div>
-              <InlineField label="Land" value={data.country || "Deutschland"} options={[...PRIORITY_COUNTRIES, ...OTHER_COUNTRIES].map((c) => [c, c])} onSave={(v) => save({ country: v || "Deutschland" })} />
             </div>
           </div>
         )}
