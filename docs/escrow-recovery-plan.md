@@ -1,9 +1,12 @@
 # Plan: replace the plaintext recovery key with EPHIA key escrow
 
-Status 2026-11-08, late: steps 0 to 4 done, release B live on main (31d6eeb). Marc decided
-to run steps 5 and 6 without the waiting weeks: the backups keep the old keys for 7 days,
-the encrypted export (step 0.4) keeps them beyond that. Recovery log: `docs/recovery-log.md`.
-Migration `0003_drop_recovery_key.sql` holds step 6.
+Status: complete. All steps run on 2026-11-08. Release B live (31d6eeb), old recovery
+columns nulled and dropped (migration 0003), encrypted export of the pre-drop key columns
+at `~/Downloads/ephia-invoicing-keys-2026-11-08.csv.enc` on Marc's Mac (passphrase in the
+EPHIA Bitwarden organisation), to be deleted around 2026-12-06. Plaintext recovery keys
+leave the Supabase backups by 2026-11-15. Recovery runbook: section 3.2, log in
+`docs/recovery-log.md`. Still open elsewhere: the AVV (separate plan) and, if resets ever
+become frequent, phase 2 (section 5).
 
 ## 1. Why
 
