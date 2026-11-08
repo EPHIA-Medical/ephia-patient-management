@@ -1,9 +1,10 @@
 # Plan: replace the plaintext recovery key with EPHIA key escrow
 
-Status 2026-11-08: steps 0 to 2 done. Key pair in the EPHIA Bitwarden organisation (Marc,
-Sophia), migration 0002 applied, release A live (c5c0b18 and later), step 2 gate passed on
-Marc's account and the test account (`escrow-recover.mjs verify` -> OK for both). Next: step 3
-with `scripts/escrow-migrate.mjs`.
+Status 2026-11-08: steps 0 to 3 done. Key pair in the EPHIA Bitwarden organisation (Marc,
+Sophia), migration 0002 applied, release A live, step 2 gate passed on two accounts. Step 3
+run 2026-11-08 ~16:00 UTC: 18 profiles (17 + the test account), 16 migrated, `--verify`
+reports 18 verified, 0 failed. Both mechanisms are live now. Release B (step 4) not before
+2026-11-15; the encrypted export (step 0.4) is still needed before step 5.
 
 ## 1. Why
 
