@@ -301,9 +301,12 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
       {/* Bottom sticky bar */}
       <div className="flex-shrink-0 border-t border-[#DFE3EB] bg-white px-4 md:px-8 py-3 md:py-4">
         <div className="max-w-3xl mx-auto space-y-3">
-        <label className={`flex items-start gap-2 md:gap-3 ${hasScrolledToEnd ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
-          <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5 md:mt-1 rounded md:w-5 md:h-5" disabled={!hasScrolledToEnd} />
-          <span className="text-xs md:text-sm text-gray-700">Ich habe den Aufklärungsbogen vollständig gelesen und verstanden.</span>
+        <label className={`flex items-start gap-2 md:gap-3 cursor-pointer ${hasScrolledToEnd ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+          {/* Box as tall as one text line, so the checkbox centres on the first line even when the text wraps */}
+          <span className="flex items-center h-4 md:h-5 flex-shrink-0">
+            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="m-0 w-4 h-4 md:w-5 md:h-5 rounded cursor-pointer" disabled={!hasScrolledToEnd} />
+          </span>
+          <span className="text-xs leading-4 md:text-sm md:leading-5 text-gray-700">Ich habe den Aufklärungsbogen vollständig gelesen und verstanden.</span>
         </label>
         <div className="flex gap-2 md:gap-3">
           <button
