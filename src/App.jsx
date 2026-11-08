@@ -229,9 +229,16 @@ export default function EphiaInvoice() {
 
   // ─── Sync selectedPatient from URL when navigating directly to /patients/:id ───
   useEffect(() => {
-    if (activePatientId && patients.length > 0 && dataLoaded) {
+    if (activePatientId && dataLoaded) {
       const found = patients.find((p) => p.id === activePatientId);
-      if (found && (!selectedPatient || selectedPatient.id !== activePatientId)) {
+      if (!found) {
+        // Unknown id for this account (stale URL, deleted patient): back to the list
+        // instead of an empty page.
+        setSelectedPatient(null);
+        navigate("/patients", { replace: true });
+        return;
+      }
+      if (!selectedPatient || selectedPatient.id !== activePatientId) {
         const d = (typeof found.data === "object" && found.data) ? found.data : {};
         setSelectedPatient({
           vorname: d.vorname || "",
@@ -960,8 +967,12 @@ export default function EphiaInvoice() {
     setSettingsDraft(null);
     setDataLoaded(false);
     docsMigrated.current = false;
+    setSelectedPatient(null);
     setAuthPage("login");
     setAuthError("");
+    // Leave any record URL behind, so the next login on this browser never
+    // starts on the previous account's patient or document.
+    navigate("/", { replace: true });
   };
   handleSignOutRef.current = handleSignOut;
 
