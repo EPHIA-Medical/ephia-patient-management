@@ -4050,7 +4050,7 @@ export default function EphiaInvoice() {
               pendingDocBehIdRef.current = behId || null;
               setConsentWarningPatient(p);
             }}
-            onViewConsent={(inv) => { setPreviewTab("consent"); navigateToPreview(inv); }}
+            onViewConsent={(inv) => openDocModal(inv, "consent")}
             onDownloadConsent={(inv) => {
               const prevPatientId = activePatientId;
               setViewingInvoice(inv);
@@ -4218,7 +4218,7 @@ export default function EphiaInvoice() {
         )}
 
         {/* ═══ CONSENT FORM PREVIEW ═══ */}
-        {isPreviewPage && viewingInvoice && viewingInvoice._consentForm && (() => {
+        {(isPreviewPage || docModalOpen) && viewingInvoice && viewingInvoice._consentForm && (() => {
           const cd = viewingInvoice.consentData || {};
           const tpl = resolveConsentTemplate(cd, practice);
           const viewPractice = viewingInvoice._practice || practice;
@@ -4250,7 +4250,7 @@ export default function EphiaInvoice() {
             setSaveToast("Arzt Unterschrift gespeichert");
             setTimeout(() => setSaveToast(""), 2500);
           };
-          return (
+          return wrapDocModal(
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4 mx-auto" style={{ maxWidth: "210mm" }}>
               <div className="flex items-center gap-3">
@@ -4304,6 +4304,7 @@ export default function EphiaInvoice() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 </button>
                 <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition flex items-center gap-1.5" onClick={() => {
+                  if (docModalOpen) { closeDocModal(); return; }
                   setViewingInvoice(null);
                   const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
                   navigate(patId ? `/patients/${patId}` : "/patients");
@@ -4325,7 +4326,7 @@ export default function EphiaInvoice() {
             </div>
             {/* Doctor signature modal for consent */}
             {showConsentDoctorSign && (
-              <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowConsentDoctorSign(false)}>
+              <div data-doc-modal-inner-dialog className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowConsentDoctorSign(false)}>
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-800">Unterschrift Ärzt:in</h3>
