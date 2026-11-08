@@ -25,6 +25,7 @@ import { escrowConfigured, buildEscrowFields, verifyMekCheck } from "./lib/escro
 import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES, TREATMENT_TYPES, treatmentShort, treatmentLabel, icd10CodesFor, FILLER_INFILTRATION_OPTIONS, FILLER_ANAESTHESIE_OPTIONS, SPRITZEN_GROESSEN } from "./constants";
 import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
+import { dedupeDocumentIds } from "./utils/documentIds";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
 import { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen, RecoveryNeededScreen, RecoveryCodeScreen } from "./components/auth/AuthScreens";
 import ImpressumPage from "./components/legal/Impressum";
@@ -620,6 +621,8 @@ export default function EphiaInvoice() {
           loadedInvoices.push({ ...invoiceData, _supabaseId: rec.id, _createdAt: rec.created_at });
         }
       }
+      // Migrated Behandlungsdoku copies share their Rechnung's id (utils/documentIds.js)
+      loadedInvoices = dedupeDocumentIds(loadedInvoices);
       setInvoices(loadedInvoices);
 
       // Load patients (decrypt if needed)

@@ -78,7 +78,7 @@ export default function PatientInvoicesTab({ invoices, behandlungen, kleinuntern
           const beh = inv._behandlungId ? behById.get(inv._behandlungId) : null;
           const nr = inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "—" ? inv.invoiceMeta.nummer : null;
           return (
-            <li key={inv.id} className="border-b border-gray-50 last:border-b-0">
+            <li key={inv._supabaseId || inv.id} className="border-b border-gray-50 last:border-b-0">
               <div
                 role="button"
                 tabIndex={0}

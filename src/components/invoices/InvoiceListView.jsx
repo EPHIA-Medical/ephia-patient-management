@@ -234,7 +234,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
               const isPaid = inv.paymentStatus === "bezahlt";
               const gesamt = invoiceGesamt(inv, kleinunternehmer);
               return (
-                <tr key={inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onView(inv)}>
+                <tr key={inv._supabaseId || inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onView(inv)}>
                   <td className="px-3 py-3 align-middle">
                     <span className="text-sm text-gray-700">{vorname}</span>
                   </td>
@@ -307,7 +307,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                 const vorname = p.vorname || (p.name || "").split(" ")[0] || "";
                 const nachname = p.nachname || (p.name || "").split(" ").slice(1).join(" ") || "";
                 return (
-                  <tr key={inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onViewHV(inv)}>
+                  <tr key={inv._supabaseId || inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onViewHV(inv)}>
                     <td className="px-3 py-3 align-middle">
                       <span className="text-sm text-gray-700">{vorname}</span>
                     </td>
@@ -376,7 +376,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                 const hasInvoice = inv.invoiceMeta.nummer && inv.invoiceMeta.nummer !== "—";
                 const createdAt = inv._createdAt ? fmtDate(inv._createdAt.slice(0, 10)) : (inv.savedAt ? fmtDate(inv.savedAt.slice(0, 10)) : "–");
                 return (
-                  <tr key={inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onViewTD(inv)}>
+                  <tr key={inv._supabaseId || inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onViewTD(inv)}>
                     <td className="px-3 py-3 align-middle">
                       <span className="text-sm text-gray-700">{vorname}</span>
                     </td>
@@ -450,7 +450,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                 const hasDoctorSig = !!cd._signatures?.doctor;
                 const consentStatus = isRefused ? "refused" : (hasPatientSig && hasDoctorSig) ? "complete" : hasPatientSig ? "pending_doctor" : "draft";
                 return (
-                  <tr key={inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onView(inv)}>
+                  <tr key={inv._supabaseId || inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onView(inv)}>
                     <td className="px-3 py-3 align-middle"><span className="text-sm text-gray-700">{vorname}</span></td>
                     <td className="px-3 py-3 align-middle"><span className="text-sm font-medium text-gray-700">{nachname}</span></td>
                     <td className="px-3 py-3 align-middle"><span className="text-sm text-gray-500">{templateName}</span></td>
