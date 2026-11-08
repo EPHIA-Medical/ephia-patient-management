@@ -1,4 +1,5 @@
 import { evalAmount } from "./helpers";
+import { treatmentPoints } from "./markers";
 
 // ═══════════════════ Präparate on a Behandlungsdoku ═══════════════════
 // A Behandlungsdoku can use several Präparate in one session (e.g. two
@@ -31,7 +32,8 @@ export const markerPraepIdx = (m, count = Infinity) => {
 // Per Präparat: its points and the summed units from the markers
 export function praeparatTotals(td) {
   const list = getPraeparate(td);
-  const markers = (td && td.markers) || [];
+  // Guide lines (Markierungen) are not points
+  const markers = treatmentPoints(td && td.markers);
   return list.map((p, i) => {
     const own = markers.filter((m) => markerPraepIdx(m, list.length) === i);
     const units = Math.round(own.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
@@ -56,7 +58,7 @@ export const praeparateSummary = (td) => praeparatTotals(td)
 export function withPraeparate(td, praeparate) {
   const list = (praeparate && praeparate.length > 0 ? praeparate : [emptyPraeparat()])
     .map((p) => ({ name: (p.name || "").trim(), einheit: p.einheit || "SE", amount: (p.amount || "").trim(), charge: (p.charge || "").trim() }));
-  const markers = (td && td.markers) || [];
+  const markers = treatmentPoints(td && td.markers);
   const total = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
   return {
     ...td,

@@ -4,6 +4,7 @@ import { MARKER_COLORS, markerColor, markerLabel, markerTextColor, fmtNum } from
 import { getPraeparate, praeparatTotals, praepMengeStr } from "../../utils/praeparate";
 import { isVector, vectorSummary, makeVectorImage } from "../treatment/vectors";
 import { chartById, chartPng, markerView, usedViews } from "../treatment/charts";
+import { isGuide, treatmentPoints } from "../../utils/markers";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
@@ -74,7 +75,10 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i, praepCount), markerColor(m), isVector(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Lines and fans drawn into one PNG over the face (SVG would be dropped by html2canvas in some browsers)
   const vectors = markers.map((m, idx) => ({ m, idx })).filter(({ m }) => isVector(m));
-  const vectorsKey = JSON.stringify(vectors.map(({ m }) => [m.x, m.y, m.to, m.tool || "", m.color || ""]));
+  // Markierungen (guide lines) go into the same PNG, so they are part of the key
+  const vectorsKey = JSON.stringify(markers.filter((m) => isVector(m) || isGuide(m)).map((m) => [m.kind, m.x, m.y, m.to, m.tool || "", m.color || "", m.v || ""]));
+  const pointCount = treatmentPoints(markers).length;
+  const hasGuides = pointCount < markers.length;
   // Body regions with points: one chart each. Drawn charts become PNGs first (html2canvas and SVG images do not mix well).
   const views = usedViews(markers);
   const viewsKey = views.join(",");
@@ -92,7 +96,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
         <img src={v === "face" && facePhoto ? facePhoto : (chartPngs[v] || chartById(v).png || "")} alt={chartById(v).label} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         {vectorImages[v] && <img src={vectorImages[v]} alt="" style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", zIndex: 5 }} />}
         {markers.map((m, idx) => {
-          if (markerView(m) !== v) return null;
+          if (markerView(m) !== v || isGuide(m)) return null;
           const d = dotImages[idx] || { src: "", w: 20, h: 20 };
           return (
             <img key={idx} src={d.src} alt={markerLabel(m, idx)} style={{ position: "absolute", left: `${m.x}%`, top: `${m.y}%`, width: d.w, height: d.h, marginLeft: -d.w / 2, marginTop: -d.h / 2, zIndex: 10 }} />
@@ -106,7 +110,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   // Legend grouped by colour: count of points and units per colour
   const colorGroups = (() => {
     const map = new Map();
-    markers.forEach((m) => {
+    treatmentPoints(markers).forEach((m) => {
       const hex = markerColor(m);
       const g = map.get(hex) || { hex, count: 0, units: 0 };
       g.count += 1;
@@ -208,8 +212,11 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
                 </div>
               ))}
               <div style={{ marginTop: multiColor ? "6px" : 0, fontWeight: 600 }}>
-                {markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && (!multiPraep || sameEinh) ? ` · ${totalStr} ${einh} gesamt` : ""}
+                {pointCount} {pointCount === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && (!multiPraep || sameEinh) ? ` · ${totalStr} ${einh} gesamt` : ""}
               </div>
+              {hasGuides && (
+                <div style={{ marginTop: "10px", color: "#666" }}>Gestrichelte graue Linie: Markierung zur Orientierung, keine Injektion.</div>
+              )}
               {vectors.length > 0 && (
                 <div style={{ marginTop: "10px" }}>
                   <div style={{ color: "#666", marginBottom: "4px" }}>Gefüllter Punkt: Injektion. Offener Kreis: Eintrittspunkt, Pfeil: Vorschubrichtung. Durchgezogen: Nadel, gestrichelt: Kanüle.</div>

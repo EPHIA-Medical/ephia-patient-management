@@ -2,6 +2,7 @@ import React from "react";
 import { MarkerDot } from "./markerUtils";
 import { VectorLayer } from "./vectors";
 import { chartById, chartImage, markerView, usedViews } from "./charts";
+import { isGuide } from "../../utils/markers";
 
 // One body-region chart with its points (static). `markers` is the whole list, so
 // labels keep their running numbers; only the points of `view` are drawn.
@@ -17,7 +18,7 @@ export function ChartFigure({ markers, view = "face", facePhoto, size = 200, dot
     >
       <img src={chartImage(view, facePhoto)} alt={chartById(view).label} className="w-full h-full object-contain pointer-events-none" draggable={false} />
       <VectorLayer markers={own} />
-      {all.map((m, idx) => markerView(m) === view && (
+      {all.map((m, idx) => markerView(m) === view && !isGuide(m) && (
         <div key={m.id ?? idx} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
           <MarkerDot marker={m} idx={idx} size={dotSize} fontSize={fontSize} shadow praepCount={praepCount} />
         </div>

@@ -6,6 +6,7 @@ import { ChartFigures } from "./ChartFigure";
 import { trackEvent } from "../../lib/analytics";
 import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, LiveTotal, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 import { markerPraepIdx } from "../../utils/praeparate";
+import { isGuide, addMarker, treatmentPoints } from "../../utils/markers";
 import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EditorRow, EDITOR_LABEL_WIDTH } from "./vectors";
 
 // ═══════════════════ Treatment Map ═══════════════════
@@ -44,7 +45,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   const praepList = Array.isArray(praeparate) ? praeparate : [];
   const praepCount = praepList.length;
   const multiPraep = praepCount > 1;
-  const [activePraep, setActivePraep] = React.useState(markers.length > 0 ? markerPraepIdx(markers[markers.length - 1], praepCount || Infinity) : 0);
+  // Defaults for new points come from the last point; Markierungen carry no dose, colour or Präparat
+  const lastPoint = treatmentPoints(markers).slice(-1)[0];
+  const [activePraep, setActivePraep] = React.useState(lastPoint ? markerPraepIdx(lastPoint, praepCount || Infinity) : 0);
   React.useEffect(() => { if (praepCount > 0 && activePraep > praepCount - 1) setActivePraep(praepCount - 1); }, [praepCount]); // eslint-disable-line react-hooks/exhaustive-deps
   // Unit shown for a point: its Präparat's unit, else the document unit
   const unitFor = (m) => (multiPraep ? (praepList[markerPraepIdx(m, praepCount)]?.einheit || einheit) : einheit);
@@ -55,9 +58,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   React.useEffect(() => { if (markers.length > 0) setSaved(true); }, [markers]);
   const modalRef = React.useRef(null);
   // Colour applied to newly placed points; starts with the colour of the last existing point
-  const [activeColor, setActiveColor] = React.useState(markers.length > 0 ? markerColor(markers[markers.length - 1]) : DEFAULT_MARKER_COLOR);
+  const [activeColor, setActiveColor] = React.useState(lastPoint ? markerColor(lastPoint) : DEFAULT_MARKER_COLOR);
   // Dose applied to newly placed points; starts with the dose of the last existing point
-  const [activeAmount, setActiveAmount] = React.useState(markers.length > 0 ? (markers[markers.length - 1].amount || "") : "");
+  const [activeAmount, setActiveAmount] = React.useState(lastPoint ? (lastPoint.amount || "") : "");
 
   // Picking a dose that already exists on the face adopts that dose's colour,
   // so one region keeps one colour without re-selecting it every time
@@ -222,7 +225,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const point = { id: Date.now(), x, y, amount: activeAmount, color: activeColor };
     if (multiPraep && activePraep > 0) point.p = activePraep;
     if (view !== "face") point.v = view;
-    setMarkers([...markers, point]);
+    setMarkers(addMarker(markers, point));
   };
 
   const setPraep = (id, p) => {
@@ -299,9 +302,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
         </div>
         {(markers.length > 0 || notes) && (
           <div className="flex gap-6" style={{ alignItems: "flex-start" }}>
-            {markers.length > 0 && (
+            {treatmentPoints(markers).length > 0 && (
               <div className="space-y-1.5" style={{ minWidth: 140 }}>
-                {markers.map((m, idx) => (
+                {treatmentPoints(markers).map((m, idx) => (
                   <div key={m.id} className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-400 w-5 text-right flex-shrink-0">{idx + 1}.</span>
                     <MarkerDot marker={m} idx={idx} size={20} fontSize={10} praepCount={praepCount} />
@@ -331,12 +334,18 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
       {!autoOpen && (
         saved && markers.length > 0 ? (() => {
           const totalUnits = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
+          const nPoints = treatmentPoints(markers).length;
+          const nGuides = markers.length - nPoints;
+          const summary = [
+            nPoints > 0 ? `${nPoints} ${nPoints === 1 ? "Punkt" : "Punkte"}` : "",
+            nGuides > 0 ? `${nGuides} ${nGuides === 1 ? "Markierung" : "Markierungen"}` : "",
+          ].filter(Boolean).join(" · ");
           const totalStr = totalUnits % 1 === 0 ? totalUnits.toString() : totalUnits.toFixed(2).replace(/0+$/, "").replace(".", ",");
           return (
           <div className="flex items-center gap-4 flex-wrap">
             <ChartFigures markers={markers} facePhoto={facePhoto} size={132} dotSize={12} fontSize={7} praepCount={praepCount} onClick={() => setModalOpen(true)} />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-800">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"} dokumentiert</p>
+              <p className="text-sm font-medium text-gray-800">{summary} dokumentiert</p>
               {totalUnits > 0 && !multiPraep && <p className="text-sm text-gray-500 mt-0.5">Gesamt {totalStr} {einheit}</p>}
               <button className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium" onClick={() => setModalOpen(true)}>Bearbeiten</button>
             </div>
@@ -428,7 +437,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     {vt.lineStart && (
                       <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12 / zoom, height: 12 / zoom, transform: "translate(-50%, -50%)", zIndex: 11 }} />
                     )}
-                    {markers.map((m, idx) => inView(m) && (
+                    {markers.map((m, idx) => inView(m) && !isGuide(m) && (
                       <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                         <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
                       </div>
@@ -454,10 +463,18 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 </div>
               </div>
               <div className="min-h-0" style={{ gridArea: "points", overflowY: sideLayout ? "auto" : "visible", paddingRight: sideLayout ? 4 : 0 }}>
-                <VectorLegend markers={markers.filter(inView)} force={vt.mode !== "punkt"} className="mb-2" />
+                <VectorLegend markers={markers.filter(inView)} force={vt.mode === "linie" || vt.mode === "faecher"} forceGuide={vt.mode === "markierung"} className="mb-2" />
                 <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
                 <div className="space-y-1.5">
-                  {markers.map((m, idx) => inView(m) && (
+                  {markers.map((m, idx) => inView(m) && (isGuide(m) ? (
+                    <div key={m.id} className="flex items-center gap-1.5">
+                      <span className="w-4 flex-shrink-0" />
+                      <span className="flex-1 min-w-0"><VectorSummary marker={m} className="text-sm text-gray-600" /></span>
+                      <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => { if (vt.activeGuide?.id === m.id) vt.finish(); removeMarker(m.id); }} title="Markierung löschen">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  ) : (
                     <React.Fragment key={m.id}>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
@@ -473,7 +490,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     </div>
                     {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
                     </React.Fragment>
-                  ))}
+                  )))}
                 </div>
                 {!markers.some(inView) && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte in dieser Region.</p>}
                 <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />

@@ -9,6 +9,7 @@ import TreatmentMap from "../treatment/TreatmentMap";
 import { ChartFigure } from "../treatment/ChartFigure";
 import { CHARTS, markerView, usedViews } from "../treatment/charts";
 import { HV_THRESHOLD, maxGesamtWithin, HV_WAIVER_TEXT } from "../../utils/hvRules";
+import { isGuide, treatmentPoints } from "../../utils/markers";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -57,7 +58,9 @@ export default function BehandlungDetailPanel({
   const unitFor = (m) => (multiPraep ? (praeparate[markerPraepIdx(m, praepCount)]?.einheit || einh) : einh);
   const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : "–";
   const hasInvoice = inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "—";
-  const markerCount = (td.markers || []).length;
+  // Markierungen (guide lines) are drawn on the chart but are not points
+  const markerCount = treatmentPoints(td.markers).length;
+  const hasChartMarks = (td.markers || []).length > 0;
   const detailViews = usedViews(td.markers || []);
   const shownView = detailViews.includes(displayView) ? displayView : detailViews[0];
   const totalUnits = Math.round((td.markers || []).reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
@@ -171,7 +174,7 @@ export default function BehandlungDetailPanel({
               </div>
             )}
             <div className="relative">
-              {markerCount > 0 ? (
+              {hasChartMarks ? (
                 <ChartFigure markers={td.markers || []} view={shownView} facePhoto={td.facePhoto} size={500} dotSize={26} fontSize={12} praepCount={praepCount} onClick={openFaceEditor} />
               ) : (
                 <div className="flex items-center justify-center border border-[#DFE3EB] rounded-lg cursor-pointer hover:border-blue-200 transition" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }} onClick={openFaceEditor} title="Klicken zum Bearbeiten">
@@ -269,7 +272,7 @@ export default function BehandlungDetailPanel({
                 <div {...clickEdit(openFaceEditor)} className={editableCls}>
                   {fieldLabel("Injektionspunkte")}
                   <div className="mt-1.5 space-y-1">
-                    {(td.markers || []).map((m, idx) => (
+                    {(td.markers || []).map((m, idx) => !isGuide(m) && (
                       <div key={idx} className="flex items-center gap-2">
                         <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
                         <MarkerDot marker={m} idx={idx} size={22} fontSize={11} praepCount={praepCount} />

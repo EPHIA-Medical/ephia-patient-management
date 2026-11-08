@@ -2,6 +2,7 @@ import React from "react";
 import { evalAmount } from "../../utils/helpers";
 import { praepLetter, markerPraepIdx } from "../../utils/praeparate";
 import { isVector, serializeVector } from "./vectors";
+import { isGuide, orderMarkers, treatmentPoints } from "../../utils/markers";
 
 // ═══════════════════ Shared injection-point helpers ═══════════════════
 // Markers are stored as { x, y, amount, color? }. `color` is optional and new;
@@ -70,9 +71,15 @@ export const markerLabel = (m, idx, praepCount = 1) => {
 
 // Strip runtime ids before persisting (keeps colour and Präparat when set; lines and
 // fans keep their kind, end points, instrument and depth; fans without arms are dropped)
-export const serializeMarkers = (markers) => (markers || [])
-  .filter((m) => !(m.kind === "fan" && !(m.to || []).length))
+export const serializeMarkers = (markers) => orderMarkers(markers)
+  .filter((m) => !((m.kind === "fan" || isGuide(m)) && !(m.to || []).length))
   .map((m) => {
+    // Markierung: only its course and body region (utils/markers.js)
+    if (isGuide(m)) {
+      const g = { kind: "guide", x: m.x, y: m.y, to: m.to.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 })) };
+      if (m.v && m.v !== "face") g.v = m.v;
+      return g;
+    }
     const out = { x: m.x, y: m.y, amount: m.amount };
     if (m.color) out.color = m.color;
     if (Number.isInteger(m.p) && m.p > 0) out.p = m.p;
@@ -259,7 +266,8 @@ export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte
 export function LiveTotal({ markers, praeparate, einheit }) {
   const list = Array.isArray(praeparate) && praeparate.length > 1 ? praeparate : null;
   const sum = (ms) => Math.round(ms.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
-  if (!(markers || []).length) return null;
+  markers = treatmentPoints(markers);
+  if (!markers.length) return null;
   const rows = list
     ? list.map((p, i) => {
         const own = markers.filter((m) => markerPraepIdx(m, list.length) === i);
