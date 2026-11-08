@@ -1059,6 +1059,8 @@ export default function EphiaInvoice() {
       if (dupInvoice) errors.nummerDuplicate = true;
     }
     if (!invoiceMeta.datum) errors.datum = true;
+    // § 12 Abs. 3 GOÄ: above 2,3-fach the invoice needs the doctor's own Begründung
+    if (!hvOnlyMode && needsBegruendung && !begruendung.trim()) errors.begruendung = true;
     if (!isBeratungOnly) {
       if (!praeparat.trim()) errors.praeparat = true;
       if (ml <= 0) errors.ml = true;
@@ -1312,7 +1314,7 @@ export default function EphiaInvoice() {
       wunschGesamtStr,
       targetGesamt: wunschGesamt > 0 ? wunschGesamt : undefined,
       useBeratungLang,
-      begruendung: needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : "",
+      begruendung: needsBegruendung ? begruendung.trim() : "",
       selectedZuschlaege: [...selectedZuschlaege],
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
       treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
@@ -1472,9 +1474,14 @@ export default function EphiaInvoice() {
     setAmendingId(null);
     setPreviewTab(hvOnlyMode ? "honorar" : "rechnung");
     setHvOnlyMode(false); setBeratungOnly(false);
-    if (patientCreateModal) setPatientCreateModal(null);
-    navigateToPreview(entry);
-    window.scrollTo(0, 0);
+    if (patientCreateModal) {
+      // Created from the patient page: the finished document replaces the form in the modal
+      setPatientCreateModal(null);
+      openDocModal(entry, hvOnlyMode ? "honorar" : "rechnung");
+    } else {
+      navigateToPreview(entry);
+      window.scrollTo(0, 0);
+    }
     setSaveToast(hvOnlyMode ? "Honorarvereinbarung gespeichert" : (fromHvId ? "Rechnung gespeichert (HV verknüpft)" : (hasHV ? "Dokumente gespeichert" : "Dokument gespeichert")));
     setTimeout(() => setSaveToast(""), 3000);
     // Signature modal is now triggered from the HV preview signature area tap
@@ -1649,8 +1656,15 @@ export default function EphiaInvoice() {
     setHvBaseSachkosten(0);
     setAmendingId(inv.id);
     setCreateForPatient(null);
-    setPatientCreateModal(null);
     setValidationErrors({});
+    // Bearbeiten from the document modal on the patient page: the form opens in the modal too
+    if (docModalOpen && isPatientDetail && window.innerWidth >= 1024) {
+      setDocModalOpen(false);
+      setCreateSource("patientDetail");
+      setPatientCreateModal(fromTab === "honorar" || inv._hvOnly ? "hv" : "rechnung");
+      return;
+    }
+    setPatientCreateModal(null);
     navigate("/erstellen");
   };
 
@@ -3431,19 +3445,21 @@ export default function EphiaInvoice() {
                   ) : null}
                   {needsBegruendung && (
                     <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-                      Über 2,3-fach: Eine Begründung für den erhöhten Steigerungssatz ist erforderlich.
+                      Über 2,3-fach: Die Rechnung braucht eine auf diese Behandlung bezogene Begründung (§ 12 Abs. 3 GOÄ). Sie wird auf der Rechnung gedruckt.
                     </div>
                   )}
                   {needsBegruendung && (
                     <div className="mt-2">
-                      <label className="text-xs text-gray-500 mb-1 block">Begründung gemäß §5 Abs. 2 GOÄ</label>
+                      <label className="text-xs text-gray-500 mb-1 block">Begründung gemäß § 12 Abs. 3 GOÄ *</label>
                       <textarea
-                        className="w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
-                        rows={2}
+                        id="field-begruendung"
+                        className={`w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 resize-none ${validationErrors.begruendung ? "border-red-400 bg-red-50 focus:ring-red-400" : "border-[#DFE3EB] focus:ring-blue-400"}`}
+                        rows={3}
                         value={begruendung}
-                        onChange={(e) => setBegruendung(e.target.value)}
-                        placeholder="Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten."
+                        onChange={(e) => { setBegruendung(e.target.value); clearError("begruendung"); }}
+                        placeholder="Warum ist der erhöhte Satz bei dieser Patient:in gerechtfertigt? Z.B. besondere Schwierigkeit, erhöhter Zeitaufwand oder Umstände der Ausführung, konkret auf diese Behandlung bezogen."
                       />
+                      {validationErrors.begruendung && <p className="text-xs text-red-500 mt-1">Bitte gib eine Begründung ein. Ohne sie ist der Satz über 2,3-fach nicht abrechenbar.</p>}
                     </div>
                   )}
                 </>
@@ -3462,7 +3478,7 @@ export default function EphiaInvoice() {
               </label>
               )}
               <div className="flex items-center justify-between">
-                <button className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] text-gray-500 hover:bg-gray-50" onClick={() => { setAmendingId(null); setHvOnlyMode(false); setBeratungOnly(false); navigate("/rechnungen"); }}>
+                <button className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] text-gray-500 hover:bg-gray-50" onClick={() => { setAmendingId(null); setHvOnlyMode(false); setBeratungOnly(false); if (patientCreateModal) { setPatientCreateModal(null); return; } navigate("/rechnungen"); }}>
                   Abbrechen
                 </button>
                 <button
@@ -3497,7 +3513,7 @@ export default function EphiaInvoice() {
                     patient={patient}
                     invoiceMeta={{ ...invoiceMeta, diagnose: indicationType === "medical" ? diagnose : "" }}
                     lineItems={liveItems}
-                    begruendung={needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : ""}
+                    begruendung={needsBegruendung ? begruendung.trim() : ""}
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
                     paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
@@ -3554,7 +3570,7 @@ export default function EphiaInvoice() {
                     patient={patient}
                     invoiceMeta={{ ...invoiceMeta, diagnose: indicationType === "medical" ? diagnose : "" }}
                     lineItems={liveItems}
-                    begruendung={needsBegruendung ? (begruendung || "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten.") : ""}
+                    begruendung={needsBegruendung ? begruendung.trim() : ""}
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
                     paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
@@ -4111,7 +4127,7 @@ export default function EphiaInvoice() {
                 await syncBehandlungToDoc(updated, previous?.treatmentDoc?.behandlungsDatum);
               }
             }}
-            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
+            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, begruendung: qBegruendung, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
               try {
                 // Resolve decrypted patient data: _raw.data (from edit flows) > .data (from list) > top-level fields
                 const rawData = selectedPatient._raw?.data;
@@ -4137,7 +4153,7 @@ export default function EphiaInvoice() {
                   sachkosten: qSachkosten || [],
                   treatmentDoc: treatment.treatmentDoc || null,
                   attachTreatmentPdf: !!qAttachTreatment,
-                  begruendung: (customS && (customS.s1 > 2.3 || customS.s5 > 2.3 || customS.s267 > 2.3) && Math.max(customS.s1, customS.s5, customS.s267) <= 3.5) ? "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten." : "",
+                  begruendung: qBegruendung || "",
                   paymentStatus: "ausstehend",
                   _kleinunternehmer: !!practice.kleinunternehmer,
                   _practice: practiceForDocument(practice),

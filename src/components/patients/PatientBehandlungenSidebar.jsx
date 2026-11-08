@@ -95,6 +95,18 @@ export default function PatientBehandlungenSidebar({
 
   const standaloneDocs = matchingInvoices.filter(inv => !inv._behandlungId);
 
+  // A Rechnung above 3,5-fach carries its Honorarvereinbarung inside the same document
+  // (shown as a tab). List it as a row of its own so it is visible in the Behandlung.
+  const hasEmbeddedHv = (inv) => getDocLabel(inv) === "Rechnung" && !inv._fromHvId
+    && (inv.hasHV != null ? !!inv.hasHV : (inv.lineItems || []).some((it) => it.steigerung != null && it.steigerung > 3.5));
+  const embeddedHvStatus = (inv) => {
+    const sigs = inv._signatures;
+    if (inv._signedHvUpload) return { label: "Hochgeladen", color: "text-green-600", done: true };
+    if (sigs?.patient && sigs?.doctor) return { label: "Unterschrieben", color: "text-green-600", done: true };
+    if (sigs?.patient) return { label: "Ärzt:in fehlt", color: "text-amber-500" };
+    return { label: "Nicht unterschrieben", color: "text-amber-500" };
+  };
+
   return (
     <div className="flex-1 min-w-0">
       {/* Header with + button (the patient page shows its own tab header instead) */}
@@ -151,6 +163,7 @@ export default function PatientBehandlungenSidebar({
       <div className="px-4 py-3">
         {patientBeh.map(beh => {
           const behDocs = matchingInvoices.filter(inv => inv._behandlungId === beh._id);
+          const embeddedHvs = behDocs.filter(hasEmbeddedHv);
           const isExpanded = expandedBeh === beh._id;
           const isDragOver = dragOverBehId === beh._id;
           return (
@@ -171,7 +184,7 @@ export default function PatientBehandlungenSidebar({
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-xs text-gray-400">{behDocs.length} Dok.</span>
+                  <span className="text-xs text-gray-400">{behDocs.length + embeddedHvs.length} Dok.</span>
                   <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
               </button>
@@ -261,6 +274,31 @@ export default function PatientBehandlungenSidebar({
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {embeddedHvs.map((inv) => {
+                    const status = embeddedHvStatus(inv);
+                    return (
+                      <div
+                        key={"hv-" + (inv._supabaseId || inv.id)}
+                        role="button"
+                        tabIndex={0}
+                        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition border-b border-gray-50 cursor-pointer"
+                        onClick={() => onViewHV && onViewHV(inv)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onViewHV && onViewHV(inv); } }}
+                        title="Honorarvereinbarung zu dieser Rechnung öffnen"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-sm text-gray-400">{"\u{1F4C4}"}</span>
+                          <span className="text-sm text-gray-700">Honorarvereinbarung</span>
+                          {inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "\u2014" && <span className="text-xs text-gray-400">zu #{inv.invoiceMeta.nummer}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
+                          {/* Same width as the delete button of the other rows; this HV is deleted with its Rechnung */}
+                          {onDelete && <span className="w-6" />}
                         </div>
                       </div>
                     );

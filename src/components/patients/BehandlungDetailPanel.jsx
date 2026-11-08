@@ -38,6 +38,7 @@ export default function BehandlungDetailPanel({
   const [quickInvoicePreisStr, setQuickInvoicePreisStr] = useState("");
   const [quickInvoiceExtraPreis, setQuickInvoiceExtraPreis] = useState({});
   const [quickInvoiceSaving, setQuickInvoiceSaving] = useState(false);
+  const [quickInvoiceBegruendung, setQuickInvoiceBegruendung] = useState("");
 
   const inv = viewingTreatment;
   const td = inv.treatmentDoc || {};
@@ -103,6 +104,7 @@ export default function BehandlungDetailPanel({
     setQuickInvoiceWunschStr("");
     setQuickInvoicePreisStr("");
     setQuickInvoiceExtraPreis({});
+    setQuickInvoiceBegruendung("");
     setQuickInvoiceOpen(true);
   };
 
@@ -360,7 +362,10 @@ export default function BehandlungDetailPanel({
           const materialkosten = Math.round((qMl * qPreisProMl + sachkosten.reduce((s, sk) => s + parseDE(sk.betragStr), 0)) * 100) / 100;
           const netto = lineItems.reduce((s, it) => s + it.betrag, 0);
           const verdienst = netto > 0 ? Math.round((netto - materialkosten) * 100) / 100 : 0;
-          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0;
+          // § 12 Abs. 3 GOÄ: between 2,3- and 3,5-fach the doctor writes a Begründung (above 3,5 an HV applies)
+          const itemMax = Math.max(0, ...lineItems.filter((it) => it.steigerung != null).map((it) => it.steigerung));
+          const needsBegruendung = itemMax > 2.3 && itemMax <= 3.5;
+          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0 && (!needsBegruendung || quickInvoiceBegruendung.trim());
 
           const realInvoices = invoices.filter(i => i.invoiceMeta?.nummer && i.invoiceMeta.nummer !== "—");
           const latestInv = realInvoices.length > 0 ? realInvoices.reduce((best, i) => { const t = i._createdAt || i.savedAt || ""; const bt = best._createdAt || best.savedAt || ""; return t > bt ? i : best; }, realInvoices[0]) : null;
@@ -442,6 +447,18 @@ export default function BehandlungDetailPanel({
                     </div>
                   </div>
 
+                  {needsBegruendung && (
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-0.5">Begründung gemäß § 12 Abs. 3 GOÄ *</label>
+                      <textarea
+                        className={inputCls + " w-full resize-none text-xs"}
+                        rows={3}
+                        value={quickInvoiceBegruendung}
+                        onChange={(e) => setQuickInvoiceBegruendung(e.target.value)}
+                        placeholder="Über 2,3-fach: Warum ist der erhöhte Satz bei dieser Patient:in gerechtfertigt? Wird auf der Rechnung gedruckt."
+                      />
+                    </div>
+                  )}
                   {qPreisProMl > 0 && gesamt > 0 && (
                     <div className="mt-4 flex justify-between items-center text-sm font-semibold text-green-600">
                       <span>Dein Verdienst</span>
@@ -468,6 +485,7 @@ export default function BehandlungDetailPanel({
                           lineItems,
                           gesamt,
                           hasHV: lineItems.some((it) => it.steigerung != null && it.steigerung > 3.5),
+                          begruendung: needsBegruendung ? quickInvoiceBegruendung.trim() : "",
                           praeparat: praep,
                           einheit: qEinh,
                           ml: qMl,

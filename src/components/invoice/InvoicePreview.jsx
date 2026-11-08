@@ -163,7 +163,7 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
 
       {begruendung && (
         <div style={{ fontSize: "10px", color: "#444", marginBottom: "16px" }}>
-          <span style={{ fontWeight: 600 }}>Begründung gemäß §5 Abs. 2 GOÄ:</span>{" "}
+          <span style={{ fontWeight: 600 }}>Begründung gemäß § 12 Abs. 3 GOÄ:</span>{" "}
           <span style={{ fontStyle: "italic" }}>{begruendung}</span>
         </div>
       )}
