@@ -3831,7 +3831,7 @@ export default function EphiaInvoice() {
         )}
 
         {/* ═══ PATIENTS PAGE ═══ */}
-        {(pathname === "/patients" || pathname === "/") && patients.length > 0 && !showAddPatient && (
+        {(pathname === "/patients" || pathname === "/") && patients.length > 0 && (
           <PatientListView
             patients={patients}
             invoices={invoices}
@@ -3844,16 +3844,18 @@ export default function EphiaInvoice() {
         )}
 
         {(pathname === "/patients" || pathname === "/") && patients.length > 0 && showAddPatient && (
-          <div className="bg-white rounded-lg border border-[#DFE3EB] overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <button className="text-xs text-gray-400 hover:text-gray-600 mb-2" onClick={() => { setShowAddPatient(false); setNewPatientData(EMPTY_PATIENT); }}>← Zurück zur Patient:innenliste</button>
-              <h2 className="text-base font-semibold text-gray-800">Neue:n Patient:in anlegen</h2>
+          <div className="fixed inset-0 bg-black/40 z-50 overflow-y-auto" onClick={() => { setShowAddPatient(false); setNewPatientData(EMPTY_PATIENT); }} onKeyDown={(e) => { if (e.key === "Escape") { setShowAddPatient(false); setNewPatientData(EMPTY_PATIENT); } }}>
+          <div className="min-h-full flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="add-patient-title" className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 id="add-patient-title" className="text-base font-semibold text-gray-800">Neue:n Patient:in anlegen</h2>
+              <button aria-label="Schließen" className="text-gray-400 hover:text-gray-600 text-xl leading-none" onClick={() => { setShowAddPatient(false); setNewPatientData(EMPTY_PATIENT); }}>×</button>
             </div>
             <div className="px-5 py-4">
               <div className="grid grid-cols-2 gap-4 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-0.5">Vorname *</label>
-                  <input className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" value={newPatientData.vorname} placeholder="Maria" onChange={(e) => setNewPatientData({ ...newPatientData, vorname: e.target.value })} />
+                  <input autoFocus className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" value={newPatientData.vorname} placeholder="Maria" onChange={(e) => setNewPatientData({ ...newPatientData, vorname: e.target.value })} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-0.5">Nachname *</label>
@@ -3957,8 +3959,11 @@ export default function EphiaInvoice() {
                   Patient:in anlegen
                 </button>
                 <InfoTooltip wide>Alle Patient:innendaten werden Ende-zu-Ende-verschlüsselt (AES-256-GCM) die Verschlüsselung erfolgt direkt in Deinem Browser, bevor die Daten unseren Server erreichen. EPHIA hat zu keinem Zeitpunkt Zugriff auf die Klartextdaten. Damit erfüllen wir die Anforderungen der DSGVO an den Schutz personenbezogener Gesundheitsdaten (Art. 9, 32 DSGVO).</InfoTooltip>
+                <button className="ml-auto px-4 py-2 text-sm rounded-lg text-gray-500 hover:text-gray-700 transition" onClick={() => { setShowAddPatient(false); setNewPatientData(EMPTY_PATIENT); }}>Abbrechen</button>
               </div>
             </div>
+          </div>
+          </div>
           </div>
         )}
 
