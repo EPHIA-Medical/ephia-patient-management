@@ -60,6 +60,11 @@ function readPrivateKey() {
   });
 }
 
+function oneTimeCode() {
+  const idx = webcrypto.getRandomValues(new Uint32Array(8));
+  return Array.from(idx, (n) => WORDS[n % WORDS.length]).join("-");
+}
+
 async function main() {
   const [mode, userId, blob, mekCheck, mekCheckIv] = process.argv.slice(2);
   if (!["verify", "release"].includes(mode) || !userId || !blob || !mekCheck || !mekCheckIv) {
