@@ -19,7 +19,6 @@
 // The MEK itself is never printed.
 
 import { readFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 import { webcrypto } from "node:crypto";
 import { importEscrowPrivateKey, unwrapMEKFromEscrow, verifyMekCheck } from "../src/lib/escrow.js";
 import { derivePDK, generateSalt, wrapMEK } from "../src/lib/crypto.js";
@@ -34,20 +33,31 @@ const RELEASE_HOURS = 48;
 
 function fail(msg) { console.error(msg); process.exit(1); }
 
-// Piped: read stdin. Interactive: prompt, with the typed/pasted key hidden.
+// Piped: read stdin. Interactive: prompt, and never echo what is pasted.
 function readPrivateKey() {
   if (!process.stdin.isTTY) return Promise.resolve(readFileSync(0, "utf8"));
   return new Promise((resolve) => {
-    process.stdout.write("Paste the escrow private key from Bitwarden and press Enter (nothing is shown): ");
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = () => {};
-    rl.question("", (answer) => { rl.close(); process.stdout.write("\n"); resolve(answer); });
+    process.stdout.write("Paste the escrow private key from Bitwarden, then press Enter.\n(The key stays invisible while you paste.) > ");
+    let buf = "";
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === "\u0003") process.exit(130);
+        if (ch === "\r" || ch === "\n") {
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.off("data", onData);
+          process.stdout.write("\n");
+          resolve(buf);
+          return;
+        }
+        buf += ch;
+      }
+    };
+    process.stdin.on("data", onData);
   });
-}
-
-function oneTimeCode() {
-  const idx = webcrypto.getRandomValues(new Uint32Array(8));
-  return Array.from(idx, (n) => WORDS[n % WORDS.length]).join("-");
 }
 
 async function main() {
