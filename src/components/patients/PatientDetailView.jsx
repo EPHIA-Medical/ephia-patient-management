@@ -294,7 +294,14 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               onSave={(text) => onUpdatePatient({ ...rawData, note: text, noteUpdatedAt: new Date().toISOString() })}
             />
           ) : (
-            <p className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{rawData.note}</p>
+            <p
+              role="button"
+              tabIndex={0}
+              title="Klicken zum Bearbeiten"
+              className="-mx-2 px-2 py-1 rounded-md text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed cursor-text hover:bg-amber-100/60 transition"
+              onClick={() => { if (window.getSelection && String(window.getSelection()).length > 0) return; setNoteEditing(true); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setNoteEditing(true); } }}
+            >{rawData.note}</p>
           )}
           {noteEditing && <p className="text-[11px] text-amber-800/60 mt-2">Nur für Dich sichtbar und verschlüsselt gespeichert. Erscheint auf keinem Dokument.</p>}
         </div>

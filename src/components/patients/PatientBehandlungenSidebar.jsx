@@ -241,7 +241,18 @@ export default function PatientBehandlungenSidebar({
                           onSave={(text) => saveBehNote(beh, text)}
                         />
                       ) : (
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{beh.notiz}</p>
+                        onUpdateBehandlung ? (
+                          <p
+                            role="button"
+                            tabIndex={0}
+                            title="Klicken zum Bearbeiten"
+                            className="-mx-2 px-2 py-1 rounded-md text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed cursor-text hover:bg-gray-50 transition"
+                            onClick={() => { if (window.getSelection && String(window.getSelection()).length > 0) return; setNoteEditingBehId(beh._id); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setNoteEditingBehId(beh._id); } }}
+                          >{beh.notiz}</p>
+                        ) : (
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{beh.notiz}</p>
+                        )
                       )}
                     </div>
                   )}
