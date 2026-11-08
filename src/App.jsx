@@ -2998,7 +2998,7 @@ export default function EphiaInvoice() {
         const liveGesamt = Math.round((netto + liveMwst) * 100) / 100;
         const verdienst = netto - praeparatKosten - sachkostenTotal;
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center" onClick={() => setShowVerdienst(false)}>
+          <div className="fixed inset-0 bg-black bg-opacity-30 z-[70] flex items-center justify-center" onClick={() => setShowVerdienst(false)}>
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-800">{hvOnlyMode ? "Dein geplanter Verdienst" : "Dein Verdienst"}</h3>
@@ -3718,7 +3718,7 @@ export default function EphiaInvoice() {
                   )}
                 </>
               )}
-              <button className="mt-2 text-xs text-blue-500 hover:text-blue-700 transition" onClick={() => setShowVerdienst(true)}>
+              <button type="button" className="mt-2 text-xs text-blue-500 hover:text-blue-700 transition" onClick={() => setShowVerdienst(true)}>
                 {hvOnlyMode ? "Mein geplanter Verdienst zeigen" : "Mein Verdienst zeigen"}
               </button>
             </div>
