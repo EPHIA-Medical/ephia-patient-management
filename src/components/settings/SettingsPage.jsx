@@ -10,6 +10,7 @@ import { supabaseCreateBehandlung, supabaseDeleteBehandlung } from "../../lib/su
 import { supabaseCreateDocument, supabaseDeleteDocument } from "../../lib/supabase/documents";
 import { showToast } from "../../utils/toast";
 import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
+import Select from "../ui/Select";
 import {
   getAvailableConsentTemplates, getPracticeTemplates, isBuiltinTemplate, consentTemplateLabel,
   copyTemplateForPractice, emptyPracticeTemplate, finalizePracticeTemplates, validatePracticeTemplate,
@@ -442,11 +443,11 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
         {list.map((p, idx) => (
           <div key={idx} className="flex items-center gap-2 sm:gap-3 mb-2">
             <input className={inputCls2 + " flex-1 min-w-0"} value={p.name} placeholder="z.B. Relfydess" onChange={(e) => upd(idx, { name: e.target.value })} />
-            <select className={inputCls2 + " !w-24"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
+            <Select className={inputCls2 + " !w-24"} value={p.einheit || "ml"} onChange={(e) => upd(idx, { einheit: e.target.value })}>
               <option value="ml">ml</option>
               <option value="SE">SE</option>
               <option value="IE">IE</option>
-            </select>
+            </Select>
             <div className="relative">
               <input className={inputCls2 + " !w-24 sm:!w-28 pr-8"} type="text" inputMode="decimal" value={p.preisStr ?? ""} placeholder="0,00" onChange={(e) => upd(idx, { preisStr: e.target.value.replace(/[^\d,.\- ]/g, "") })} />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">€</span>

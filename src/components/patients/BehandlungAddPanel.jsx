@@ -6,6 +6,7 @@ import TreatmentMap from "../treatment/TreatmentMap";
 import InfoTooltip from "../ui/InfoTooltip";
 import { serializeMarkers } from "../treatment/markerUtils";
 import { emptyPraeparat, praepLetter, praeparatTotals, withPraeparate } from "../../utils/praeparate";
+import Select from "../ui/Select";
 
 export default function BehandlungAddPanel({
   patient, email, rawData, patientDbId, matchingInvoices, rechnungsInvoices, copySourceDocs = [], practice,
@@ -98,7 +99,7 @@ export default function BehandlungAddPanel({
                   <label className="block text-xs font-medium text-gray-500">Daten aus Dokument &uuml;bertragen</label>
                   <InfoTooltip>Pr&auml;parat, Menge und Einheit aus einer bestehenden Rechnung oder Honorarvereinbarung &uuml;bernehmen. Es wird keine Verkn&uuml;pfung erstellt &mdash; die Felder lassen sich danach frei bearbeiten.</InfoTooltip>
                 </div>
-                <select
+                <Select
                   className={inputCls + " bg-white"}
                   value={newTreatmentInvoiceId || ""}
                   onChange={(e) => { const v = e.target.value; setNewTreatmentInvoiceId(v || null); if (v) copyFromDoc(v); }}
@@ -109,7 +110,7 @@ export default function BehandlungAddPanel({
                       {docLabel(inv)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
           </div>
@@ -161,7 +162,7 @@ export default function BehandlungAddPanel({
             {praeparate.map((p, idx) => {
               const t = totals[idx];
               return (
-                <div key={idx} className="grid gap-2" style={{ gridTemplateColumns: multiPraep ? "18px 1fr 76px 64px 28px" : "1fr 76px 64px" }}>
+                <div key={idx} className="grid gap-2" style={{ gridTemplateColumns: multiPraep ? "18px 1fr 76px 72px 28px" : "1fr 76px 72px" }}>
                   {multiPraep && (
                     <div className="flex items-end pb-1.5">
                       <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center" style={{ width: 18, height: 18, lineHeight: "18px" }}>{praepLetter(idx)}</span>
@@ -199,11 +200,11 @@ export default function BehandlungAddPanel({
                   </div>
                   <div>
                     {idx === 0 && <label className="block text-xs font-medium text-gray-500 mb-0.5">Einheit</label>}
-                    <select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => updatePraep(idx, { einheit: e.target.value })}>
+                    <Select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => updatePraep(idx, { einheit: e.target.value })}>
                       <option value="ml">ml</option>
                       <option value="SE">SE</option>
                       <option value="IE">IE</option>
-                    </select>
+                    </Select>
                   </div>
                   {multiPraep && (
                     <div className="flex items-end">

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { fmtDate } from "../../utils/helpers";
+import Select from "../ui/Select";
 
 export default function PatientTimeline({
   patient, patientDbId, matchingInvoices, patientBeh, activityLog, lastActivity,
@@ -110,7 +111,7 @@ export default function PatientTimeline({
         </div>
         <div className="flex flex-col gap-2">
           <input type="text" placeholder="Durchsuchen..." className="w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" value={timelineSearch} onChange={e => setTimelineSearch(e.target.value)} />
-          <select className="w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" value={timelineFilter} onChange={e => setTimelineFilter(e.target.value)}>
+          <Select className="w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" value={timelineFilter} onChange={e => setTimelineFilter(e.target.value)}>
             <option value="alle">Alle</option>
             <option value="aufklaerung">Aufkl&auml;rung</option>
             <option value="hv">HV</option>
@@ -118,7 +119,7 @@ export default function PatientTimeline({
             <option value="rechnung">Rechnung</option>
             <option value="behandlung">Behandlung</option>
             <option value="patient">Patient</option>
-          </select>
+          </Select>
         </div>
       </div>
 

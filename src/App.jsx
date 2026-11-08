@@ -56,6 +56,7 @@ import TreatmentDocPreview from "./components/patients/TreatmentDocumentPreview"
 import PatientDetailView from "./components/patients/PatientDetailView";
 import InvoiceListView from "./components/invoices/InvoiceListView";
 import NotFoundPage from "./components/ui/NotFoundPage";
+import Select from "./components/ui/Select";
 
 let currentMEK = null;
 
@@ -2641,9 +2642,9 @@ export default function EphiaInvoice() {
               return (
                 <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Aufklärungsbogen</label>
-                  <select className="w-full border border-[#DFE3EB] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" value={selected.id} onChange={(e) => setConsentStartTemplate(available.find(t => t.id === e.target.value) || null)}>
+                  <Select className="w-full border border-[#DFE3EB] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" value={selected.id} onChange={(e) => setConsentStartTemplate(available.find(t => t.id === e.target.value) || null)}>
                     {available.map(t => <option key={t.id} value={t.id}>{consentTemplateLabel(t)}</option>)}
-                  </select>
+                  </Select>
                 </div>
               );
             })()}
@@ -3144,7 +3145,7 @@ export default function EphiaInvoice() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Land</label>
-                <select
+                <Select
                     className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
                     value={patient.country}
                     onChange={(e) => setPatient({ ...patient, country: e.target.value })}
@@ -3152,7 +3153,7 @@ export default function EphiaInvoice() {
                     {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                     <option disabled>────────────</option>
                     {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  </Select>
                   {patient.country !== "Deutschland" && (
                     <p className="text-xs text-gray-500 mt-1">Kein inländischer Wohnsitz: MwSt. entfällt.</p>
                   )}
@@ -3230,11 +3231,11 @@ export default function EphiaInvoice() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Einheit</label>
-                  <select className="w-full border border-[#DFE3EB] rounded px-1.5 sm:px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={einheit} onChange={(e) => setEinheit(e.target.value)}>
+                  <Select className="w-full border border-[#DFE3EB] rounded px-1.5 sm:px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={einheit} onChange={(e) => setEinheit(e.target.value)}>
                     <option value="ml">ml</option>
                     <option value="SE">SE</option>
                     <option value="IE">IE</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               {/* ── Behandlungsdokumentation / Injektionsplanung (inside Präparat) ── */}
@@ -3787,11 +3788,11 @@ export default function EphiaInvoice() {
                 </div>
                 <div className="mb-3">
                   <label className="block text-xs font-medium text-gray-500 mb-0.5">Land</label>
-                  <select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.country} onChange={(e) => setNewPatientData({ ...newPatientData, country: e.target.value })}>
+                  <Select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.country} onChange={(e) => setNewPatientData({ ...newPatientData, country: e.target.value })}>
                     {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                     <option disabled>────────────</option>
                     {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div className="border-t border-gray-100 pt-3 mb-4">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Medizinische Angaben (optional)</p>
@@ -3802,12 +3803,12 @@ export default function EphiaInvoice() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-0.5">Geschlecht</label>
-                      <select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.geschlecht} onChange={(e) => setNewPatientData({ ...newPatientData, geschlecht: e.target.value })}>
+                      <Select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.geschlecht} onChange={(e) => setNewPatientData({ ...newPatientData, geschlecht: e.target.value })}>
                         <option value="">Bitte wählen</option>
                         <option value="w">Weiblich</option>
                         <option value="m">Männlich</option>
                         <option value="d">Divers</option>
-                      </select>
+                      </Select>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -3920,11 +3921,11 @@ export default function EphiaInvoice() {
               </div>
               <div className="mb-3">
                 <label className="block text-xs font-medium text-gray-500 mb-0.5">Land</label>
-                <select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.country} onChange={(e) => setNewPatientData({ ...newPatientData, country: e.target.value })}>
+                <Select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.country} onChange={(e) => setNewPatientData({ ...newPatientData, country: e.target.value })}>
                   {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   <option disabled>────────────</option>
                   {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+                </Select>
               </div>
               <div className="border-t border-gray-100 pt-3 mb-4">
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Medizinische Angaben (optional)</p>
@@ -3935,12 +3936,12 @@ export default function EphiaInvoice() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-0.5">Geschlecht</label>
-                    <select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.geschlecht} onChange={(e) => setNewPatientData({ ...newPatientData, geschlecht: e.target.value })}>
+                    <Select className="w-full border border-[#DFE3EB] rounded px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white" value={newPatientData.geschlecht} onChange={(e) => setNewPatientData({ ...newPatientData, geschlecht: e.target.value })}>
                       <option value="">Bitte wählen</option>
                       <option value="w">Weiblich</option>
                       <option value="m">Männlich</option>
                       <option value="d">Divers</option>
-                    </select>
+                    </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

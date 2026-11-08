@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { fmtPhone, parsePlzOrt, combinePlzOrt, lookupPlz } from "../../utils/helpers";
 import { PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "../../constants";
 import { showToast } from "../../utils/toast";
+import Select from "../ui/Select";
 
 const inputCls = "border border-[#DFE3EB] rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
 const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-700 text-right hover:bg-gray-50 hover:text-gray-900 cursor-text transition";
@@ -21,10 +22,10 @@ function InlineField({ label, value, display, type = "text", options, placeholde
       <span className="text-sm text-gray-400 flex-shrink-0">{label}</span>
       {editing ? (
         options ? (
-          <select autoFocus className={inputCls + " bg-white min-w-0"} value={draft} onChange={(e) => commit(e.target.value)} onBlur={stop} onKeyDown={keys}>
+          <Select autoFocus className={inputCls + " bg-white min-w-0"} value={draft} onChange={(e) => commit(e.target.value)} onBlur={stop} onKeyDown={keys}>
             <option value="">--</option>
             {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+          </Select>
         ) : (
           <input autoFocus type={type} className={inputCls + " min-w-0 w-40 text-right"} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} onKeyDown={keys} />
         )

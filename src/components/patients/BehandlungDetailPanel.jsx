@@ -4,6 +4,7 @@ import { FACE_IMAGE_B64 } from "../../constants";
 import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMarkers, markerColor, nextMarkerColor, fmtNum, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
+import Select from "../ui/Select";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -209,9 +210,9 @@ export default function BehandlungDetailPanel({
                             onSelect={(s) => setInlineTempPraeparate(inlineTempPraeparate.map((q, i) => (i === idx ? { ...q, name: s.name, ...(s.einheit ? { einheit: s.einheit } : {}) } : q)))}
                           />
                         </div>
-                        <select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => setInlineTempPraeparate(inlineTempPraeparate.map((q, i) => (i === idx ? { ...q, einheit: e.target.value } : q)))}>
+                        <Select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => setInlineTempPraeparate(inlineTempPraeparate.map((q, i) => (i === idx ? { ...q, einheit: e.target.value } : q)))}>
                           <option value="ml">ml</option><option value="SE">SE</option><option value="IE">IE</option>
-                        </select>
+                        </Select>
                         {inlineTempPraeparate.length > 1 && (
                           <button type="button" className="p-1 rounded text-gray-300 hover:text-red-500 transition" title="Pr&auml;parat entfernen" onClick={() => setInlineTempPraeparate(inlineTempPraeparate.filter((_, i) => i !== idx))}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

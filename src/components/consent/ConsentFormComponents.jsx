@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { fmtDate, fmtPhone } from "../../utils/helpers";
 import SignaturePad from "./SignaturePad";
 import PinGate from "./PinGate";
+import Select from "../ui/Select";
 // ═══════════════════ Consent Form Components ═══════════════════
 
 export function ConsentFormView({ template, patient, practice, onComplete, onCancel, kioskPin }) {
@@ -190,9 +191,9 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
           <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
             <div data-field="geburtsdatum" className="col-span-3 md:col-span-1"><label className={`text-xs md:text-sm mb-1 block ${validationErrors.has("geburtsdatum") ? "text-red-500 font-medium" : "text-gray-500"}`}>Geburtsdatum</label><input type="date" className={inputCls + (validationErrors.has("geburtsdatum") ? " border-red-400 ring-1 ring-red-400" : "")} value={geburtsdatum} onChange={e => { setGeburtsdatum(e.target.value); setValidationErrors(prev => { const n = new Set(prev); n.delete("geburtsdatum"); return n; }); }} /></div>
             <div data-field="geschlecht"><label className={`text-xs md:text-sm mb-1 block ${validationErrors.has("geschlecht") ? "text-red-500 font-medium" : "text-gray-500"}`}>Geschlecht</label>
-              <select className={inputCls + (validationErrors.has("geschlecht") ? " border-red-400 ring-1 ring-red-400" : "")} value={geschlecht} onChange={e => { setGeschlecht(e.target.value); setValidationErrors(prev => { const n = new Set(prev); n.delete("geschlecht"); return n; }); }}>
+              <Select className={inputCls + (validationErrors.has("geschlecht") ? " border-red-400 ring-1 ring-red-400" : "")} value={geschlecht} onChange={e => { setGeschlecht(e.target.value); setValidationErrors(prev => { const n = new Set(prev); n.delete("geschlecht"); return n; }); }}>
                 <option value="">–</option><option value="w">Weiblich</option><option value="m">Männlich</option><option value="d">Divers</option>
-              </select>
+              </Select>
             </div>
             <div data-field="groesse"><label className={`text-xs md:text-sm mb-1 block ${validationErrors.has("groesse") ? "text-red-500 font-medium" : "text-gray-500"}`}>Größe (cm)</label><input className={inputCls + (validationErrors.has("groesse") ? " border-red-400 ring-1 ring-red-400" : "")} value={groesse} onChange={e => { setGroesse(e.target.value); setValidationErrors(prev => { const n = new Set(prev); n.delete("groesse"); return n; }); }} placeholder="cm" /></div>
             <div data-field="gewicht"><label className={`text-xs md:text-sm mb-1 block ${validationErrors.has("gewicht") ? "text-red-500 font-medium" : "text-gray-500"}`}>Gewicht (kg)</label><input className={inputCls + (validationErrors.has("gewicht") ? " border-red-400 ring-1 ring-red-400" : "")} value={gewicht} onChange={e => { setGewicht(e.target.value); setValidationErrors(prev => { const n = new Set(prev); n.delete("gewicht"); return n; }); }} placeholder="kg" /></div>
