@@ -69,3 +69,16 @@ export function maxGesamtWithin(itemsFor, upperBound, limit = HV_THRESHOLD) {
   for (let i = 0; i < 20 && best > 0 && maxSteigerung(itemsFor(best)) > limit; i++) best = Math.round((best - 0.01) * 100) / 100;
   return best;
 }
+
+// ── Bewusster Verzicht (for users who only create invoices in EPHIA) ──
+// Shown as a checkbox when a Rechnung above 3,5-fach has no valid HV in the app.
+// Confirming is recorded server-side (hv_waivers, no patient data) before saving.
+// Changing the text means bumping HV_WAIVER_VERSION.
+export const HV_WAIVER_VERSION = 1;
+export const HV_WAIVER_TEXT =
+  "Mir ist bekannt, dass ein Steigerungssatz über 3,5 nach § 2 Abs. 2 GOÄ nur zulässig ist, wenn vor der Behandlung eine schriftliche Honorarvereinbarung mit der behandelten Person geschlossen wurde. Ich erstelle diese Rechnung bewusst ohne eine in EPHIA hinterlegte Honorarvereinbarung und trage selbst die Verantwortung dafür, dass die Voraussetzungen erfüllt sind.";
+
+export async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}

@@ -5,7 +5,7 @@ import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMark
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
-import { HV_THRESHOLD, maxGesamtWithin } from "../../utils/hvRules";
+import { HV_THRESHOLD, maxGesamtWithin, HV_WAIVER_TEXT } from "../../utils/hvRules";
 
 export default function BehandlungDetailPanel({
   viewingTreatment, setViewingTreatment,
@@ -40,6 +40,7 @@ export default function BehandlungDetailPanel({
   const [quickInvoiceExtraPreis, setQuickInvoiceExtraPreis] = useState({});
   const [quickInvoiceSaving, setQuickInvoiceSaving] = useState(false);
   const [quickInvoiceBegruendung, setQuickInvoiceBegruendung] = useState("");
+  const [quickInvoiceHvVerzicht, setQuickInvoiceHvVerzicht] = useState(false);
 
   const inv = viewingTreatment;
   const td = inv.treatmentDoc || {};
@@ -106,6 +107,7 @@ export default function BehandlungDetailPanel({
     setQuickInvoicePreisStr("");
     setQuickInvoiceExtraPreis({});
     setQuickInvoiceBegruendung("");
+    setQuickInvoiceHvVerzicht(false);
     setQuickInvoiceOpen(true);
   };
 
@@ -372,7 +374,7 @@ export default function BehandlungDetailPanel({
           const maxOhneHv = aboveHv
             ? maxGesamtWithin((g) => buildLineItems(praep, qMl, qPreisProMl, [], sachkosten, calcWeightedForGesamt(g, qMl, qPreisProMl, [], sachkosten, noMwst, false), qEinh, false), effectiveWunsch)
             : null;
-          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0 && !aboveHv && (!needsBegruendung || quickInvoiceBegruendung.trim());
+          const isValid = effectiveWunsch > 0 && qPreisProMl > 0 && extrasValid && quickInvoiceNummer.trim() && effectiveMax > 0 && (!aboveHv || quickInvoiceHvVerzicht) && (!needsBegruendung || quickInvoiceBegruendung.trim());
 
           const realInvoices = invoices.filter(i => i.invoiceMeta?.nummer && i.invoiceMeta.nummer !== "—");
           const latestInv = realInvoices.length > 0 ? realInvoices.reduce((best, i) => { const t = i._createdAt || i.savedAt || ""; const bt = best._createdAt || best.savedAt || ""; return t > bt ? i : best; }, realInvoices[0]) : null;
@@ -442,7 +444,7 @@ export default function BehandlungDetailPanel({
                             {effectiveMax > 3.5 && <span className="ml-1 text-amber-600 text-xs">nur mit HV</span>}
                           </div>
                           {aboveHv && (
-                            <div className="mt-1.5 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                            <div className={`mt-1.5 px-2.5 py-1.5 border rounded text-xs ${quickInvoiceHvVerzicht ? "bg-gray-50 border-[#DFE3EB] text-gray-700" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
                               &Uuml;ber 3,5-fach nur mit einer Honorarvereinbarung, die vor der Behandlung unterschrieben wurde (&sect; 2 Abs. 2 GO&Auml;). Erstelle die Rechnung dann &uuml;ber &bdquo;+ Rechnung&ldquo; aus der HV.
                               {onStartHvFromValues && (
                                 <>
@@ -468,6 +470,12 @@ export default function BehandlungDetailPanel({
                                   Gesamtbetrag auf {maxOhneHv.toFixed(2).replace(".", ",")} &euro; setzen (h&ouml;chstens 3,5-fach)
                                 </button>
                               )}
+                              <label className="mt-2 pt-2 border-t border-current/10 flex items-start gap-2 cursor-pointer">
+                                <span className="flex items-center h-4 flex-shrink-0">
+                                  <input type="checkbox" className="m-0 w-3.5 h-3.5 rounded" checked={quickInvoiceHvVerzicht} onChange={(e) => setQuickInvoiceHvVerzicht(e.target.checked)} />
+                                </span>
+                                <span className="leading-4">{HV_WAIVER_TEXT}</span>
+                              </label>
                             </div>
                           )}
                           {effectiveMax <= 0 && quickInvoiceWunschStr && (
@@ -517,6 +525,7 @@ export default function BehandlungDetailPanel({
                           gesamt,
                           hasHV: false, // never created with the invoice (§ 2 Abs. 2 GOÄ)
                           begruendung: needsBegruendung ? quickInvoiceBegruendung.trim() : "",
+                          hvVerzicht: aboveHv && quickInvoiceHvVerzicht,
                           praeparat: praep,
                           einheit: qEinh,
                           ml: qMl,

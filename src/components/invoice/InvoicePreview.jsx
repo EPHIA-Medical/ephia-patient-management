@@ -3,7 +3,7 @@ import { fmtDate, fmt, fmtPhone } from "../../utils/helpers";
 
 // ═══════════════════ Invoice Preview ═══════════════════
 
-export default function InvoicePreview({ practice, patient: rawPatient, invoiceMeta, lineItems, begruendung, targetGesamt, voucherRedemption, paymentStatus }) {
+export default function InvoicePreview({ practice, patient: rawPatient, invoiceMeta, lineItems, begruendung, targetGesamt, voucherRedemption, paymentStatus, hvVerzicht = false }) {
   const patient = rawPatient || {};
   const isPaid = paymentStatus === "bezahlt";
   // Bank details are pointless on a settled invoice and can be disabled globally in settings
@@ -18,7 +18,8 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
   const standardGesamt = Math.round((zwischensumme + standardMwst) * 100) / 100;
   const gesamt = (targetGesamt && !noMwst && targetGesamt !== standardGesamt) ? targetGesamt : standardGesamt;
   const mwst = (targetGesamt && !noMwst && targetGesamt !== standardGesamt) ? Math.round((targetGesamt - zwischensumme) * 100) / 100 : standardMwst;
-  const hasHonorarvereinbarung = lineItems.some((it) => it.steigerung != null && it.steigerung > 3.5);
+  // Only claim an HV when one exists: not on Rechnungen the doctor created knowingly without one
+  const hasHonorarvereinbarung = !hvVerzicht && lineItems.some((it) => it.steigerung != null && it.steigerung > 3.5);
 
   const S = {
     page: { fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: "11px", lineHeight: "1.55", color: "#1a1a1a", padding: "40px 44px", width: "210mm", minHeight: "297mm", margin: "0 auto", background: "white", position: "relative", boxSizing: "border-box", overflow: "hidden" },

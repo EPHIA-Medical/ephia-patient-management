@@ -59,7 +59,8 @@ import InvoiceListView from "./components/invoices/InvoiceListView";
 import NotFoundPage from "./components/ui/NotFoundPage";
 import Select from "./components/ui/Select";
 import Modal from "./components/ui/Modal";
-import { HV_THRESHOLD, maxSteigerung, checkHvForInvoice, hvProblemText, maxGesamtWithin, hvSignedDate } from "./utils/hvRules";
+import { HV_THRESHOLD, maxSteigerung, checkHvForInvoice, hvProblemText, maxGesamtWithin, hvSignedDate, HV_WAIVER_TEXT, HV_WAIVER_VERSION } from "./utils/hvRules";
+import { recordHvWaiver } from "./lib/supabase/hvWaivers";
 
 // Rechnung/HV form: a page of its own, or the shared modal on the patient page
 const CreateFormShell = ({ enabled, title, onClose, children }) => (enabled
@@ -170,6 +171,7 @@ export default function EphiaInvoice() {
   const [hvOnlyMode, setHvOnlyMode] = useState(false);
   const [beratungOnly, setBeratungOnly] = useState(false); // consultation-only invoice (no Präparat/Injektion)
   const [fromHvId, setFromHvId] = useState(null); // ID of imported HV
+  const [hvVerzicht, setHvVerzicht] = useState(false); // doctor confirmed billing above 3,5-fach without an HV in the app
   const [hvBaseGesamt, setHvBaseGesamt] = useState(null); // original HV Gesamtbetrag (brutto)
   const [hvBaseProductCost, setHvBaseProductCost] = useState(null); // original HV product cost (ml * preisProMl)
   const [hvBaseSachkosten, setHvBaseSachkosten] = useState(0); // original HV sachkosten (always 0 for HVs)
@@ -1046,8 +1048,11 @@ export default function EphiaInvoice() {
   const formHvCheck = formAboveHv && !legacyEmbeddedHv
     ? checkHvForInvoice(fromHvId ? invoices.find((i) => i.id === fromHvId) : null, formTreatmentDate, liveItems)
     : { ok: true };
-  const hvBlocked = formAboveHv && !legacyEmbeddedHv && !formHvCheck.ok;
-  const maxGesamtWithoutHv = hvBlocked
+  const hvMissing = formAboveHv && !legacyEmbeddedHv && !formHvCheck.ok;
+  // The doctor may knowingly bill without an HV in the app (e.g. invoices only); confirmed and recorded
+  const hvWaiverUsed = hvMissing && hvVerzicht;
+  const hvBlocked = hvMissing && !hvVerzicht;
+  const maxGesamtWithoutHv = hvMissing
     ? maxGesamtWithin((g) => buildLineItems(praeparat || "Präparat", ml, preisProMl, selectedZuschlaege, sachkosten,
         calcWeightedForGesamt(g, ml, preisProMl, selectedZuschlaege, sachkosten, noMwst, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly),
         einheit, useBeratungLang, ganzeAmpulle, ampullenpreis, isBeratungOnly), wunschGesamt)
@@ -1110,6 +1115,16 @@ export default function EphiaInvoice() {
       return;
     }
     setValidationErrors({});
+    if (hvWaiverUsed && session) {
+      // Proof that the § 2 GOÄ notice was confirmed; no patient data. Without it, nothing is saved.
+      try {
+        await recordHvWaiver(session.access_token, { context: "rechnung", maxSteigerung: maxSteigerung(liveItems) });
+      } catch (e) {
+        console.error("Failed to record HV waiver:", e);
+        showErrorToast("Die Bestätigung konnte nicht gespeichert werden, die Rechnung wurde daher nicht erstellt. Bitte versuche es erneut. (" + (e?.message || e) + ")");
+        return;
+      }
+    }
     setIsSaving(true);
 
     // Save practice settings (plaintext — doctor's own business data)
@@ -1352,6 +1367,7 @@ export default function EphiaInvoice() {
       treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
       // Zahlungseingang: kept when editing, otherwise the invoice date (paid at the practice)
+      hvVerzicht: hvWaiverUsed ? { at: new Date().toISOString(), version: HV_WAIVER_VERSION } : undefined,
       paidAt: (!hvOnlyMode && markAsPaid)
         ? ((amendingId && invoices.find((i) => i.id === amendingId)?.paidAt) || invoiceMeta.datum || todayLocal())
         : undefined,
@@ -1596,6 +1612,7 @@ export default function EphiaInvoice() {
     setHvOnlyMode(true); setBeratungOnly(false);
     setAmendingId(null);
     setFromHvId(null);
+    setHvVerzicht(false);
     setHvBaseGesamt(null);
     setHvBaseProductCost(null);
     setHvBaseSachkosten(0);
@@ -1614,6 +1631,7 @@ export default function EphiaInvoice() {
   const switchRechnungFormToHv = () => {
     setHvOnlyMode(true);
     setFromHvId(null);
+    setHvVerzicht(false);
     setMarkAsPaid(false);
     setValidationErrors({});
     setInvoiceMeta((m) => ({ ...m, nummer: "", datum: todayLocal() }));
@@ -1662,6 +1680,7 @@ export default function EphiaInvoice() {
     setAmendingId(null);
     setAppliedVoucher(null); setVoucherLookupError("");
     setFromHvId(null);
+    setHvVerzicht(false);
     setHvBaseGesamt(null);
     setHvBaseProductCost(null);
     setHvBaseSachkosten(0);
@@ -1704,6 +1723,7 @@ export default function EphiaInvoice() {
     setHvOnlyMode(fromTab === "honorar" ? true : !!inv._hvOnly);
     setBeratungOnly(!!inv.beratungOnly);
     setFromHvId(inv._fromHvId || null);
+    setHvVerzicht(!!inv.hvVerzicht);
     setHvBaseGesamt(null);
     setHvBaseProductCost(null);
     setHvBaseSachkosten(0);
@@ -3514,8 +3534,8 @@ export default function EphiaInvoice() {
                     <div className="mt-2 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
                       Honorarvereinbarung verknüpft, unterschrieben am {formHvCheck.signedOn ? formHvCheck.signedOn.split("-").reverse().join(".") : "?"}, vor der Behandlung. Anforderungen gemäß § 2 GOÄ erfüllt.
                     </div>
-                  ) : hvBlocked ? (
-                    <div id="field-hvRequired" className={`mt-2 px-3 py-2 rounded text-xs border ${validationErrors.hvRequired ? "bg-red-50 border-red-300 text-red-700" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                  ) : hvMissing ? (
+                    <div id="field-hvRequired" className={`mt-2 px-3 py-2 rounded text-xs border ${validationErrors.hvRequired ? "bg-red-50 border-red-300 text-red-700" : hvVerzicht ? "bg-gray-50 border-[#DFE3EB] text-gray-700" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
                       <p>{hvProblemText(formHvCheck, formTreatmentDate)}</p>
                       {formHvCheck.reason === "missing" && (
                         <>
@@ -3538,6 +3558,12 @@ export default function EphiaInvoice() {
                           Gesamtbetrag auf {maxGesamtWithoutHv.toFixed(2).replace(".", ",")} € setzen (höchstens 3,5-fach)
                         </button>
                       )}
+                      <label className="mt-2.5 pt-2.5 border-t border-current/10 flex items-start gap-2 cursor-pointer">
+                        <span className="flex items-center h-4 flex-shrink-0">
+                          <input type="checkbox" className="m-0 w-3.5 h-3.5 rounded" checked={hvVerzicht} onChange={(e) => { setHvVerzicht(e.target.checked); clearError("hvRequired"); }} />
+                        </span>
+                        <span className="leading-4">{HV_WAIVER_TEXT}</span>
+                      </label>
                     </div>
                   ) : null}
                   {needsBegruendung && (
@@ -3614,6 +3640,7 @@ export default function EphiaInvoice() {
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
                     paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
+                    hvVerzicht={hvWaiverUsed}
                   />
                 )}
               </PreviewScaler>
@@ -3671,6 +3698,7 @@ export default function EphiaInvoice() {
                     targetGesamt={wunschGesamt > 0 ? wunschGesamt : undefined}
                     voucherRedemption={liveVoucherRedemption}
                     paymentStatus={markAsPaid ? "bezahlt" : "ausstehend"}
+                    hvVerzicht={hvWaiverUsed}
                   />
                 )}
               </MobileScaledPreview>
@@ -4225,7 +4253,17 @@ export default function EphiaInvoice() {
                 await syncBehandlungToDoc(updated, previous?.treatmentDoc?.behandlungsDatum);
               }
             }}
-            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, begruendung: qBegruendung, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
+            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, begruendung: qBegruendung, hvVerzicht: qHvVerzicht, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
+              if (qHvVerzicht && session) {
+                // Proof that the § 2 GOÄ notice was confirmed; without it the Rechnung is not created
+                try {
+                  await recordHvWaiver(session.access_token, { context: "schnellrechnung", maxSteigerung: maxSteigerung(lineItems) });
+                } catch (e) {
+                  console.error("Failed to record HV waiver:", e);
+                  showErrorToast("Die Bestätigung konnte nicht gespeichert werden, die Rechnung wurde daher nicht erstellt. Bitte versuche es erneut. (" + (e?.message || e) + ")");
+                  throw e;
+                }
+              }
               try {
                 // Resolve decrypted patient data: _raw.data (from edit flows) > .data (from list) > top-level fields
                 const rawData = selectedPatient._raw?.data;
@@ -4252,6 +4290,7 @@ export default function EphiaInvoice() {
                   treatmentDoc: treatment.treatmentDoc || null,
                   attachTreatmentPdf: !!qAttachTreatment,
                   begruendung: qBegruendung || "",
+                  hvVerzicht: qHvVerzicht ? { at: new Date().toISOString(), version: HV_WAIVER_VERSION } : undefined,
                   paymentStatus: "ausstehend",
                   _kleinunternehmer: !!practice.kleinunternehmer,
                   _practice: practiceForDocument(practice),
@@ -4595,7 +4634,7 @@ export default function EphiaInvoice() {
                     <HonorarvereinbarungPreview practice={viewPractice} patient={(linkedHV || viewingInvoice).patient} invoiceMeta={(linkedHV || viewingInvoice).invoiceMeta} lineItems={(linkedHV || viewingInvoice).lineItems} isStandalone={!!(linkedHV ? linkedHV._hvOnly : viewingInvoice._hvOnly)} signatures={(linkedHV || viewingInvoice)._signatures} onSignatureClick={() => setShowSignatureModal(true)} onDoctorSign={(linkedHV || viewingInvoice)._signatures?.patient && !(linkedHV || viewingInvoice)._signatures?.doctor ? () => setShowHvDoctorSign(true) : undefined} />
                   )
                 ) : (
-                  <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
+                  <InvoicePreview hvVerzicht={!!viewingInvoice.hvVerzicht} practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                 )}
               </div>
             </div>
@@ -4631,7 +4670,7 @@ export default function EphiaInvoice() {
                       <HonorarvereinbarungPreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} isStandalone={!!viewingInvoice._hvOnly} signatures={viewingInvoice._signatures} onSignatureClick={() => setShowSignatureModal(true)} onDoctorSign={viewingInvoice._signatures?.patient && !viewingInvoice._signatures?.doctor ? () => setShowHvDoctorSign(true) : undefined} />
                     )
                   ) : (
-                    <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
+                    <InvoicePreview hvVerzicht={!!viewingInvoice.hvVerzicht} practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                   )}
                 </div>
               </div>
