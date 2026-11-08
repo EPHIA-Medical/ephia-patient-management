@@ -1,9 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
 import { fmtDate } from "../../utils/helpers";
 import { invoiceGesamt } from "../../utils/invoiceTotals";
 import { spawnConfetti } from "../ui/ConfettiBurst";
 
 const fmtEuro = (n) => (n || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+
+// Date of the Zahlungseingang under the paid button; click to change it
+function PaidDate({ inv, onChange }) {
+  const [editing, setEditing] = useState(false);
+  if (!onChange) return inv.paidAt ? <span className="text-[11px] text-gray-400">am {fmtDate(inv.paidAt)}</span> : null;
+  if (editing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        defaultValue={inv.paidAt || ""}
+        className="border border-[#DFE3EB] rounded px-1.5 py-0.5 text-xs bg-white"
+        style={{ colorScheme: "light" }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") { e.currentTarget.dataset.cancel = "1"; e.currentTarget.blur(); }
+        }}
+        onBlur={(e) => {
+          const v = e.currentTarget.value;
+          setEditing(false);
+          if (e.currentTarget.dataset.cancel || !v || v === inv.paidAt) return;
+          onChange(v);
+        }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="text-[11px] text-gray-400 hover:text-blue-600 hover:underline"
+      title="Datum des Zahlungseingangs ändern"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+    >
+      {inv.paidAt ? `am ${fmtDate(inv.paidAt)}` : "Datum eintragen"}
+    </button>
+  );
+}
 
 // Rechnungen of one patient: open/paid totals, one row per Rechnung with a
 // payment toggle. Clicking a row opens the Rechnung (modal on the patient page).
@@ -59,10 +98,11 @@ export default function PatientInvoicesTab({ invoices, behandlungen, kleinuntern
                   )}
                 </div>
                 <span className="text-sm text-gray-700 tabular-nums flex-shrink-0">{fmtEuro(gesamt)}</span>
+                <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                 {onSetPaymentStatus ? (
                   <button
                     type="button"
-                    title={paid ? "Als ausstehend markieren" : "Als bezahlt markieren"}
+                    title={paid ? `Bezahlt${inv.paidAt ? ` am ${fmtDate(inv.paidAt)}` : ""}. Klicken, um als ausstehend zu markieren` : "Als bezahlt markieren (Zahlungseingang heute)"}
                     className={`text-xs px-2.5 py-1 rounded-full font-medium transition flex-shrink-0 ${paid ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
                     style={{ minWidth: 84 }}
                     onClick={(e) => {
@@ -76,6 +116,8 @@ export default function PatientInvoicesTab({ invoices, behandlungen, kleinuntern
                 ) : (
                   <span className={`text-xs flex-shrink-0 ${paid ? "text-green-600" : "text-amber-500"}`}>{paid ? "Bezahlt" : "Ausstehend"}</span>
                 )}
+                {paid && <PaidDate inv={inv} onChange={onSetPaymentStatus ? (date) => onSetPaymentStatus(inv, "bezahlt", date) : null} />}
+                </div>
               </div>
             </li>
           );

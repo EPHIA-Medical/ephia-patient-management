@@ -268,6 +268,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                     <button
                       className={`px-2.5 py-1 text-xs rounded-full font-medium transition ${isPaid ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
                       style={{ minWidth: 80 }}
+                      title={isPaid ? `Bezahlt${inv.paidAt ? ` am ${fmtDate(inv.paidAt)}` : ""}. Klicken, um als ausstehend zu markieren` : "Als bezahlt markieren (Zahlungseingang heute)"}
                       onClick={(e) => { if (!isPaid) spawnConfetti(e.currentTarget); if (onUpdateInvoice) onUpdateInvoice({ ...inv, paymentStatus: isPaid ? "ausstehend" : "bezahlt" }); }}
                     >
                       {isPaid ? "Bezahlt" : "Ausstehend"}

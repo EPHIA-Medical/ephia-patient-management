@@ -19,7 +19,7 @@ export default function PatientBehandlungenSidebar({
   const renderStatus = (doc, status) => (status.payment && onSetPaymentStatus ? (
     <button
       type="button"
-      title={status.paid ? "Als ausstehend markieren" : "Als bezahlt markieren"}
+      title={status.paid ? `Bezahlt${status.paidAt ? ` am ${fmtDate(status.paidAt)}` : ""}. Klicken, um als ausstehend zu markieren` : "Als bezahlt markieren (Zahlungseingang heute)"}
       className={`text-xs px-2 py-0.5 rounded-full font-medium transition ${status.paid ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
       onClick={(e) => {
         e.stopPropagation();

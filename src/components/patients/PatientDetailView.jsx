@@ -185,7 +185,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     }
     // A Behandlungsdoku has no payment of its own: once saved it is documented
     if ((inv._standalone || inv._treatmentDocOnly) || inv._docType === "behandlungsdoku") return { label: "Dokumentiert", color: "text-green-600", done: true };
-    if (inv.paymentStatus === "bezahlt") return { label: "Bezahlt", color: "text-green-600", payment: true, paid: true };
+    if (inv.paymentStatus === "bezahlt") return { label: "Bezahlt", color: "text-green-600", payment: true, paid: true, paidAt: inv.paidAt };
     return { label: "Ausstehend", color: "text-amber-500", payment: true, paid: false };
   };
 

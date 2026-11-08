@@ -22,7 +22,7 @@ import {
   computePatientHash, getPatientIdentifier
 } from "./lib/crypto";
 import { DEFAULT_PRACTICE, AUTO_LOGOUT_MS, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "./constants";
-import { parseDE, evalAmount, fmt, fmtDate, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
+import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
 import { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen } from "./components/auth/AuthScreens";
@@ -1284,6 +1284,10 @@ export default function EphiaInvoice() {
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
       treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
+      // Zahlungseingang: kept when editing, otherwise the invoice date (paid at the practice)
+      paidAt: (!hvOnlyMode && markAsPaid)
+        ? ((amendingId && invoices.find((i) => i.id === amendingId)?.paidAt) || invoiceMeta.datum || todayLocal())
+        : undefined,
       indicationType: hvOnlyMode ? undefined : indicationType,
       _fromHvId: fromHvId || undefined,
       _kleinunternehmer: !!practice.kleinunternehmer,
@@ -1926,16 +1930,18 @@ export default function EphiaInvoice() {
     await updateDocAdapter(supabaseId, modified);
   };
 
-  // Mark a Rechnung as paid / outstanding (Dokumente list and patient page).
-  // Only paymentStatus changes; on failure the change is undone and shown.
-  const setInvoicePaymentStatus = async (inv, status) => {
-    const updated = { ...inv, paymentStatus: status };
+  // Mark a Rechnung as paid / outstanding (Dokumente list and patient page),
+  // or change the date of the Zahlungseingang. Only paymentStatus and paidAt
+  // change; on failure the change is undone and shown.
+  const setInvoicePaymentStatus = async (inv, status, paidAtDate) => {
+    const paidAt = status === "bezahlt" ? (paidAtDate || todayLocal()) : null;
+    const updated = { ...inv, paymentStatus: status, paidAt: paidAt || undefined };
     setInvoices((prev) => prev.map((i) => (i.id === inv.id ? updated : i)));
     if (viewingInvoice && viewingInvoice.id === inv.id) setViewingInvoice(updated);
     if (!session || !inv._supabaseId) return;
     try {
-      await e2eeFetchModifySave(session.access_token, inv._supabaseId, { paymentStatus: status });
-      logActivity(inv._patientDbId, "rechnung", inv._supabaseId, "updated", `Zahlungsstatus: ${status === "bezahlt" ? "Bezahlt" : "Ausstehend"}`);
+      await e2eeFetchModifySave(session.access_token, inv._supabaseId, { paymentStatus: status, paidAt });
+      logActivity(inv._patientDbId, "rechnung", inv._supabaseId, "updated", status === "bezahlt" ? `Zahlungseingang am ${fmtDate(paidAt)}` : "Zahlungsstatus: Ausstehend");
     } catch (e) {
       console.error("Failed to persist payment status:", e);
       setInvoices((prev) => prev.map((i) => (i.id === inv.id ? inv : i)));

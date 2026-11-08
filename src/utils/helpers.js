@@ -75,6 +75,13 @@ export function fmtDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Today as YYYY-MM-DD in local time (toISOString would give UTC, i.e. the
+// previous day shortly after midnight in Germany)
+export function todayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function parseDE(str) {
   if (!str || str === "" || str === "," || str === "-") return 0;
   const cleaned = str.replace(",", ".");
