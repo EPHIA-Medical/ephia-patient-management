@@ -3,13 +3,14 @@ import { fmtDate, fmtPhone, evalAmount, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { MARKER_COLORS, markerColor, markerLabel, markerTextColor, fmtNum } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr } from "../../utils/praeparate";
+import { isVector, vectorSummary, makeVectorImage } from "../treatment/vectors";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
 // Pre-render a labelled pill as a tiny canvas → data URL image
 // html2canvas renders <img> tags perfectly, unlike CSS text centering.
 // Returns { src, w, h } in CSS pixels (drawn at 2x for sharpness).
-export function makeDotImage(label, color = "#dc2626") {
+export function makeDotImage(label, color = "#dc2626", hollow = false) {
   const h = 40; // 2x of 20px
   const fontPx = Math.round(h * 0.5);
   const c = document.createElement("canvas");
@@ -27,9 +28,19 @@ export function makeDotImage(label, color = "#dc2626") {
   ctx2.lineTo(r, h);
   ctx2.arc(r, r, r, Math.PI / 2, -Math.PI / 2);
   ctx2.closePath();
-  ctx2.fillStyle = color;
-  ctx2.fill();
-  ctx2.fillStyle = markerTextColor(color);
+  if (hollow) {
+    // Entry point of a line or fan: open pill with coloured border
+    ctx2.fillStyle = "#ffffff";
+    ctx2.fill();
+    ctx2.lineWidth = 4;
+    ctx2.strokeStyle = color;
+    ctx2.save(); ctx2.clip(); ctx2.stroke(); ctx2.restore();
+    ctx2.fillStyle = markerTextColor(color) === "#111827" ? "#111827" : color;
+  } else {
+    ctx2.fillStyle = color;
+    ctx2.fill();
+    ctx2.fillStyle = markerTextColor(color);
+  }
   ctx2.font = `bold ${fontPx}px Arial, sans-serif`;
   ctx2.textAlign = "center";
   ctx2.textBaseline = "middle";
@@ -59,8 +70,12 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   const patName = [pat.vorname, pat.nachname].filter(Boolean).join(" ") || pat.name || "";
 
   // Pre-generate dot images for all markers (memoized on their content)
-  const markersKey = JSON.stringify(markers.map((m) => [m.amount, m.color || "", m.p || 0])) + praepCount;
-  const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i, praepCount), markerColor(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const markersKey = JSON.stringify(markers.map((m) => [m.amount, m.color || "", m.p || 0, m.kind || ""])) + praepCount;
+  const dotImages = React.useMemo(() => markers.map((m, i) => makeDotImage(markerLabel(m, i, praepCount), markerColor(m), isVector(m))), [markersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Lines and fans drawn into one PNG over the face (SVG would be dropped by html2canvas in some browsers)
+  const vectors = markers.map((m, idx) => ({ m, idx })).filter(({ m }) => isVector(m));
+  const vectorsKey = JSON.stringify(vectors.map(({ m }) => [m.x, m.y, m.to, m.tool || "", m.color || ""]));
+  const vectorImage = React.useMemo(() => makeVectorImage(markers, 340), [vectorsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Legend grouped by colour: count of points and units per colour
   const colorGroups = (() => {
@@ -149,6 +164,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
             {/* Face diagram */}
             <div style={{ position: "relative", width: "340px", height: "340px", flexShrink: 0, border: "1px solid #e5e5e5", borderRadius: "6px", overflow: "hidden", background: "#fafafa" }}>
               <img src={facePhoto || FACE_IMAGE_B64} alt="Gesicht" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              {vectorImage && <img src={vectorImage} alt="" style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", zIndex: 5 }} />}
               {markers.map((m, idx) => {
                 const d = dotImages[idx] || { src: "", w: 20, h: 20 };
                 return (
@@ -175,6 +191,16 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
               <div style={{ marginTop: multiColor ? "6px" : 0, fontWeight: 600 }}>
                 {markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && (!multiPraep || sameEinh) ? ` · ${totalStr} ${einh} gesamt` : ""}
               </div>
+              {vectors.length > 0 && (
+                <div style={{ marginTop: "10px" }}>
+                  <div style={{ color: "#666", marginBottom: "4px" }}>Gefüllter Punkt: Injektion. Offener Kreis: Eintrittspunkt, Pfeil: Vorschubrichtung. Durchgezogen: Nadel, gestrichelt: Kanüle.</div>
+                  {vectors.map(({ m, idx }) => (
+                    <div key={idx} style={{ marginBottom: "2px" }}>
+                      {idx + 1}. {vectorSummary(m)}{evalAmount(m.amount) > 0 ? ` · ${fmtNum(evalAmount(m.amount))} ${einh}` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

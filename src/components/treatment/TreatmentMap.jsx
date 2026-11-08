@@ -4,6 +4,7 @@ import { FACE_IMAGE_B64 } from "../../constants";
 import { trackEvent } from "../../lib/analytics";
 import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 import { markerPraepIdx } from "../../utils/praeparate";
+import { useVectorTools, VectorToolbar, VectorLayer, vectorSummary, isVector } from "./vectors";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -61,6 +62,13 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     if (!val) return;
     const existing = [...markers].reverse().find((m) => sameAmount(m.amount, val));
     if (existing) setActiveColor(markerColor(existing));
+  };
+
+  // Lines and fans (needle/cannula vectors) next to single points
+  const vt = useVectorTools({ markers, setMarkers, color: activeColor, amount: activeAmount, praep: multiPraep ? activePraep : 0 });
+  const facePos = (e) => {
+    const rect = modalRef.current.getBoundingClientRect();
+    return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 };
   };
 
   // Pinch-to-zoom state for the modal face map
@@ -136,6 +144,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     const faceH = rect.height;
     const x = (rawX / faceW) * 100;
     const y = (rawY / faceH) * 100;
+    if (vt.handleClick(x, y)) return;
     const point = { id: Date.now(), x, y, amount: activeAmount, color: activeColor };
     if (multiPraep && activePraep > 0) point.p = activePraep;
     setMarkers([...markers, point]);
@@ -158,6 +167,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   };
 
   const handleSave = () => {
+    vt.finish();
     setSaved(true);
     setModalOpen(false);
     if (onAutoSave) onAutoSave(markers);
@@ -174,6 +184,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
       <div className="flex flex-col sm:flex-row gap-4" style={{ alignItems: "flex-start" }}>
         <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none flex-shrink-0" style={{ width: 250, height: 250, background: "#fafafa" }}>
           <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+          <VectorLayer markers={markers} />
           {markers.map((m, idx) => (
             <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
               <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow praepCount={praepCount} />
@@ -190,6 +201,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     <MarkerDot marker={m} idx={idx} size={20} fontSize={10} praepCount={praepCount} />
                     <input type="text" inputMode="decimal" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded bg-gray-50" value={m.amount} readOnly />
                     <span className="text-xs text-gray-400">{unitFor(m)}</span>
+                    {isVector(m) && <span className="text-[11px] text-gray-500">{vectorSummary(m)}</span>}
                   </div>
                 ))}
               </div>
@@ -218,6 +230,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
           <div>
             <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:opacity-90 transition" style={{ width: 200, height: 200, background: "#fafafa" }} onClick={() => setModalOpen(true)} title="Klicken zum Bearbeiten">
               <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+              <VectorLayer markers={markers} />
               {markers.map((m, idx) => (
                 <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                   <MarkerDot marker={m} idx={idx} size={15} fontSize={8} shadow praepCount={praepCount} />
@@ -268,6 +281,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 <span className="sm:hidden">{multiPraep ? "Präparat, Dosis und Farbe wählen" : "Dosis und Farbe wählen"}, dann auf das Gesicht tippen. Zwei Finger zum Zoomen.</span>
               </p>
               <p className="text-xs text-amber-500 mb-2">Die Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <div className="mb-2"><VectorToolbar vt={vt} /></div>
               {multiPraep && <div className="mb-2"><PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} /></div>}
               <div className="mb-2"><DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} /></div>
               <div className="mb-3"><ColorSwatches value={activeColor} onChange={setActiveColor} /></div>
@@ -289,10 +303,15 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     <div
                       ref={modalRef}
                       onClick={handleClick}
+                      onMouseMove={(e) => { if (modalRef.current && (vt.lineStart || vt.activeFan)) { const p = facePos(e); vt.handleMove(p.x, p.y); } }}
                       className="relative w-full h-full"
                       style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isPinching.current ? "none" : "transform 0.15s ease-out" }}
                     >
                       <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                      <VectorLayer markers={markers} preview={vt.preview} />
+                      {vt.lineStart && (
+                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12, height: 12, transform: "translate(-50%, -50%)", zIndex: 11 }} />
+                      )}
                       {markers.map((m, idx) => (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                           <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
@@ -335,7 +354,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 <div className="flex-shrink-0 sm:overflow-y-auto" style={{ width: isMobile ? "100%" : 220, maxHeight: isMobile ? "none" : faceSize }}>
                   <div className="space-y-1.5">
                     {markers.map((m, idx) => (
-                      <div key={m.id} className="flex items-center gap-1.5">
+                      <React.Fragment key={m.id}>
+                      <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
                         <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
                           <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
@@ -343,10 +363,12 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                         <PraeparatBadge marker={m} praeparate={praepList} onCycle={(p) => setPraep(m.id, p)} />
                         <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => updateAmount(m.id, e.target.value)} />
                         <span className="text-xs text-gray-400">{unitFor(m)}</span>
-                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => removeMarker(m.id)} title="Löschen">
+                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => { if (vt.activeFan?.id === m.id) vt.finish(); removeMarker(m.id); }} title="Löschen">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
+                      {isVector(m) && <div className="pl-6 -mt-1 text-[11px] text-gray-500">{vectorSummary(m)}</div>}
+                      </React.Fragment>
                     ))}
                   </div>
                 </div>

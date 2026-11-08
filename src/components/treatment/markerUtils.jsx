@@ -1,6 +1,7 @@
 import React from "react";
 import { evalAmount } from "../../utils/helpers";
 import { praepLetter, markerPraepIdx } from "../../utils/praeparate";
+import { isVector, serializeVector } from "./vectors";
 
 // ═══════════════════ Shared injection-point helpers ═══════════════════
 // Markers are stored as { x, y, amount, color? }. `color` is optional and new;
@@ -67,18 +68,25 @@ export const markerLabel = (m, idx, praepCount = 1) => {
   return praepCount > 1 ? `${base}${praepLetter(markerPraepIdx(m, praepCount))}` : base;
 };
 
-// Strip runtime ids before persisting (keeps colour and Präparat when set)
-export const serializeMarkers = (markers) => (markers || []).map((m) => {
-  const out = { x: m.x, y: m.y, amount: m.amount };
-  if (m.color) out.color = m.color;
-  if (Number.isInteger(m.p) && m.p > 0) out.p = m.p;
-  return out;
-});
+// Strip runtime ids before persisting (keeps colour and Präparat when set; lines and
+// fans keep their kind, end points, instrument and depth; fans without arms are dropped)
+export const serializeMarkers = (markers) => (markers || [])
+  .filter((m) => !(m.kind === "fan" && !(m.to || []).length))
+  .map((m) => {
+    const out = { x: m.x, y: m.y, amount: m.amount };
+    if (m.color) out.color = m.color;
+    if (Number.isInteger(m.p) && m.p > 0) out.p = m.p;
+    if (isVector(m)) Object.assign(out, serializeVector(m));
+    return out;
+  });
 
 // Pill-shaped dot that grows with its label (e.g. "12,5")
 export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false, style = {}, praepCount = 1 }) {
   const label = markerLabel(marker, idx, praepCount);
   const bg = markerColor(marker);
+  // Entry point of a line or fan: open circle in the marker colour (face-chart convention)
+  const hollow = isVector(marker);
+  const hollowText = markerTextColor(bg) === "#111827" ? "#111827" : bg;
   return (
     <span
       className="flex items-center justify-center font-bold select-none flex-shrink-0"
@@ -87,8 +95,10 @@ export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false
         height: size,
         padding: label.length > 2 ? `0 ${Math.round(size * 0.3)}px` : 0,
         borderRadius: 999,
-        background: bg,
-        color: markerTextColor(bg),
+        background: hollow ? "#ffffff" : bg,
+        color: hollow ? hollowText : markerTextColor(bg),
+        border: hollow ? `${Math.max(1.5, Math.round(size / 9))}px solid ${bg}` : "none",
+        boxSizing: "border-box",
         fontSize,
         lineHeight: 1,
         boxShadow: shadow ? "0 0 3px rgba(0,0,0,0.35)" : "none",

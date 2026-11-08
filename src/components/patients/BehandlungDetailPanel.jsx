@@ -5,6 +5,7 @@ import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMark
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
+import { useVectorTools, VectorToolbar, VectorLayer, vectorSummary, isVector } from "../treatment/vectors";
 import { HV_THRESHOLD, maxGesamtWithin, HV_WAIVER_TEXT } from "../../utils/hvRules";
 
 export default function BehandlungDetailPanel({
@@ -50,6 +51,8 @@ export default function BehandlungDetailPanel({
   const praeparate = getPraeparate({ ...td, praeparat: praep, einheit: einh });
   const praepCount = praeparate.length;
   const multiPraep = praepCount > 1;
+  // Lines and fans in the inline face editor (same tools as in the Behandlungsdoku form)
+  const inlineVt = useVectorTools({ markers: inlineTempMarkers, setMarkers: setInlineTempMarkers, color: inlineEditColor, amount: "", praep: multiPraep ? inlineEditPraep : 0 });
   const praepTotals = praeparatTotals({ ...td, praeparat: praep, einheit: einh });
   const unitFor = (m) => (multiPraep ? (praeparate[markerPraepIdx(m, praepCount)]?.einheit || einh) : einh);
   const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : "–";
@@ -140,6 +143,7 @@ export default function BehandlungDetailPanel({
               {markerCount > 0 ? (
                 <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }}>
                   <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                  <VectorLayer markers={td.markers || []} />
                   {(td.markers || []).map((m, idx) => (
                     <div key={idx} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                       <MarkerDot marker={m} idx={idx} size={26} fontSize={12} shadow praepCount={praepCount} />
@@ -249,6 +253,7 @@ export default function BehandlungDetailPanel({
                         <MarkerDot marker={m} idx={idx} size={22} fontSize={11} praepCount={praepCount} />
                         <span className="text-sm text-gray-700">{m.amount}{String(m.amount).match(/[xX×*]/) ? ` = ${evalAmount(m.amount)}` : ""} {unitFor(m)}</span>
                         {multiPraep && <span className="text-xs text-gray-400">{praeparate[markerPraepIdx(m, praepCount)]?.name || `Präparat ${praepLetter(markerPraepIdx(m, praepCount))}`}</span>}
+                        {isVector(m) && <span className="text-xs text-gray-500">{vectorSummary(m)}</span>}
                       </div>
                     ))}
                   </div>
@@ -564,6 +569,7 @@ export default function BehandlungDetailPanel({
           const rect = faceModalRef.current.getBoundingClientRect();
           const x = ((e.clientX - rect.left) / rect.width) * 100;
           const y = ((e.clientY - rect.top) / rect.height) * 100;
+          if (inlineVt.handleClick(x, y)) return;
           const hit = inlineTempMarkers.find((m) => Math.abs(m.x - x) < 3.5 && Math.abs(m.y - y) < 3.5);
           if (hit) { setInlineTempMarkers(inlineTempMarkers.filter((m) => m.id !== hit.id)); return; }
           const tooClose = inlineTempMarkers.some((m) => Math.abs(m.x - x) < 2 && Math.abs(m.y - y) < 2);
@@ -573,6 +579,7 @@ export default function BehandlungDetailPanel({
           setInlineTempMarkers([...inlineTempMarkers, point]);
         };
         const saveFaceMarkers = () => {
+          inlineVt.finish();
           const updatedTd = withPraeparate({ ...inv.treatmentDoc, markers: serializeMarkers(inlineTempMarkers) }, praeparate);
           const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
           if (onUpdateInvoice) onUpdateInvoice(updated);
@@ -590,13 +597,23 @@ export default function BehandlungDetailPanel({
               </div>
               <p className="text-xs text-gray-400 mb-1">Klicke auf das Gesicht, um Injektionspunkte zu setzen.</p>
               <p className="text-xs text-amber-500 mb-2">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Pr&auml;parats &uuml;bernommen. In den Punkten werden die Einheiten angezeigt.</p>
+              <div className="mb-2"><VectorToolbar vt={inlineVt} /></div>
               {multiPraep && <div className="mb-2"><PraeparatChips praeparate={praeparate} value={inlineEditPraep} onChange={setInlineEditPraep} /></div>}
               <div className="mb-3"><ColorSwatches value={inlineEditColor} onChange={setInlineEditColor} /></div>
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 overflow-y-auto">
                 <div className="flex-shrink-0">
                   <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: faceSzFE, height: faceSzFE, cursor: "crosshair", background: "#fafafa" }}>
-                    <div ref={faceModalRef} onClick={handleFaceClickFE} className="relative w-full h-full">
+                    <div
+                      ref={faceModalRef}
+                      onClick={handleFaceClickFE}
+                      onMouseMove={(e) => { if (faceModalRef.current && (inlineVt.lineStart || inlineVt.activeFan)) { const r = faceModalRef.current.getBoundingClientRect(); inlineVt.handleMove(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100); } }}
+                      className="relative w-full h-full"
+                    >
                       <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                      <VectorLayer markers={inlineTempMarkers} preview={inlineVt.preview} />
+                      {inlineVt.lineStart && (
+                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${inlineVt.lineStart.x}%`, top: `${inlineVt.lineStart.y}%`, width: 12, height: 12, transform: "translate(-50%, -50%)", zIndex: 11 }} />
+                      )}
                       {inlineTempMarkers.map((m, idx) => (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                           <MarkerDot marker={m} idx={idx} size={21} fontSize={11} shadow praepCount={praepCount} />
