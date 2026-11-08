@@ -242,3 +242,30 @@ export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte
     </div>
   );
 }
+
+// Live Gesamtmenge under the editor's point list: one total, or one row per Präparat
+export function LiveTotal({ markers, praeparate, einheit }) {
+  const list = Array.isArray(praeparate) && praeparate.length > 1 ? praeparate : null;
+  const sum = (ms) => Math.round(ms.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
+  if (!(markers || []).length) return null;
+  const rows = list
+    ? list.map((p, i) => {
+        const own = markers.filter((m) => markerPraepIdx(m, list.length) === i);
+        return { key: i, label: <><span className="font-bold mr-1">{praepLetter(i)}</span>{p.name || `Präparat ${praepLetter(i)}`}</>, units: sum(own), einheit: p.einheit || einheit, count: own.length };
+      }).filter((r) => r.count > 0)
+    : [{ key: 0, label: "Gesamtmenge", units: sum(markers), einheit, count: markers.length }];
+  return (
+    <div className="mt-3 pt-2.5 border-t border-gray-100">
+      {list && <p className="text-xs text-gray-500 mb-1">Gesamtmenge</p>}
+      <div className="space-y-1">
+        {rows.map((r) => (
+          <div key={r.key} className="flex items-baseline justify-between gap-3 text-sm">
+            <span className={list ? "text-gray-600 text-xs" : "text-gray-700 font-medium"}>{r.label}</span>
+            <span className="font-semibold text-gray-900 tabular-nums whitespace-nowrap">{fmtNum(r.units)} {r.einheit}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] text-gray-400">Wird beim Speichern als Menge des Präparats übernommen.</p>
+    </div>
+  );
+}

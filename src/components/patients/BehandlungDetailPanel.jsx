@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { fmtDate, todayLocal, parseDE, toDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber, fmtBetrag } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
-import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMarkers, markerColor, nextMarkerColor, fmtNum, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
+import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, LiveTotal, serializeMarkers, markerColor, nextMarkerColor, fmtNum, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
@@ -629,7 +629,8 @@ export default function BehandlungDetailPanel({
                 <div className="flex-shrink-0 overflow-y-auto" style={{ width: multiPraep ? 250 : 220, maxHeight: faceSzFE }}>
                   <div className="space-y-1.5">
                     {inlineTempMarkers.map((m, idx) => (
-                      <div key={m.id} className="flex items-center gap-1.5">
+                      <React.Fragment key={m.id}>
+                      <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
                         <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, color: nextMarkerColor(markerColor(mk)) } : mk))}>
                           <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
@@ -637,12 +638,15 @@ export default function BehandlungDetailPanel({
                         <PraeparatBadge marker={m} praeparate={praeparate} onCycle={(p) => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, p } : mk))} />
                         <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, amount: e.target.value } : mk))} />
                         <span className="text-xs text-gray-400">{unitFor(m)}</span>
-                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" onClick={() => setInlineTempMarkers(inlineTempMarkers.filter((mk) => mk.id !== m.id))} title="L&ouml;schen">
+                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" onClick={() => { if (inlineVt.activeFan?.id === m.id) inlineVt.finish(); setInlineTempMarkers(inlineTempMarkers.filter((mk) => mk.id !== m.id)); }} title="L&ouml;schen">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
+                      {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
+                      </React.Fragment>
                     ))}
                   </div>
+                  <LiveTotal markers={inlineTempMarkers} praeparate={multiPraep ? praeparate : null} einheit={einh} />
                 </div>
               </div>
               <div className="flex justify-end mt-4 pt-3 border-t border-gray-100">

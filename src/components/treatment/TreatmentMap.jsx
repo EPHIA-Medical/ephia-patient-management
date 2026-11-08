@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { trackEvent } from "../../lib/analytics";
-import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
+import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, LiveTotal, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 import { markerPraepIdx } from "../../utils/praeparate";
 import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EDITOR_LABEL_WIDTH } from "./vectors";
 
@@ -376,7 +376,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       </React.Fragment>
                     ))}
                   </div>
-                  {markers.length > 0 && <p className="mt-3 text-[11px] text-gray-400">Die Summe der Mengen wird als Gesamtmenge des Präparats übernommen.</p>}
+                  <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />
                 </div>
               </div>
             </div>
