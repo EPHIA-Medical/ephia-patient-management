@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { fmtDate, todayLocal, parseDE, toDE, evalAmount, buildLineItems, calcWeightedForGesamt, calcGesamt, fmtUnits, nextInvoiceNumber, fmtBetrag } from "../../utils/helpers";
-import { FACE_IMAGE_B64 } from "../../constants";
-import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, LiveTotal, serializeMarkers, markerColor, nextMarkerColor, fmtNum, DEFAULT_MARKER_COLOR } from "../treatment/markerUtils";
+import { MarkerDot, serializeMarkers, fmtNum } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
-import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EDITOR_LABEL_WIDTH } from "../treatment/vectors";
+import { VectorSummary, VectorLegend } from "../treatment/vectors";
+import TreatmentMap from "../treatment/TreatmentMap";
+import { ChartFigure } from "../treatment/ChartFigure";
+import { CHARTS, markerView, usedViews } from "../treatment/charts";
 import { HV_THRESHOLD, maxGesamtWithin, HV_WAIVER_TEXT } from "../../utils/hvRules";
 
 export default function BehandlungDetailPanel({
@@ -28,10 +30,10 @@ export default function BehandlungDetailPanel({
   const [editHinweis, setEditHinweis] = useState(false);
   const [inlineTempHinweis, setInlineTempHinweis] = useState("");
   const [inlineTempBetrag, setInlineTempBetrag] = useState("");
-  const [inlineEditColor, setInlineEditColor] = useState(DEFAULT_MARKER_COLOR);
-  const [inlineEditPraep, setInlineEditPraep] = useState(0);
   const [inlineTempMarkers, setInlineTempMarkers] = useState([]);
-  const faceModalRef = useRef(null);
+  const [inlineTempPhoto, setInlineTempPhoto] = useState("");
+  // Region shown in the large chart when points sit on several regions
+  const [displayView, setDisplayView] = useState(null);
 
   // Quick-invoice modal states (local to this component)
   const [quickInvoiceOpen, setQuickInvoiceOpen] = useState(false);
@@ -51,13 +53,13 @@ export default function BehandlungDetailPanel({
   const praeparate = getPraeparate({ ...td, praeparat: praep, einheit: einh });
   const praepCount = praeparate.length;
   const multiPraep = praepCount > 1;
-  // Lines and fans in the inline face editor (same tools as in the Behandlungsdoku form)
-  const inlineVt = useVectorTools({ markers: inlineTempMarkers, setMarkers: setInlineTempMarkers, color: inlineEditColor, amount: "", praep: multiPraep ? inlineEditPraep : 0 });
   const praepTotals = praeparatTotals({ ...td, praeparat: praep, einheit: einh });
   const unitFor = (m) => (multiPraep ? (praeparate[markerPraepIdx(m, praepCount)]?.einheit || einh) : einh);
   const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : "–";
   const hasInvoice = inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "—";
   const markerCount = (td.markers || []).length;
+  const detailViews = usedViews(td.markers || []);
+  const shownView = detailViews.includes(displayView) ? displayView : detailViews[0];
   const totalUnits = Math.round((td.markers || []).reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
   const totalUnitsStr = fmtUnits(td.markers || []);
   const sameEinh = praepTotals.every((t) => t.einheit === praepTotals[0].einheit);
@@ -80,7 +82,7 @@ export default function BehandlungDetailPanel({
   );
   const inputCls = "border border-[#DFE3EB] rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
 
-  const openFaceEditor = () => { setInlineTempMarkers((td.markers || []).map((m, i) => ({ id: Date.now() + i, ...m }))); setEditFace(true); };
+  const openFaceEditor = () => { setInlineTempMarkers((td.markers || []).map((m, i) => ({ id: Date.now() + i, ...m }))); setInlineTempPhoto(td.facePhoto || ""); setEditFace(true); };
 
   const saveInlineField = (field, value) => {
     let updatedTd = { ...td };
@@ -152,17 +154,25 @@ export default function BehandlungDetailPanel({
         <div className="flex flex-wrap gap-6">
           {/* Left: Face map large */}
           <div style={{ flex: "0 1 500px", minWidth: 0, maxWidth: "100%" }}>
+            {detailViews.length > 1 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {detailViews.map((v) => {
+                  const n = (td.markers || []).filter((m) => markerView(m) === v).length;
+                  const active = shownView === v;
+                  return (
+                    <button key={v} type="button" onClick={() => setDisplayView(v)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition ${active ? "bg-gray-800 text-white font-medium" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                      style={{ height: 26 }}>
+                      {CHARTS.find((c) => c.id === v)?.label}
+                      <span className={`text-[10px] font-semibold rounded-full px-1.5 ${active ? "bg-white/20" : "bg-white text-gray-700"}`}>{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="relative">
               {markerCount > 0 ? (
-                <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:border-blue-200 transition" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }} onClick={openFaceEditor} title="Klicken zum Bearbeiten">
-                  <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
-                  <VectorLayer markers={td.markers || []} />
-                  {(td.markers || []).map((m, idx) => (
-                    <div key={idx} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                      <MarkerDot marker={m} idx={idx} size={26} fontSize={12} shadow praepCount={praepCount} />
-                    </div>
-                  ))}
-                </div>
+                <ChartFigure markers={td.markers || []} view={shownView} facePhoto={td.facePhoto} size={500} dotSize={26} fontSize={12} praepCount={praepCount} onClick={openFaceEditor} />
               ) : (
                 <div className="flex items-center justify-center border border-[#DFE3EB] rounded-lg cursor-pointer hover:border-blue-200 transition" style={{ width: 500, maxWidth: "100%", aspectRatio: "1", background: "#fafafa" }} onClick={openFaceEditor} title="Klicken zum Bearbeiten">
                   <p className="text-xs text-gray-400">Keine Injektionspunkte dokumentiert. Klicke, um welche zu setzen.</p>
@@ -172,7 +182,7 @@ export default function BehandlungDetailPanel({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
               </button>
             </div>
-            <VectorLegend markers={td.markers || []} className="mt-2" />
+            <VectorLegend markers={(td.markers || []).filter((m) => markerView(m) === shownView)} className="mt-2" />
             {markerCount > 0 ? (
               <p className="text-xs text-gray-500 mt-2">
                 {multiPraep ? praepSummary : `Gesamt: ${totalUnitsStr} ${einh}`} an {markerCount} {markerCount === 1 ? "Stelle" : "Stellen"}
@@ -266,6 +276,7 @@ export default function BehandlungDetailPanel({
                         <span className="text-sm text-gray-700">{m.amount}{String(m.amount).match(/[xX×*]/) ? ` = ${evalAmount(m.amount)}` : ""} {unitFor(m)}</span>
                         {multiPraep && <span className="text-xs text-gray-400">{praeparate[markerPraepIdx(m, praepCount)]?.name || `Präparat ${praepLetter(markerPraepIdx(m, praepCount))}`}</span>}
                         <VectorSummary marker={m} className="text-xs text-gray-500" />
+                        {detailViews.length > 1 && <span className="text-[11px] text-gray-400">{CHARTS.find((c) => c.id === markerView(m))?.label}</span>}
                       </div>
                     ))}
                   </div>
@@ -576,101 +587,26 @@ export default function BehandlungDetailPanel({
         })()}
       </div>
 
-      {/* Face Edit Modal */}
-      {editFace && (() => {
-        const isMobileFE = typeof window !== "undefined" && window.innerWidth < 640;
-        const faceSzFE = isMobileFE ? "min(85vw, 340px)" : "min(85vh - 100px, 700px)";
-        const handleFaceClickFE = (e) => {
-          if (!faceModalRef.current) return;
-          const rect = faceModalRef.current.getBoundingClientRect();
-          const x = ((e.clientX - rect.left) / rect.width) * 100;
-          const y = ((e.clientY - rect.top) / rect.height) * 100;
-          if (inlineVt.handleClick(x, y)) return;
-          const hit = inlineTempMarkers.find((m) => Math.abs(m.x - x) < 3.5 && Math.abs(m.y - y) < 3.5);
-          if (hit) { setInlineTempMarkers(inlineTempMarkers.filter((m) => m.id !== hit.id)); return; }
-          const tooClose = inlineTempMarkers.some((m) => Math.abs(m.x - x) < 2 && Math.abs(m.y - y) < 2);
-          if (tooClose) return;
-          const point = { id: Date.now(), x, y, amount: "", color: inlineEditColor };
-          if (multiPraep && inlineEditPraep > 0) point.p = inlineEditPraep;
-          setInlineTempMarkers([...inlineTempMarkers, point]);
-        };
-        const saveFaceMarkers = () => {
-          inlineVt.finish();
-          const updatedTd = withPraeparate({ ...inv.treatmentDoc, markers: serializeMarkers(inlineTempMarkers) }, praeparate);
-          const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
-          if (onUpdateInvoice) onUpdateInvoice(updated);
-          setViewingTreatment(updated);
-          setEditFace(false);
-        };
-        return (
-          <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4" onClick={() => setEditFace(false)}>
-            <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-5 flex flex-col w-full" style={{ maxWidth: 1100, maxHeight: "95vh" }} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Injektionspunkte setzen</h3>
-                <button className="p-1 text-gray-400 hover:text-gray-600" onClick={() => setEditFace(false)}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="space-y-2 mb-3">
-                <VectorToolbar vt={inlineVt} />
-                {multiPraep && <PraeparatChips praeparate={praeparate} value={inlineEditPraep} onChange={setInlineEditPraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
-                <ColorSwatches value={inlineEditColor} onChange={setInlineEditColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
-              </div>
-              <p className="text-xs text-gray-500 mb-2">{vectorInstruction(inlineVt)} Die Mengen trägst Du rechts ein.</p>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 overflow-y-auto">
-                <div className="flex-shrink-0">
-                  <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: faceSzFE, height: faceSzFE, cursor: "crosshair", background: "#fafafa" }}>
-                    <div
-                      ref={faceModalRef}
-                      onClick={handleFaceClickFE}
-                      onMouseMove={(e) => { if (faceModalRef.current && (inlineVt.lineStart || inlineVt.activeFan)) { const r = faceModalRef.current.getBoundingClientRect(); inlineVt.handleMove(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100); } }}
-                      className="relative w-full h-full"
-                    >
-                      <img src={td.facePhoto || FACE_IMAGE_B64} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
-                      <VectorLayer markers={inlineTempMarkers} preview={inlineVt.preview} />
-                      {inlineVt.lineStart && (
-                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${inlineVt.lineStart.x}%`, top: `${inlineVt.lineStart.y}%`, width: 12, height: 12, transform: "translate(-50%, -50%)", zIndex: 11 }} />
-                      )}
-                      {inlineTempMarkers.map((m, idx) => (
-                        <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                          <MarkerDot marker={m} idx={idx} size={21} fontSize={11} shadow praepCount={praepCount} />
-                        </div>
-                      ))}
-                    </div>
-                    <VectorDrawingBar vt={inlineVt} />
-                  </div>
-                  <VectorLegend markers={inlineTempMarkers} force={inlineVt.mode !== "punkt"} className="mt-2" />
-                </div>
-                <div className="flex-shrink-0 overflow-y-auto" style={{ width: multiPraep ? 250 : 220, maxHeight: faceSzFE }}>
-                  <div className="space-y-1.5">
-                    {inlineTempMarkers.map((m, idx) => (
-                      <React.Fragment key={m.id}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
-                        <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, color: nextMarkerColor(markerColor(mk)) } : mk))}>
-                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
-                        </button>
-                        <PraeparatBadge marker={m} praeparate={praeparate} onCycle={(p) => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, p } : mk))} />
-                        <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => setInlineTempMarkers(inlineTempMarkers.map((mk) => mk.id === m.id ? { ...mk, amount: e.target.value } : mk))} />
-                        <span className="text-xs text-gray-400">{unitFor(m)}</span>
-                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition" onClick={() => { if (inlineVt.activeFan?.id === m.id) inlineVt.finish(); setInlineTempMarkers(inlineTempMarkers.filter((mk) => mk.id !== m.id)); }} title="L&ouml;schen">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                      </div>
-                      {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <LiveTotal markers={inlineTempMarkers} praeparate={multiPraep ? praeparate : null} einheit={einh} />
-                </div>
-              </div>
-              <div className="flex justify-end mt-4 pt-3 border-t border-gray-100">
-                <button className="px-4 py-1.5 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition" onClick={saveFaceMarkers}>Speichern</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Point editor: the same editor as in the Behandlungsdoku form (regions, zoom, lines and fans) */}
+      {editFace && (
+        <TreatmentMap
+          markers={inlineTempMarkers}
+          setMarkers={setInlineTempMarkers}
+          einheit={einh}
+          praeparate={praeparate}
+          facePhoto={inlineTempPhoto}
+          onFacePhotoChange={setInlineTempPhoto}
+          autoOpen
+          onAutoSave={(ms) => {
+            const updatedTd = withPraeparate({ ...inv.treatmentDoc, markers: serializeMarkers(ms), facePhoto: inlineTempPhoto || "" }, praeparate);
+            const updated = { ...inv, treatmentDoc: updatedTd, lastModifiedAt: new Date().toISOString() };
+            if (onUpdateInvoice) onUpdateInvoice(updated);
+            setViewingTreatment(updated);
+            setEditFace(false);
+          }}
+          onAutoCancel={() => setEditFace(false)}
+        />
+      )}
     </>
   );
 }

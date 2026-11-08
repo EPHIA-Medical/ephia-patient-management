@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { evalAmount } from "../../utils/helpers";
-import { FACE_IMAGE_B64 } from "../../constants";
+import { CHARTS, chartById, chartImage, markerView, usedViews } from "./charts";
+import { ChartFigures } from "./ChartFigure";
 import { trackEvent } from "../../lib/analytics";
 import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, LiveTotal, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 import { markerPraepIdx } from "../../utils/praeparate";
-import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EDITOR_LABEL_WIDTH } from "./vectors";
+import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EditorRow, EDITOR_LABEL_WIDTH } from "./vectors";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -36,7 +37,9 @@ export function compressImage(file, maxSize = 400, quality = 0.7) {
 }
 
 export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, notes, autoOpen, onAutoSave, onAutoCancel, facePhoto, onFacePhotoChange, planMode, praeparate }) {
-  const faceImg = facePhoto || FACE_IMAGE_B64;
+  // Body region shown in the editor; new points belong to it (marker.v, absent = face)
+  const [view, setViewRaw] = React.useState(() => usedViews(markers)[0]);
+  const inView = (m) => markerView(m) === view;
   // Several Präparate on one document: each point belongs to one of them (marker.p)
   const praepList = Array.isArray(praeparate) ? praeparate : [];
   const praepCount = praepList.length;
@@ -67,7 +70,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   };
 
   // Lines and fans (needle/cannula vectors) next to single points
-  const vt = useVectorTools({ markers, setMarkers, color: activeColor, amount: activeAmount, praep: multiPraep ? activePraep : 0 });
+  const vt = useVectorTools({ markers, setMarkers, color: activeColor, amount: activeAmount, praep: multiPraep ? activePraep : 0, view });
+  const setView = (v) => { vt.finish(); setViewRaw(v); setZoom(1); setPan({ x: 0, y: 0 }); };
   const facePos = (e) => {
     const rect = modalRef.current.getBoundingClientRect();
     return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 };
@@ -80,6 +84,70 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   const lastTouchCenter = React.useRef(null);
   const isPinching = React.useRef(false);
   const justPinched = React.useRef(false);
+
+  const boxRef = React.useRef(null);
+  const zoomRef = React.useRef(1);
+  const panRef = React.useRef({ x: 0, y: 0 });
+  zoomRef.current = zoom;
+  panRef.current = pan;
+  const justDragged = React.useRef(false);
+  const dragRef = React.useRef(null);
+  const MAX_ZOOM = 5;
+
+  // Keep the zoomed image covering the box: pan at most half the overflow on each side
+  const clampPanPx = (p, z) => {
+    const size = boxRef.current ? boxRef.current.clientWidth : 500;
+    const maxP = ((z - 1) * size) / 2;
+    return { x: Math.min(maxP, Math.max(-maxP, p.x)), y: Math.min(maxP, Math.max(-maxP, p.y)) };
+  };
+  // Zoom by a factor while the point `s` (offset from the box centre, in px) stays under the cursor
+  const zoomAt = (factor, s = { x: 0, y: 0 }) => {
+    const z = zoomRef.current, p = panRef.current;
+    const nz = Math.min(MAX_ZOOM, Math.max(1, z * factor));
+    if (nz === z) return;
+    const np = clampPanPx({ x: s.x - (nz * (s.x - p.x)) / z, y: s.y - (nz * (s.y - p.y)) / z }, nz);
+    zoomRef.current = nz; panRef.current = np;
+    setZoom(nz); setPan(np);
+  };
+  const resetZoom = () => { zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  // Mouse wheel and trackpad pinch (ctrlKey) zoom at the cursor. Needs a non-passive listener.
+  React.useEffect(() => {
+    const box = boxRef.current;
+    if (!modalOpen || !box) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const r = box.getBoundingClientRect();
+      const s = { x: e.clientX - (r.left + r.width / 2), y: e.clientY - (r.top + r.height / 2) };
+      zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)), s);
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, [modalOpen, view]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Dragging moves the zoomed image; a drag never places a point
+  const handleMouseDown = (e) => {
+    if (e.button !== 0 || zoomRef.current <= 1) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, pan: panRef.current, moved: false };
+    const onMove = (ev) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = ev.clientX - d.x, dy = ev.clientY - d.y;
+      if (!d.moved && Math.hypot(dx, dy) < 4) return;
+      d.moved = true;
+      const np = clampPanPx({ x: d.pan.x + dx, y: d.pan.y + dy }, zoomRef.current);
+      panRef.current = np;
+      setPan(np);
+    };
+    const onUp = () => {
+      if (dragRef.current?.moved) { justDragged.current = true; setTimeout(() => { justDragged.current = false; }, 0); }
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   // Reset zoom when modal opens
   React.useEffect(() => { if (modalOpen) { setZoom(1); setPan({ x: 0, y: 0 }); } }, [modalOpen]);
@@ -126,18 +194,12 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
       lastTouchDist.current = null;
       lastTouchCenter.current = null;
       // Clamp pan to keep face visible
-      setPan((p) => clampPan(p, zoom));
+      setPan((p) => clampPanPx(p, zoom));
     }
   };
 
-  const clampPan = (p, z) => {
-    if (z <= 1) return { x: 0, y: 0 };
-    const maxP = ((z - 1) / z) * 150; // rough limit
-    return { x: Math.min(maxP, Math.max(-maxP, p.x)), y: Math.min(maxP, Math.max(-maxP, p.y)) };
-  };
-
   const handleClick = (e) => {
-    if (!modalRef.current || justPinched.current) return;
+    if (!modalRef.current || justPinched.current || justDragged.current) return;
     const rect = modalRef.current.getBoundingClientRect();
     // Account for zoom and pan: convert screen coords to face % coords
     const rawX = e.clientX - rect.left;
@@ -149,6 +211,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     if (vt.handleClick(x, y)) return;
     const point = { id: Date.now(), x, y, amount: activeAmount, color: activeColor };
     if (multiPraep && activePraep > 0) point.p = activePraep;
+    if (view !== "face") point.v = view;
     setMarkers([...markers, point]);
   };
 
@@ -177,25 +240,18 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   // Desktop: sized so the whole editor fits in the window next to the point list, same width as the form dialogs
-  const faceSize = isMobile ? "min(85vw, 340px)" : "clamp(320px, 100vh - 330px, 540px)";
-  const markerSize = isMobile ? Math.max(10, 21 / zoom) : 21;
-  const markerFontSize = isMobile ? Math.max(6, 11 / zoom) : 11;
+  const faceSize = isMobile ? "min(85vw, 340px)" : "clamp(300px, 100vh - 390px, 540px)";
+  // Points, labels and lines keep their size on screen at any zoom
+  const markerSize = 21 / zoom;
+  const markerFontSize = 11 / zoom;
 
   // ── Read-only view (viewing existing Behandlungen) ──
   if (readOnly) {
     return (
       <div className="flex flex-col sm:flex-row gap-4" style={{ alignItems: "flex-start" }}>
-        <div className="flex-shrink-0" style={{ width: 250 }}>
-        <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none flex-shrink-0" style={{ width: 250, height: 250, background: "#fafafa" }}>
-          <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
-          <VectorLayer markers={markers} />
-          {markers.map((m, idx) => (
-            <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-              <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow praepCount={praepCount} />
-            </div>
-          ))}
-        </div>
-        <VectorLegend markers={markers} className="mt-1.5" />
+        <div className="flex-shrink-0" style={{ maxWidth: 520 }}>
+          <ChartFigures markers={markers} facePhoto={facePhoto} size={250} dotSize={17} fontSize={9} praepCount={praepCount} />
+          <VectorLegend markers={markers} className="mt-1.5" />
         </div>
         {(markers.length > 0 || notes) && (
           <div className="flex gap-6" style={{ alignItems: "flex-start" }}>
@@ -233,16 +289,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
           const totalUnits = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
           const totalStr = totalUnits % 1 === 0 ? totalUnits.toString() : totalUnits.toFixed(2).replace(/0+$/, "").replace(".", ",");
           return (
-          <div className="flex items-center gap-4">
-            <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:border-blue-300 transition flex-shrink-0" style={{ width: 132, height: 132, background: "#fafafa" }} onClick={() => setModalOpen(true)} title="Klicken zum Bearbeiten">
-              <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
-              <VectorLayer markers={markers} />
-              {markers.map((m, idx) => (
-                <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                  <MarkerDot marker={m} idx={idx} size={12} fontSize={7} shadow praepCount={praepCount} />
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <ChartFigures markers={markers} facePhoto={facePhoto} size={132} dotSize={12} fontSize={7} praepCount={praepCount} onClick={() => setModalOpen(true)} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-800">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"} dokumentiert</p>
               {totalUnits > 0 && !multiPraep && <p className="text-sm text-gray-500 mt-0.5">Gesamt {totalStr} {einheit}</p>}
@@ -253,7 +301,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
         })() : (
           <button className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50/50 text-sm text-blue-600 font-medium transition py-4" onClick={() => setModalOpen(true)}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            {planMode ? "Injektionspunkte planen" : "Injektionspunkte im Gesichtsschema setzen"}
+            {planMode ? "Injektionspunkte planen" : "Injektionspunkte setzen"}
           </button>
         )
       )}
@@ -283,25 +331,41 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 }} />
               )}
               <div className="space-y-2 mb-3">
+                <EditorRow label="Region">
+                  <div className="flex flex-wrap gap-1">
+                    {CHARTS.map((c) => {
+                      const n = markers.filter((m) => markerView(m) === c.id).length;
+                      const active = view === c.id;
+                      return (
+                        <button key={c.id} type="button" onClick={() => setView(c.id)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition ${active ? "bg-gray-800 text-white font-medium" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                          style={{ height: 26 }}>
+                          {c.label}
+                          {n > 0 && <span className={`text-[10px] font-semibold rounded-full px-1.5 ${active ? "bg-white/20" : "bg-white text-gray-700"}`}>{n}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </EditorRow>
                 <VectorToolbar vt={vt} />
                 {multiPraep && <PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
                 <DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} label="Dosis" labelWidth={EDITOR_LABEL_WIDTH} />
                 <ColorSwatches value={activeColor} onChange={setActiveColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
               </div>
               <p className="text-xs text-gray-500 mb-2">
-                {vectorInstruction(vt)}<span className="sm:hidden"> Zwei Finger zum Zoomen.</span>
+                {vectorInstruction(vt)}
+                <span className="text-gray-400"><span className="sm:hidden"> Zwei Finger zum Zoomen.</span><span className="hidden sm:inline"> Zoomen mit Mausrad oder +/−, gezoomt lässt sich das Bild ziehen.</span></span>
               </p>
-              {zoom > 1 && (
-                <button className="text-xs text-blue-500 hover:text-blue-700 mb-2 sm:hidden" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Zoom zurücksetzen</button>
-              )}
             </div>
             {/* Single scrollable area on mobile, side-by-side on desktop */}
             <div className="flex-1 overflow-y-auto sm:overflow-y-auto px-4 sm:px-5">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
                 <div className="flex-shrink-0">
                   <div
+                    ref={boxRef}
                     className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none"
-                    style={{ width: faceSize, height: faceSize, cursor: "crosshair", background: "#fafafa", touchAction: "none" }}
+                    style={{ width: faceSize, height: faceSize, cursor: "crosshair", background: "#ffffff", touchAction: "none" }}
+                    onMouseDown={handleMouseDown}
                     onTouchStart={handleTouchStart}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
@@ -311,21 +375,26 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       onClick={handleClick}
                       onMouseMove={(e) => { if (modalRef.current && (vt.lineStart || vt.activeFan)) { const p = facePos(e); vt.handleMove(p.x, p.y); } }}
                       className="relative w-full h-full"
-                      style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isPinching.current ? "none" : "transform 0.15s ease-out" }}
+                      style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isMobile && !isPinching.current ? "transform 0.15s ease-out" : "none" }}
                     >
-                      <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
-                      <VectorLayer markers={markers} preview={vt.preview} />
+                      <img src={chartImage(view, facePhoto)} alt={chartById(view).label} className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                      <VectorLayer markers={markers.filter(inView)} preview={vt.preview} scale={1 / zoom} />
                       {vt.lineStart && (
-                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12, height: 12, transform: "translate(-50%, -50%)", zIndex: 11 }} />
+                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12 / zoom, height: 12 / zoom, transform: "translate(-50%, -50%)", zIndex: 11 }} />
                       )}
-                      {markers.map((m, idx) => (
+                      {markers.map((m, idx) => inView(m) && (
                         <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
                           <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
                         </div>
                       ))}
                     </div>
                     <VectorDrawingBar vt={vt} />
-                    {!readOnly && facePhoto && (
+                    <div className="absolute bottom-2 left-2 flex items-center rounded-lg bg-white/95 shadow-md text-gray-600" style={{ zIndex: 20, cursor: "default" }} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                      <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.5)} aria-label="Verkleinern" title="Verkleinern">&minus;</button>
+                      <button type="button" className="px-1 min-w-[3rem] h-8 text-xs tabular-nums hover:text-gray-900" onClick={resetZoom} title="Zurück auf 100 %">{Math.round(zoom * 100)} %</button>
+                      <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom >= MAX_ZOOM} onClick={() => zoomAt(1.5)} aria-label="Vergrößern" title="Vergrößern">+</button>
+                    </div>
+                    {!readOnly && facePhoto && view === "face" && (
                       <button
                         className="absolute bottom-2 right-2 rounded-full bg-white bg-opacity-90 shadow-md hover:bg-opacity-100 transition flex items-center justify-center"
                         style={{ width: 36, height: 36, zIndex: 20 }}
@@ -336,8 +405,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       </button>
                     )}
                   </div>
-                  <VectorLegend markers={markers} force={vt.mode !== "punkt"} className="mt-2" />
-                  {!readOnly && (
+                  <VectorLegend markers={markers.filter(inView)} force={vt.mode !== "punkt"} className="mt-2" />
+                  {!readOnly && view === "face" && (
                     <div className="mt-2">
                       {facePhoto ? (
                         <button
@@ -360,8 +429,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                   )}
                 </div>
                 <div className="flex-shrink-0 sm:overflow-y-auto" style={{ width: isMobile ? "100%" : 220, maxHeight: isMobile ? "none" : faceSize }}>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
                   <div className="space-y-1.5">
-                    {markers.map((m, idx) => (
+                    {markers.map((m, idx) => inView(m) && (
                       <React.Fragment key={m.id}>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
@@ -379,7 +449,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       </React.Fragment>
                     ))}
                   </div>
-                  {markers.length === 0 && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte gesetzt.</p>}
+                  {!markers.some(inView) && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte in dieser Region.</p>}
                   <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />
                 </div>
               </div>

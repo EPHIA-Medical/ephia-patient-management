@@ -1,9 +1,9 @@
 import React from "react";
 import { fmtDate, fmtPhone, evalAmount, fmtBetrag } from "../../utils/helpers";
-import { FACE_IMAGE_B64 } from "../../constants";
 import { MARKER_COLORS, markerColor, markerLabel, markerTextColor, fmtNum } from "../treatment/markerUtils";
 import { getPraeparate, praeparatTotals, praepMengeStr } from "../../utils/praeparate";
 import { isVector, vectorSummary, makeVectorImage } from "../treatment/vectors";
+import { chartById, chartPng, markerView, usedViews } from "../treatment/charts";
 
 // ═══════════════════ Treatment Document Preview (for PDF) ═══════════════════
 
@@ -75,7 +75,33 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
   // Lines and fans drawn into one PNG over the face (SVG would be dropped by html2canvas in some browsers)
   const vectors = markers.map((m, idx) => ({ m, idx })).filter(({ m }) => isVector(m));
   const vectorsKey = JSON.stringify(vectors.map(({ m }) => [m.x, m.y, m.to, m.tool || "", m.color || ""]));
-  const vectorImage = React.useMemo(() => makeVectorImage(markers, 340), [vectorsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Body regions with points: one chart each. Drawn charts become PNGs first (html2canvas and SVG images do not mix well).
+  const views = usedViews(markers);
+  const viewsKey = views.join(",");
+  const chartSize = views.length === 1 ? 340 : views.length === 2 ? 340 : 222;
+  const vectorImages = React.useMemo(() => Object.fromEntries(views.map((v) => [v, makeVectorImage(markers.filter((m) => markerView(m) === v), chartSize)])), [vectorsKey, viewsKey, chartSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [chartPngs, setChartPngs] = React.useState({});
+  React.useEffect(() => {
+    let alive = true;
+    Promise.all(views.map((v) => chartPng(v).then((src) => [v, src]))).then((pairs) => { if (alive) setChartPngs(Object.fromEntries(pairs)); });
+    return () => { alive = false; };
+  }, [viewsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chartBox = (v) => (
+    <div key={v} style={{ flexShrink: 0 }}>
+      <div style={{ position: "relative", width: `${chartSize}px`, height: `${chartSize}px`, border: "1px solid #e5e5e5", borderRadius: "6px", overflow: "hidden", background: "#ffffff" }}>
+        <img src={v === "face" && facePhoto ? facePhoto : (chartPngs[v] || chartById(v).png || "")} alt={chartById(v).label} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        {vectorImages[v] && <img src={vectorImages[v]} alt="" style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", zIndex: 5 }} />}
+        {markers.map((m, idx) => {
+          if (markerView(m) !== v) return null;
+          const d = dotImages[idx] || { src: "", w: 20, h: 20 };
+          return (
+            <img key={idx} src={d.src} alt={markerLabel(m, idx)} style={{ position: "absolute", left: `${m.x}%`, top: `${m.y}%`, width: d.w, height: d.h, marginLeft: -d.w / 2, marginTop: -d.h / 2, zIndex: 10 }} />
+          );
+        })}
+      </div>
+      {views.length > 1 && <div style={{ fontSize: "10px", color: "#666", marginTop: "3px" }}>{chartById(v).label}</div>}
+    </div>
+  );
 
   // Legend grouped by colour: count of points and units per colour
   const colorGroups = (() => {
@@ -160,18 +186,11 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
       {markers.length > 0 && (
         <div style={{ marginBottom: "16px" }}>
           <div style={S.sectionTitle}>Injektionspunkte</div>
+          {views.length > 1 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>{views.map(chartBox)}</div>
+          )}
           <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-            {/* Face diagram */}
-            <div style={{ position: "relative", width: "340px", height: "340px", flexShrink: 0, border: "1px solid #e5e5e5", borderRadius: "6px", overflow: "hidden", background: "#fafafa" }}>
-              <img src={facePhoto || FACE_IMAGE_B64} alt="Gesicht" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              {vectorImage && <img src={vectorImage} alt="" style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", zIndex: 5 }} />}
-              {markers.map((m, idx) => {
-                const d = dotImages[idx] || { src: "", w: 20, h: 20 };
-                return (
-                  <img key={idx} src={d.src} alt={markerLabel(m, idx)} style={{ position: "absolute", left: `${m.x}%`, top: `${m.y}%`, width: d.w, height: d.h, marginLeft: -d.w / 2, marginTop: -d.h / 2, zIndex: 10 }} />
-                );
-              })}
-            </div>
+            {views.length === 1 && chartBox(views[0])}
             {/* Legend: the dots show the units per point; summarise per colour */}
             <div style={{ fontSize: "11px", color: "#333", lineHeight: "1.6" }}>
               <div style={{ color: "#666", marginBottom: "6px" }}>{multiPraep ? `Die Zahl im Punkt ist die Menge${sameEinh ? ` in ${einh}` : ""}, der Buchstabe das Präparat.` : `Die Zahl im Punkt ist die Menge in ${einh}.`}</div>
@@ -196,7 +215,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
                   <div style={{ color: "#666", marginBottom: "4px" }}>Gefüllter Punkt: Injektion. Offener Kreis: Eintrittspunkt, Pfeil: Vorschubrichtung. Durchgezogen: Nadel, gestrichelt: Kanüle.</div>
                   {vectors.map(({ m, idx }) => (
                     <div key={idx} style={{ marginBottom: "2px" }}>
-                      {idx + 1}. {vectorSummary(m)}{evalAmount(m.amount) > 0 ? ` · ${fmtNum(evalAmount(m.amount))} ${einh}` : ""}
+                      {idx + 1}. {vectorSummary(m)}{evalAmount(m.amount) > 0 ? ` · ${fmtNum(evalAmount(m.amount))} ${einh}` : ""}{views.length > 1 ? ` · ${chartById(markerView(m)).label}` : ""}
                     </div>
                   ))}
                 </div>

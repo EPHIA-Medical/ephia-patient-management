@@ -67,7 +67,8 @@ export default function BehandlungAddPanel({
     // Transfer the documented injection points, if the source has any
     const srcMarkers = src.treatmentDoc?.markers || [];
     if (srcMarkers.length > 0) {
-      setNewTreatmentMarkers(srcMarkers.map((m, i) => ({ id: Date.now() + i, x: m.x, y: m.y, amount: m.amount, ...(m.color ? { color: m.color } : {}) })));
+      // Keep every stored field (colour, Präparat, lines/fans, body region)
+      setNewTreatmentMarkers(srcMarkers.map((m, i) => ({ ...m, id: Date.now() + i })));
       if (src.treatmentDoc?.facePhoto) setNewTreatmentFacePhoto(src.treatmentDoc.facePhoto);
     } else {
       const menge = src.mlStr || (src.ml != null ? toDE(src.ml) : "");

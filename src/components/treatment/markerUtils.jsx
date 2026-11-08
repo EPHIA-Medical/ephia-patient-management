@@ -76,6 +76,8 @@ export const serializeMarkers = (markers) => (markers || [])
     const out = { x: m.x, y: m.y, amount: m.amount };
     if (m.color) out.color = m.color;
     if (Number.isInteger(m.p) && m.p > 0) out.p = m.p;
+    // Body region (absent = face)
+    if (m.v && m.v !== "face") out.v = m.v;
     if (isVector(m)) Object.assign(out, serializeVector(m));
     return out;
   });

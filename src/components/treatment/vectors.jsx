@@ -121,7 +121,7 @@ export function makeVectorImage(markers, sizePx = 340) {
 // ── Editing: one hook + toolbar shared by both face editors ──
 // handleClick(x, y) returns true when the click was used for a line/fan; otherwise the
 // editor places a normal point as before.
-export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
+export function useVectorTools({ markers, setMarkers, color, amount, praep, view = "face" }) {
   const [mode, setModeRaw] = React.useState("punkt"); // "punkt" | "linie" | "faecher"
   const [tool, setTool] = React.useState("nadel");
   const [depth, setDepth] = React.useState("");
@@ -141,6 +141,7 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
     const v = { id: Date.now() + Math.random(), amount: amount || "", color, tool };
     if (depth) v.depth = depth;
     if (praep > 0) v.p = praep;
+    if (view && view !== "face") v.v = view;
     return v;
   };
 

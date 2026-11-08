@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round">
+<g stroke-width="11">
+<circle cx="400" cy="150" r="72"/>
+<path d="M372 220 L 368 262"/><path d="M428 220 L 432 262"/>
+<path d="M150 24 C 172 150 226 238 300 266 C 330 276 354 272 368 262"/>
+<path d="M650 24 C 628 150 574 238 500 266 C 470 276 446 272 432 262"/>
+<path d="M262 24 C 256 140 262 262 272 362 C 278 470 272 630 292 790"/>
+<path d="M538 24 C 544 140 538 262 528 362 C 522 470 528 630 508 790"/>
+</g>
+<g stroke-width="7">
+<path d="M274 384 C 304 436 344 466 378 474"/>
+<path d="M526 384 C 496 436 456 466 422 474"/>
+<path d="M310 300 C 344 306 372 312 392 326"/>
+<path d="M490 300 C 456 306 428 312 408 326"/>
+<path d="M300 560 C 318 640 356 676 382 670"/>
+<path d="M500 560 C 482 640 444 676 418 670"/>
+</g>
+<g fill="#6b7280" stroke="none" font-family="Helvetica, Arial, sans-serif" font-size="30" text-anchor="middle"><text x="170" y="460">rechts</text><text x="630" y="460">links</text></g>
+</svg>
