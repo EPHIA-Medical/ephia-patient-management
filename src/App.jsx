@@ -22,7 +22,7 @@ import {
   computePatientHash, getPatientIdentifier
 } from "./lib/crypto";
 import { escrowConfigured, buildEscrowFields, verifyMekCheck } from "./lib/escrow";
-import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES, TREATMENT_TYPES, treatmentShort, icd10CodesFor, FILLER_INFILTRATION_OPTIONS, FILLER_ANAESTHESIE_OPTIONS, SPRITZEN_GROESSEN } from "./constants";
+import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES, TREATMENT_TYPES, treatmentShort, treatmentLabel, icd10CodesFor, FILLER_INFILTRATION_OPTIONS, FILLER_ANAESTHESIE_OPTIONS, SPRITZEN_GROESSEN } from "./constants";
 import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
@@ -136,6 +136,7 @@ export default function EphiaInvoice() {
 
   // Indication type & Diagnose (medical vs aesthetic)
   const [showIndicationModal, setShowIndicationModal] = useState(false);
+  const [indicationStep, setIndicationStep] = useState("type"); // dialog: "type" (Botulinum/Filler) then "indication"
   const [indicationType, setIndicationType] = useState("aesthetic"); // "aesthetic" | "medical"
   const [diagnose, setDiagnose] = useState("");
 
@@ -1684,6 +1685,7 @@ export default function EphiaInvoice() {
     setIndicationType("aesthetic");
     setDiagnose("");
     setAppliedVoucher(null); setVoucherLookupError("");
+    setIndicationStep("type");
     setShowIndicationModal(true);
     navigate("/erstellen");
   };
@@ -1813,6 +1815,7 @@ export default function EphiaInvoice() {
     setCreateForPatient(patientObj);
     setIndicationType("aesthetic");
     setDiagnose("");
+    setIndicationStep("type");
     setShowIndicationModal(true);
     if (isPatientDetail && window.innerWidth >= 1024) {
       setCreateSource("patientDetail");
@@ -3173,8 +3176,35 @@ export default function EphiaInvoice() {
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
+                {indicationStep === "type" ? (
+                <>
+                <h3 className="text-base font-semibold text-gray-800 mb-1 pr-8">Behandlung</h3>
+                <p className="text-xs text-gray-400 mb-5">Womit wird behandelt? Der Behandlungstyp bestimmt die GOÄ-Ziffern, die Produktzeile und die Einheit der Behandlungsdokumentation.</p>
+                <div className="flex flex-col gap-3">
+                  {TREATMENT_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      className="flex items-center gap-3 p-4 rounded-lg border-2 border-[#DFE3EB] hover:border-blue-400 hover:bg-blue-50 transition text-left group"
+                      onClick={() => { switchTreatmentType(t.id); setIndicationStep("indication"); }}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${t.id === "filler" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>
+                        {t.id === "filler"
+                          ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3c-3.5 4.5-6 8-6 11a6 6 0 0012 0c0-3-2.5-6.5-6-11z" /></svg>
+                          : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 20l4-4m0 0l9-9m-9 9l-2-2m11-7l3 3m-5-5l5 5M14 6l4 4" /></svg>}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-800 group-hover:text-blue-700">{t.label}</div>
+                        <div className="text-xs text-gray-400">{t.id === "filler" ? "Ganze Spritze als Auslage, Dokumentation in ml, Chargennummer Pflicht" : "Einheiten oder ganze Ampulle, Dokumentation in SE oder IE"}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                </>
+                ) : (
+                <>
+                <button className="text-xs text-gray-400 hover:text-gray-600 mb-2" onClick={() => setIndicationStep("type")}>&larr; {treatmentLabel(treatmentType)} ändern</button>
                 <h3 className="text-base font-semibold text-gray-800 mb-1 pr-8">Art der Abrechnung</h3>
-                <p className="text-xs text-gray-400 mb-5">Wähle, ob die Rechnung für eine ästhetische oder therapeutische Indikation erstellt werden soll.</p>
+                <p className="text-xs text-gray-400 mb-5">Wähle, ob die {hvOnlyMode ? "Honorarvereinbarung" : "Rechnung"} für eine ästhetische oder therapeutische Indikation erstellt werden soll.</p>
                 <div className="flex flex-col gap-3">
                   <button
                     className="flex items-center gap-3 p-4 rounded-lg border-2 border-[#DFE3EB] hover:border-blue-400 hover:bg-blue-50 transition text-left group"
@@ -3201,6 +3231,8 @@ export default function EphiaInvoice() {
                     </div>
                   </button>
                 </div>
+                </>
+                )}
               </div>
             </div>
           )}
@@ -3465,27 +3497,6 @@ export default function EphiaInvoice() {
             </div>
             )}
 
-            {/* ─── Behandlungstyp: Botulinum vs. Dermalfiller ─── */}
-            <div className="mb-6 pb-5 border-b border-gray-100">
-              <div className="flex items-center gap-1 mb-3">
-                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Behandlung</p>
-                <InfoTooltip wide>
-                  <div>Der Behandlungstyp bestimmt die GOÄ-Ziffern, die Produktzeile und die Einheit der Behandlungsdokumentation. Beim Dermalfiller wird die ganze Spritze als Auslage nach § 10 GOÄ berechnet, die Injektionspunkte werden in ml dokumentiert und die Chargennummer ist Pflicht.</div>
-                </InfoTooltip>
-              </div>
-              <div className="flex gap-2">
-                {TREATMENT_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    className={`px-4 py-2 text-xs rounded-lg border transition ${treatmentType === t.id ? "bg-blue-50 border-blue-300 text-blue-700 font-medium" : "border-[#DFE3EB] text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
-                    onClick={() => switchTreatmentType(t.id)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* ─── Rechnungsart: Behandlung vs. Nur Beratung ─── */}
             {!hvOnlyMode && (
             <div className="mb-6 pb-5 border-b border-gray-100">
@@ -3526,7 +3537,7 @@ export default function EphiaInvoice() {
             {!isBeratungOnly && (
             <div className="mb-6 pb-5 border-b border-gray-100">
               <div className="flex items-center gap-1 mb-4">
-                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Verwendetes Präparat</p>
+                <p className="text-xs font-bold text-gray-800 uppercase tracking-wide">Verwendetes Präparat <span className="normal-case tracking-normal font-normal text-gray-400">({treatmentLabel(treatmentType)})</span></p>
                 <InfoTooltip wide>
                   <div>
                     <strong>Hinweis nach GOÄ §10 (Auslagen):</strong> Es dürfen nur die tatsächlich entstandenen Kosten berechnet werden, nicht der aktuelle Marktpreis, sondern der Einkaufspreis. Rabatte und Boni müssen an Patient:innen weitergegeben werden; Pauschalen sind nicht erlaubt.{"\n\n"}Ab einem Betrag von 25,56 € ist ein Beleg (z.B. Einkaufsrechnung, Lieferschein) beizufügen. Belege mit mehreren Posten sind zulässig, sofern der Einzelpreis des verwendeten Materials klar hervorgeht.{"\n\n"}<strong>Tipp:</strong> Häufig verwendete Präparate kannst Du in den Praxis-Einstellungen speichern, um sie hier schnell auszuwählen.
