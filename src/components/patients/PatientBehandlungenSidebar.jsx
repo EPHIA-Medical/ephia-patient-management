@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import DocTypeIcon from "../ui/DocTypeIcon";
 import { fmtDate } from "../../utils/helpers";
 import { showToast } from "../../utils/toast";
 import NoteEditor from "./NoteEditor";
@@ -33,9 +34,6 @@ export default function PatientBehandlungenSidebar({
   // Every document status is one pill: green when done, amber when something is still open.
   const statusPill = (status) => (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${status.done ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{status.label}</span>
-  );
-  const docIcon = (
-    <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
   );
   const trashBtn = (onClick, title = "Dokument löschen") => (
     <button className="p-1 rounded text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition" title={title} onClick={onClick}>
@@ -266,7 +264,7 @@ export default function PatientBehandlungenSidebar({
                     return (
                       <div key={doc._supabaseId || doc.id} role="button" tabIndex={0} className="group w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-gray-50 transition cursor-pointer" onClick={() => handleDocClick(doc)} onKeyDown={(e) => { if (e.key === "Enter") handleDocClick(doc); }}>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          {docIcon}
+                          <DocTypeIcon label={getDocLabel(doc)} />
                           <span className="text-sm text-gray-700">{getDocLabel(doc)}</span>
                           {doc.invoiceMeta?.nummer && doc.invoiceMeta.nummer !== "\u2014" && <span className="text-xs text-gray-400">{doc.invoiceMeta.nummer}</span>}
                           {status.risk && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">Risiko</span>}
@@ -291,7 +289,7 @@ export default function PatientBehandlungenSidebar({
                         title="Honorarvereinbarung zu dieser Rechnung öffnen"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          {docIcon}
+                          <DocTypeIcon label="Honorarvereinbarung" />
                           <span className="text-sm text-gray-700">Honorarvereinbarung</span>
                           {inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "\u2014" && <span className="text-xs text-gray-400">zu {inv.invoiceMeta.nummer}</span>}
                         </div>
@@ -344,7 +342,7 @@ export default function PatientBehandlungenSidebar({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                     </svg>
                   )}
-                  {docIcon}
+                  <DocTypeIcon label={getDocLabel(doc)} />
                   <span className="text-sm text-gray-700">{getDocLabel(doc)}</span>
                   {doc.invoiceMeta?.nummer && doc.invoiceMeta.nummer !== "\u2014" && <span className="text-xs text-gray-400">{doc.invoiceMeta.nummer}</span>}
                   {doc.invoiceMeta?.datum && <span className="text-xs text-gray-400">{fmtDate(doc.invoiceMeta.datum)}</span>}
