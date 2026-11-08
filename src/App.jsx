@@ -15,18 +15,18 @@ import { supabaseFetchActivityLog, supabaseCreateActivityLog, supabaseDeleteActi
 import { trackEvent } from "./lib/analytics";
 import {
   MEK_SESSION_KEY, bufToBase64, base64ToBuf, derivePDK,
-  generateMEK, generateSalt, generateRecoveryKey,
+  generateMEK, generateSalt,
   wrapMEK, unwrapMEK, encryptData, decryptData,
   exportMEKToBase64, importMEKFromBase64,
   storeMEKInSession, loadMEKFromSession, clearMEKFromSession,
   computePatientHash, getPatientIdentifier
 } from "./lib/crypto";
-import { escrowConfigured, buildEscrowFields } from "./lib/escrow";
+import { escrowConfigured, buildEscrowFields, verifyMekCheck } from "./lib/escrow";
 import { DEFAULT_PRACTICE, autoLogoutMinutes, ZUSCHLAEGE, BOTOX_GOA_ITEMS, PUNKTWERT, SACHKOSTEN_INFO, ICD10_CODES, PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "./constants";
 import { parseDE, evalAmount, fmt, fmtDate, todayLocal, buildLineItems, calcWeightedForGesamt, calcGoaBetrag, calcGesamt, parsePlzOrt, combinePlzOrt, nextInvoiceNumber, toDE, flashOrtField, lookupPlz } from "./utils/helpers";
 import { subscribeToast, showToast } from "./utils/toast";
 import { generateVoucherCode, createVoucherObject, computeStatus, redeemBlockReason, applyRedemption, restoreRedemption } from "./utils/vouchers";
-import { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen } from "./components/auth/AuthScreens";
+import { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen, RecoveryNeededScreen, RecoveryCodeScreen } from "./components/auth/AuthScreens";
 import ImpressumPage from "./components/legal/Impressum";
 import DatenschutzPage from "./components/legal/Datenschutz";
 import AGBPage from "./components/legal/AGB";
@@ -79,6 +79,10 @@ export default function EphiaInvoice() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authPage, setAuthPage] = useState("login"); // "login" | "signup" | "reset" | "set_new_password"
   const [recoveryAccessToken, setRecoveryAccessToken] = useState(null);
+  // Login whose MEK could not be unwrapped with the password (password was
+  // reset): { sess, profile, password }, kept in memory until the escrow
+  // release code completes the login. See docs/escrow-recovery-plan.md 3.2.
+  const [pendingRecovery, setPendingRecovery] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState(false);
   const [authSuccessEmail, setAuthSuccessEmail] = useState("");
@@ -696,14 +700,15 @@ export default function EphiaInvoice() {
   // Best-effort: write the escrow blob for an account that has none yet. Never
   // blocks login; the password path does not depend on it.
   const ensureEscrow = async (mek, profile, accessToken) => {
-    if (!profile || profile.escrow_wrapped_mek) return;
+    if (!profile) return;
+    if (profile.escrow_wrapped_mek && profile.encryption_version >= 2) return;
     try {
-      const fields = await escrowFieldsFor(mek, profile.id);
-      if (!fields.escrow_wrapped_mek) return;
+      const fields = profile.escrow_wrapped_mek ? {} : await escrowFieldsFor(mek, profile.id);
+      if (!profile.escrow_wrapped_mek && !fields.escrow_wrapped_mek) return;
       const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(profile.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(fields),
+        body: JSON.stringify({ ...fields, encryption_version: 2 }),
       });
       if (!res.ok) console.error("[E2EE] Failed to write escrow blob:", res.status, await res.text());
       else console.log("[E2EE] Escrow blob written");
@@ -719,11 +724,8 @@ export default function EphiaInvoice() {
     const salt = generateSalt();
     const pdk = await derivePDK(password, salt);
     const { encrypted: encryptedMek, iv: mekIv } = await wrapMEK(mek, pdk);
-    // Recovery key: random AES key stored server-side for email-based recovery
-    const rk = await generateRecoveryKey();
-    const { encrypted: recoveryWrappedMek, iv: recoveryIv } = await wrapMEK(mek, rk);
-    const rkRaw = await crypto.subtle.exportKey("raw", rk);
-    const recoveryKeyBase64 = bufToBase64(rkRaw);
+    // Recovery after a password loss goes through the escrow blob (release
+    // path below); no server-readable recovery key is written any more.
     const escrowFields = await escrowFieldsFor(mek, userId);
     // Store all crypto params in profile
     const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(userId)}`, {
@@ -732,8 +734,7 @@ export default function EphiaInvoice() {
       body: JSON.stringify({
         encrypted_mek: encryptedMek, mek_salt: salt, mek_iv: mekIv,
         mek_params: { iterations: 100000, hash: "SHA-256" },
-        recovery_wrapped_mek: recoveryWrappedMek, recovery_iv: recoveryIv,
-        recovery_key: recoveryKeyBase64, encryption_version: 1,
+        encryption_version: escrowFields.escrow_wrapped_mek ? 2 : 1,
         ...escrowFields,
       }),
     });
@@ -751,45 +752,77 @@ export default function EphiaInvoice() {
   // ─── E2EE: Unlock MEK from password ───
   const unlockMEK = async (password, profile, accessToken) => {
     const pdk = await derivePDK(password, profile.mek_salt, profile.mek_params?.iterations || 100000);
+    let mek;
     try {
-      const mek = await unwrapMEK(profile.encrypted_mek, profile.mek_iv, pdk);
-      currentMEK = mek;
-      const mekB64 = await exportMEKToBase64(mek);
-      storeMEKInSession(mekB64);
-      await ensureEscrow(mek, profile, accessToken);
+      mek = await unwrapMEK(profile.encrypted_mek, profile.mek_iv, pdk);
     } catch (e) {
-      // MEK unwrap failed — likely password was reset. Try recovery key.
-      console.warn("MEK unwrap with password failed, trying recovery key...", e);
-      if (profile.recovery_key && profile.recovery_wrapped_mek && profile.recovery_iv) {
-        const rkRaw = base64ToBuf(profile.recovery_key);
-        const rk = await crypto.subtle.importKey("raw", rkRaw, { name: "AES-GCM", length: 256 }, false, ["unwrapKey"]);
-        const mek = await unwrapMEK(profile.recovery_wrapped_mek, profile.recovery_iv, rk);
-        currentMEK = mek;
-        // Re-wrap MEK with new password
-        const newSalt = generateSalt();
-        const newPdk = await derivePDK(password, newSalt);
-        const { encrypted: newEncMek, iv: newMekIv } = await wrapMEK(mek, newPdk);
-        // Also generate a new recovery key
-        const newRk = await generateRecoveryKey();
-        const { encrypted: newRecWrapped, iv: newRecIv } = await wrapMEK(mek, newRk);
-        const newRkRaw = await crypto.subtle.exportKey("raw", newRk);
-        const escrowFields = profile.escrow_wrapped_mek ? {} : await escrowFieldsFor(mek, profile.id);
-        // Update profile with new wrapping
-        await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(profile.id)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}`, "Prefer": "return=representation" },
-          body: JSON.stringify({
-            encrypted_mek: newEncMek, mek_salt: newSalt, mek_iv: newMekIv,
-            recovery_wrapped_mek: newRecWrapped, recovery_iv: newRecIv,
-            recovery_key: bufToBase64(newRkRaw),
-            ...escrowFields,
-          }),
-        });
-        const mekB64 = await exportMEKToBase64(mek);
-        storeMEKInSession(mekB64);
-      } else {
-        throw new Error("Entschlüsselung fehlgeschlagen. Bitte kontaktiere den Support.");
+      // The MEK is wrapped under another password (the auth password was reset).
+      // Nothing is written here. Either support has already placed a release
+      // (MEK under a one-time code) in the profile, or the doctor has to ask.
+      console.warn("[E2EE] MEK unwrap with password failed", e);
+      const err = new Error("Entschlüsselung fehlgeschlagen.");
+      err.code = hasValidRelease(profile) ? "RECOVERY_CODE" : "RECOVERY_NEEDED";
+      throw err;
+    }
+    currentMEK = mek;
+    storeMEKInSession(await exportMEKToBase64(mek));
+    await ensureEscrow(mek, profile, accessToken);
+  };
+
+  const hasValidRelease = (profile) =>
+    !!(profile.escrow_release && profile.escrow_release_iv && profile.escrow_release_salt) &&
+    (!profile.escrow_release_expires_at || new Date(profile.escrow_release_expires_at) > new Date());
+
+  // ─── E2EE: finish a login with the one-time code from support ───
+  const RELEASE_CODE_ITERATIONS = 300000;
+  const handleRecoveryCode = async (rawCode) => {
+    if (!pendingRecovery) return;
+    const { sess, profile, password } = pendingRecovery;
+    const code = String(rawCode || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      let mek;
+      try {
+        const codeKey = await derivePDK(code, profile.escrow_release_salt, RELEASE_CODE_ITERATIONS);
+        mek = await unwrapMEK(profile.escrow_release, profile.escrow_release_iv, codeKey);
+      } catch {
+        throw new Error("Der Code ist nicht korrekt. Bitte prüfe die Schreibweise: acht Wörter, durch Bindestriche getrennt.");
       }
+      if (!(await verifyMekCheck(mek, profile))) {
+        throw new Error("Der Code passt nicht zu diesem Konto. Bitte wende Dich an support@ephia.de.");
+      }
+      // Verified. Re-wrap under the current password and clear the release in one write.
+      const newSalt = generateSalt();
+      const newPdk = await derivePDK(password, newSalt);
+      const { encrypted, iv } = await wrapMEK(mek, newPdk);
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(profile.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${sess.access_token}`, "Prefer": "return=representation" },
+        body: JSON.stringify({
+          encrypted_mek: encrypted, mek_iv: iv, mek_salt: newSalt, mek_params: { iterations: 100000, hash: "SHA-256" },
+          escrow_release: null, escrow_release_iv: null, escrow_release_salt: null, escrow_release_expires_at: null,
+        }),
+      });
+      const rows = res.ok ? await res.json() : [];
+      if (!res.ok || rows.length !== 1 || rows[0].encrypted_mek !== encrypted) {
+        throw new Error("Der Schlüssel konnte nicht gespeichert werden. Bitte versuche es noch einmal.");
+      }
+      currentMEK = mek;
+      storeMEKInSession(await exportMEKToBase64(mek));
+      localStorage.setItem("ephia_session", JSON.stringify(sess));
+      setSession(sess);
+      setUser(sess.user);
+      setPendingRecovery(null);
+      setAuthPage("login");
+      await ensureEscrow(mek, rows[0], sess.access_token);
+      await migrateToEncrypted(sess.access_token, sess.user.id);
+      await migrateInvoicesToDocuments(sess.access_token, sess.user.id, currentMEK);
+      await loadUserData(sess.access_token, sess.user.id, sess.user.email);
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -893,7 +926,20 @@ export default function EphiaInvoice() {
       if (profile && profile.encrypted_mek) {
         // Existing encrypted user: unlock MEK
         console.log("[E2EE] Unlocking existing MEK...");
-        await unlockMEK(password, profile, data.access_token);
+        try {
+          await unlockMEK(password, profile, data.access_token);
+        } catch (e) {
+          if (e.code === "RECOVERY_CODE" || e.code === "RECOVERY_NEEDED") {
+            // Not logged in until the MEK is back: undo the session set above.
+            localStorage.removeItem("ephia_session");
+            setSession(null);
+            setUser(null);
+            setPendingRecovery({ sess, profile, password });
+            setAuthPage(e.code === "RECOVERY_CODE" ? "recovery_code" : "recovery_needed");
+            return;
+          }
+          throw e;
+        }
         console.log("[E2EE] MEK unlocked successfully");
       } else {
         // New or pre-E2EE user: initialize encryption
@@ -2637,6 +2683,25 @@ export default function EphiaInvoice() {
           isLoading={authLoading}
           error={authError}
           success={authSuccess}
+        />
+      );
+    }
+    if (authPage === "recovery_needed" && pendingRecovery) {
+      return (
+        <RecoveryNeededScreen
+          email={pendingRecovery.sess.user?.email || ""}
+          requestId={String(pendingRecovery.profile.id || "").slice(0, 8)}
+          onBackClick={() => { setPendingRecovery(null); setAuthPage("login"); setAuthError(""); }}
+        />
+      );
+    }
+    if (authPage === "recovery_code" && pendingRecovery) {
+      return (
+        <RecoveryCodeScreen
+          onSubmit={handleRecoveryCode}
+          onBackClick={() => { setPendingRecovery(null); setAuthPage("login"); setAuthError(""); }}
+          isLoading={authLoading}
+          error={authError}
         />
       );
     }

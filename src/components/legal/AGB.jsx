@@ -12,7 +12,7 @@ export default function AGBPage({ onBack }) {
           </button>
         )}
         <h1 className="text-xl font-bold text-gray-800 mb-1">Allgemeine Geschäftsbedingungen (AGB)</h1>
-        <p className="text-xs text-gray-400 mb-6">EPHIA Medical GmbH · Stand: März 2026</p>
+        <p className="text-xs text-gray-400 mb-6">EPHIA Medical GmbH · Stand: November 2026</p>
 
         <div className="prose prose-sm max-w-none text-gray-700 text-sm leading-relaxed space-y-5">
           <section>
@@ -33,19 +33,19 @@ export default function AGBPage({ onBack }) {
           </section>
 
           <section>
-            <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">§ 4 Datenschutz und Ende-zu-Ende-Verschlüsselung</h2>
+            <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">§ 4 Datenschutz und Verschlüsselung</h2>
             <p>(1) Der Schutz personenbezogener Daten hat für uns höchste Priorität. Die Verarbeitung personenbezogener Daten erfolgt ausschließlich im Einklang mit der Datenschutz-Grundverordnung (DSGVO) und dem Bundesdatenschutzgesetz (BDSG).</p>
-            <p>(2) Patient:innendaten (Name, Adresse, Geburtsdatum und weitere personenbezogene Informationen) werden mittels Ende-zu-Ende-Verschlüsselung (E2EE) mit AES-256-GCM geschützt. Die Verschlüsselung erfolgt direkt in Deinem Browser, bevor Daten an den Server übermittelt werden. Der Anbieter hat zu keinem Zeitpunkt Zugriff auf unverschlüsselte Patient:innendaten.</p>
-            <p>(3) Der Verschlüsselungsschlüssel (Master Encryption Key) wird aus Deinem Passwort abgeleitet und ist ausschließlich Dir zugänglich. Eine Wiederherstellung des Schlüssels ist über einen per E-Mail verifizierten Recovery-Mechanismus möglich.</p>
+            <p>(2) Patient:innendaten (Name, Adresse, Geburtsdatum und weitere personenbezogene Informationen) werden mit AES-256-GCM verschlüsselt. Die Verschlüsselung erfolgt direkt in Deinem Browser, bevor Daten an den Server übermittelt werden. Im laufenden Betrieb hat der Anbieter keinen Zugriff auf unverschlüsselte Patient:innendaten.</p>
+            <p>(3) Der Datenschlüssel (Master Encryption Key) wird durch Dein Passwort geschützt. Für die Wiederherstellung bei Passwortverlust wird er zusätzlich mit einem Schlüssel des Anbieters verschlüsselt hinterlegt, dessen privater Teil getrennt von der Datenbank verwahrt wird. Eine Wiederherstellung erfolgt nur auf Deine Anfrage an support@ephia.de und wird protokolliert.</p>
             <p>(4) Praxisdaten (Praxisname, Adresse, Steuernummer etc.) sowie Rechnungsbeträge und Leistungspositionen werden nicht verschlüsselt gespeichert, um eine ordnungsgemäße Geschäftsabwicklung zu ermöglichen.</p>
             <p>(5) Rechtsgrundlage für die Verarbeitung ist Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) sowie Art. 9 Abs. 2 lit. h DSGVO für die Verarbeitung von Gesundheitsdaten im Rahmen der Gesundheitsversorgung.</p>
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">§ 5 Umgang mit Gesundheitsdaten</h2>
-            <p>(1) Die App verarbeitet im Rahmen der Rechnungsstellung mittelbar Gesundheitsdaten im Sinne von Art. 9 DSGVO, da aus Rechnungspositionen auf Behandlungen und somit auf den Gesundheitszustand geschlossen werden kann. Durch die in § 4 beschriebene Ende-zu-Ende-Verschlüsselung sind patient:innenidentifizierende Daten auf den Servern von EPHIA jedoch zu keinem Zeitpunkt im Klartext gespeichert oder einsehbar — Rechnungspositionen können serverseitig keiner identifizierbaren Person zugeordnet werden.</p>
+            <p>(1) Die App verarbeitet im Rahmen der Rechnungsstellung mittelbar Gesundheitsdaten im Sinne von Art. 9 DSGVO, da aus Rechnungspositionen auf Behandlungen und somit auf den Gesundheitszustand geschlossen werden kann. Durch die in § 4 beschriebene Verschlüsselung sind patient:innenidentifizierende Daten auf den Servern von EPHIA nicht im Klartext gespeichert; Rechnungspositionen können serverseitig keiner identifizierbaren Person zugeordnet werden.</p>
             <p>(2) Du bist als verantwortliche Stelle im Sinne der DSGVO für die von Dir eingegebenen Patient:innendaten verantwortlich. Du stellst sicher, dass Du über die erforderliche Rechtsgrundlage zur Verarbeitung der jeweiligen Patient:innendaten verfügst.</p>
-            <p>(3) Die technischen und organisatorischen Maßnahmen umfassen insbesondere die unter § 4 beschriebene Ende-zu-Ende-Verschlüsselung.</p>
+            <p>(3) Die technischen und organisatorischen Maßnahmen umfassen insbesondere die unter § 4 beschriebene Verschlüsselung.</p>
           </section>
 
           <section>
@@ -60,7 +60,7 @@ export default function AGBPage({ onBack }) {
             <p>(1) Der Anbieter haftet unbeschränkt für Schäden, die auf vorsätzlichem oder grob fahrlässigem Verhalten beruhen.</p>
             <p>(2) Für leichte Fahrlässigkeit haftet der Anbieter nur bei Verletzung wesentlicher Vertragspflichten. Die Haftung ist in diesen Fällen auf den vorhersehbaren, vertragstypischen Schaden begrenzt.</p>
             <p>(3) Die App ersetzt keine steuerliche oder rechtliche Beratung. Der Anbieter übernimmt keine Haftung für die steuerliche oder rechtliche Korrektheit der erstellten Rechnungen.</p>
-            <p>(4) Bei Verlust Deines Passworts und Nichtfunktionieren des Recovery-Mechanismus können wir verschlüsselte Patient:innendaten nicht wiederherstellen. Der Anbieter haftet nicht für Datenverluste, die auf den Verlust des Verschlüsselungsschlüssels zurückzuführen sind.</p>
+            <p>(4) Bei Verlust Deines Passworts kann der Zugriff über das in § 4 beschriebene Wiederherstellungsverfahren zurückgegeben werden. Schlägt dies fehl, können wir verschlüsselte Patient:innendaten nicht wiederherstellen. Der Anbieter haftet nicht für Datenverluste, die auf den Verlust des Verschlüsselungsschlüssels zurückzuführen sind.</p>
           </section>
 
           <section>

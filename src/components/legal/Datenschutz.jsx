@@ -12,7 +12,7 @@ export default function DatenschutzPage({ onBack }) {
           </button>
         )}
         <h1 className="text-xl font-bold text-gray-800 mb-1">Datenschutzerklärung</h1>
-        <p className="text-xs text-gray-400 mb-6">EPHIA Medical GmbH · Stand: März 2026</p>
+        <p className="text-xs text-gray-400 mb-6">EPHIA Medical GmbH · Stand: November 2026</p>
 
         <div className="prose prose-sm max-w-none text-gray-700 text-sm leading-relaxed space-y-5">
           <section>
@@ -31,28 +31,28 @@ export default function DatenschutzPage({ onBack }) {
             <p><strong>Kontodaten:</strong> Deine E-Mail-Adresse und ein Passwort-Hash zur Authentifizierung.</p>
             <p><strong>Praxisdaten:</strong> Praxisname, Anschrift, Steuernummer, Bankverbindung und weitere geschäftliche Angaben. Diese Daten werden unverschlüsselt gespeichert, um die Geschäftsabwicklung zu ermöglichen.</p>
             <p><strong>Rechnungsdaten:</strong> Rechnungsnummern, Leistungspositionen (GOÄ-Ziffern), Beträge und Datumsangaben. Diese Daten werden unverschlüsselt gespeichert.</p>
-            <p><strong>Patient:innendaten:</strong> Name, Adresse, Geburtsdatum und E-Mail-Adresse Deiner Patient:innen. Diese Daten werden vor der Übertragung an den Server in Deinem Browser Ende-zu-Ende-verschlüsselt (siehe Abschnitt 5). Auf unseren Servern werden ausschließlich verschlüsselte, nicht lesbare Daten gespeichert. Wir haben zu keinem Zeitpunkt Zugriff auf Patient:innendaten im Klartext — nur Du selbst kannst diese mit Deinem persönlichen Schlüssel entschlüsseln.</p>
+            <p><strong>Patient:innendaten:</strong> Name, Adresse, Geburtsdatum und E-Mail-Adresse Deiner Patient:innen. Diese Daten werden in Deinem Browser verschlüsselt, bevor sie an den Server übertragen werden, und dort ausschließlich verschlüsselt gespeichert (siehe Abschnitt 5). Im laufenden Betrieb hat EPHIA keinen Zugriff auf diese Daten im Klartext.</p>
             <p><strong>Technische Daten:</strong> Bei der Nutzung der App werden automatisch technische Informationen wie IP-Adresse, Browsertyp und Zugriffszeiten erfasst. Diese Daten werden ausschließlich zur Sicherstellung des Betriebs und zur Fehlerbehebung verwendet.</p>
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">4. Verarbeitung von Gesundheitsdaten</h2>
-            <p>Im Rahmen der Rechnungsstellung können mittelbar Gesundheitsdaten gemäß Art. 9 DSGVO verarbeitet werden, da aus Behandlungspositionen auf den Gesundheitszustand geschlossen werden kann. Die Verarbeitung erfolgt auf Grundlage von Art. 9 Abs. 2 lit. h DSGVO (Gesundheitsversorgung). Durch die Ende-zu-Ende-Verschlüsselung (siehe Abschnitt 5) sind patient:innenidentifizierende Daten auf unseren Servern jedoch zu keinem Zeitpunkt im Klartext gespeichert oder für EPHIA einsehbar — Rechnungspositionen können serverseitig keiner identifizierbaren Person zugeordnet werden.</p>
+            <p>Im Rahmen der Rechnungsstellung können mittelbar Gesundheitsdaten gemäß Art. 9 DSGVO verarbeitet werden, da aus Behandlungspositionen auf den Gesundheitszustand geschlossen werden kann. Die Verarbeitung erfolgt auf Grundlage von Art. 9 Abs. 2 lit. h DSGVO (Gesundheitsversorgung). Durch die Verschlüsselung (siehe Abschnitt 5) sind patient:innenidentifizierende Daten auf unseren Servern nicht im Klartext gespeichert; Rechnungspositionen können serverseitig keiner identifizierbaren Person zugeordnet werden.</p>
             <p>Du bist als verantwortliche Stelle für die von Dir eingegebenen Patient:innendaten verantwortlich und stellst sicher, dass Du über die erforderliche Rechtsgrundlage verfügst.</p>
           </section>
 
           <section>
-            <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">5. Ende-zu-Ende-Verschlüsselung (E2EE)</h2>
-            <p>Patient:innendaten werden mittels Ende-zu-Ende-Verschlüsselung mit AES-256-GCM geschützt. Die Verschlüsselung erfolgt direkt in Deinem Browser, bevor Daten an unsere Server übertragen werden.</p>
-            <p><strong>Schlüsselhierarchie:</strong> Aus Deinem Passwort wird mittels PBKDF2 ein Schlüsselableitungsschlüssel (PDK) erzeugt. Dieser schützt den eigentlichen Datenverschlüsselungsschlüssel (Master Encryption Key, MEK). Der MEK wird ausschließlich in Deinem Browser entschlüsselt.</p>
-            <p><strong>Konsequenz:</strong> Auf unseren Servern befinden sich ausschließlich verschlüsselte, nicht lesbare Zeichenketten. Wir speichern keine Patient:innendaten im Klartext und können diese auch nicht einsehen. Selbst im Falle eines unbefugten Datenbankzugriffs durch Dritte bleiben Patient:innendaten vollständig geschützt, da sie ohne Deinen persönlichen Schlüssel nicht entschlüsselt werden können.</p>
-            <p><strong>Wiederherstellung:</strong> Ein Recovery-Mechanismus ermöglicht es, den MEK bei Passwortverlust über eine E-Mail-Verifizierung wiederherzustellen.</p>
+            <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">5. Verschlüsselung der Patient:innendaten</h2>
+            <p>Patient:innendaten werden mit AES-256-GCM verschlüsselt. Die Verschlüsselung erfolgt direkt in Deinem Browser, bevor Daten an unsere Server übertragen werden.</p>
+            <p><strong>Schlüsselhierarchie:</strong> Aus Deinem Passwort wird mittels PBKDF2 ein Schlüssel abgeleitet, der den eigentlichen Datenschlüssel (Master Encryption Key, MEK) schützt. Für die Arbeit in der App wird der MEK ausschließlich in Deinem Browser entschlüsselt.</p>
+            <p><strong>Wiederherstellung:</strong> Damit Deine Daten bei Verlust Deines Passworts nicht verloren gehen, wird der MEK zusätzlich mit einem öffentlichen Schlüssel von EPHIA verschlüsselt in Deinem Profil gespeichert. Der zugehörige private Schlüssel wird getrennt von der Datenbank verwahrt und nur auf Deine Anfrage an support@ephia.de verwendet, um Dir den Zugriff auf Deine Daten zurückzugeben. Jede Wiederherstellung wird protokolliert. Außerhalb einer solchen Wiederherstellung hat EPHIA keinen Zugriff auf Deine Patient:innendaten im Klartext.</p>
+            <p><strong>Konsequenz:</strong> In der Datenbank liegen ausschließlich verschlüsselte Daten. Ein unbefugter Zugriff auf die Datenbank allein ermöglicht keine Entschlüsselung, weil der dafür nötige Schlüssel dort nicht gespeichert ist.</p>
           </section>
 
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">6. Hosting und Datenverarbeitung</h2>
             <p><strong>Hosting:</strong> Die App wird über GitHub Pages (GitHub, Inc.) als statische Webanwendung bereitgestellt. Es werden dabei keine personenbezogenen Daten serverseitig durch GitHub verarbeitet.</p>
-            <p><strong>Datenbank:</strong> Sämtliche Daten werden auf Servern innerhalb der Europäischen Union gespeichert. Als Datenbankdienstleister wird Supabase mit EU-Serverstandort eingesetzt. Patient:innendaten werden zusätzlich durch Ende-zu-Ende-Verschlüsselung geschützt (siehe Abschnitt 5).</p>
+            <p><strong>Datenbank:</strong> Sämtliche Daten werden auf Servern innerhalb der Europäischen Union gespeichert. Als Datenbankdienstleister wird Supabase mit EU-Serverstandort eingesetzt. Patient:innendaten werden zusätzlich durch Verschlüsselung geschützt (siehe Abschnitt 5).</p>
             <p><strong>Authentifizierung:</strong> Die Authentifizierung erfolgt über Supabase Auth. Dabei werden E-Mail-Adresse und Passwort-Hash verarbeitet.</p>
           </section>
 

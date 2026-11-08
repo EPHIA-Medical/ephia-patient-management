@@ -91,7 +91,7 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
         if (!patchRes.ok) {
           const err = await patchRes.text();
           console.error("Failed to persist re-wrapped MEK:", err);
-          throw new Error("Passwort geändert, aber die Verschlüsselung konnte nicht aktualisiert werden. Bitte melde Dich neu an — Deine Daten werden über den Wiederherstellungsschlüssel automatisch entsperrt.");
+          throw new Error("Passwort geändert, aber die Verschlüsselung konnte nicht aktualisiert werden. Bitte melde Dich neu an. Falls Deine Daten dann nicht entschlüsselt werden, wende Dich an support@ephia.de.");
         }
       }
 

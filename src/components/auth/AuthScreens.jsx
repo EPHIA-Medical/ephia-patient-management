@@ -325,4 +325,96 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
 }
 
 
-export default { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen };
+// Shown after a password reset: the MEK is still wrapped under the old
+// password and support has not placed a release yet. Writes nothing.
+export function RecoveryNeededScreen({ email, requestId, onBackClick }) {
+  const subject = encodeURIComponent(`Wiederherstellung ${requestId}`);
+  const body = encodeURIComponent(`Hallo,\n\nich habe mein Passwort zurückgesetzt und brauche die Wiederherstellung meines Schlüssels.\n\nKonto: ${email}\nAnfrage: ${requestId}\n\nLiebe Grüße`);
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
+        <div className="text-center mb-6">
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
+          <div className="text-xs text-gray-400 uppercase tracking-wider">Wiederherstellung nötig</div>
+        </div>
+
+        <p className="text-sm text-gray-700 mb-3">Dein Passwort wurde zurückgesetzt. Deine Patient:innendaten sind weiterhin sicher verschlüsselt, der Schlüssel muss aber einmal neu freigegeben werden.</p>
+        <p className="text-sm text-gray-700 mb-4">Schreib uns kurz an <a className="text-blue-600 hover:underline" href={`mailto:support@ephia.de?subject=${subject}&body=${body}`}>support@ephia.de</a>. Du bekommst dann einen Wiederherstellungscode an die E-Mail-Adresse Deines Kontos.</p>
+
+        <div className="mb-6 px-3 py-2 bg-gray-50 border border-[#DFE3EB] rounded text-xs text-gray-600">
+          <div>Konto: <span className="font-medium text-gray-800">{email}</span></div>
+          <div>Anfrage: <span className="font-mono font-medium text-gray-800">{requestId}</span></div>
+        </div>
+
+        <a
+          className="block w-full text-center bg-gray-800 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-gray-700 transition"
+          href={`mailto:support@ephia.de?subject=${subject}&body=${body}`}
+        >
+          E-Mail an den Support schreiben
+        </a>
+
+        <div className="mt-4 text-center">
+          <button className="text-xs text-gray-600 hover:text-gray-800 font-medium" onClick={onBackClick}>
+            ← Zurück zur Anmeldung
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown when support has placed a release: the doctor enters the one-time
+// code from the email, the app re-wraps the MEK under the new password.
+export function RecoveryCodeScreen({ onSubmit, onBackClick, isLoading, error }) {
+  const [code, setCode] = useState("");
+  const ready = code.trim().split(/[\s-]+/).filter(Boolean).length === 8;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
+        <div className="text-center mb-6">
+          <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
+          <div className="text-xs text-gray-400 uppercase tracking-wider">Wiederherstellungscode</div>
+        </div>
+
+        <p className="text-sm text-gray-700 mb-4">Gib den Code ein, den Du vom Support per E-Mail bekommen hast: acht Wörter, durch Bindestriche getrennt.</p>
+
+        {error && (
+          <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mb-6">
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">Code</label>
+          <textarea
+            className="w-full border border-[#DFE3EB] rounded px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+            rows={3}
+            placeholder="apfel-baum-berg-..."
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && ready && !isLoading) { e.preventDefault(); onSubmit(code); } }}
+            disabled={isLoading}
+            autoFocus
+          />
+        </div>
+
+        <button
+          className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => onSubmit(code)}
+          disabled={isLoading || !ready}
+        >
+          {isLoading ? "Wird geprüft..." : "Schlüssel wiederherstellen"}
+        </button>
+
+        <div className="mt-4 text-center">
+          <button className="text-xs text-gray-600 hover:text-gray-800 font-medium" onClick={onBackClick} disabled={isLoading}>
+            ← Zurück zur Anmeldung
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default { LoginScreen, SignUpScreen, ResetPasswordScreen, SetNewPasswordScreen, RecoveryNeededScreen, RecoveryCodeScreen };

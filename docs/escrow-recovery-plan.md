@@ -3,8 +3,12 @@
 Status 2026-11-08: steps 0 to 3 done. Key pair in the EPHIA Bitwarden organisation (Marc,
 Sophia), migration 0002 applied, release A live, step 2 gate passed on two accounts. Step 3
 run 2026-11-08 ~16:00 UTC: 18 profiles (17 + the test account), 16 migrated, `--verify`
-reports 18 verified, 0 failed. Both mechanisms are live now. Release B (step 4) not before
-2026-11-15; the encrypted export (step 0.4) is still needed before step 5.
+reports 18 verified, 0 failed. Both mechanisms are live now.
+
+Release B (step 4) is written on branch `release-b` and must not be merged into `main`
+before 2026-11-15. Before the merge: the eight end-to-end checks in step 4 on the test
+account, against a preview build of the branch. The encrypted export (step 0.4) is still
+needed before step 5.
 
 ## 1. Why
 
