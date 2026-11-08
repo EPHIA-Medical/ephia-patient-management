@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { fmtDate, fmt, evalAmount } from "../../utils/helpers";
 import { resolveConsentTemplate, consentTemplateLabel } from "../consent/consentTemplateStore";
 import { spawnConfetti } from "../ui/ConfettiBurst";
+import { invoiceGesamt } from "../../utils/invoiceTotals";
 import { getPraeparate } from "../../utils/praeparate";
 
 // All Präparate of a document, e.g. "Bocouture, Relfydess"
@@ -245,12 +246,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
               const vorname = p.vorname || (p.name || "").split(" ")[0] || "";
               const nachname = p.nachname || (p.name || "").split(" ").slice(1).join(" ") || "";
               const isPaid = inv.paymentStatus === "bezahlt";
-              const zw = (inv.lineItems || []).reduce((s, it) => s + (it.betrag || 0), 0);
-              const isAusland = (inv.patient || {}).country && (inv.patient || {}).country !== "Deutschland";
-              const invIsMedical = !!(inv.invoiceMeta && inv.invoiceMeta.diagnose);
-              const invKlein = inv._kleinunternehmer != null ? inv._kleinunternehmer : kleinunternehmer;
-              const noMwst = invKlein || isAusland || invIsMedical;
-              const gesamt = zw + (noMwst ? 0 : Math.round(zw * 0.19 * 100) / 100);
+              const gesamt = invoiceGesamt(inv, kleinunternehmer);
               return (
                 <tr key={inv.id} className="border-b border-gray-50 hover:bg-blue-50 transition cursor-pointer" onClick={() => onView(inv)}>
                   <td className="px-3 py-3 align-middle">

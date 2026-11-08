@@ -1926,6 +1926,24 @@ export default function EphiaInvoice() {
     await updateDocAdapter(supabaseId, modified);
   };
 
+  // Mark a Rechnung as paid / outstanding (Dokumente list and patient page).
+  // Only paymentStatus changes; on failure the change is undone and shown.
+  const setInvoicePaymentStatus = async (inv, status) => {
+    const updated = { ...inv, paymentStatus: status };
+    setInvoices((prev) => prev.map((i) => (i.id === inv.id ? updated : i)));
+    if (viewingInvoice && viewingInvoice.id === inv.id) setViewingInvoice(updated);
+    if (!session || !inv._supabaseId) return;
+    try {
+      await e2eeFetchModifySave(session.access_token, inv._supabaseId, { paymentStatus: status });
+      logActivity(inv._patientDbId, "rechnung", inv._supabaseId, "updated", `Zahlungsstatus: ${status === "bezahlt" ? "Bezahlt" : "Ausstehend"}`);
+    } catch (e) {
+      console.error("Failed to persist payment status:", e);
+      setInvoices((prev) => prev.map((i) => (i.id === inv.id ? inv : i)));
+      if (viewingInvoice && viewingInvoice.id === inv.id) setViewingInvoice(inv);
+      showErrorToast("Zahlungsstatus konnte nicht gespeichert werden: " + (e?.message || e));
+    }
+  };
+
   // Helper: update the currently viewing invoice (and any linked docs) and persist
   const updateViewingInvoiceData = async (updates) => {
     if (!viewingInvoice) return;
@@ -3602,14 +3620,10 @@ export default function EphiaInvoice() {
               const patientObj = { ...patientData, id: p.id, _raw: p._raw || p };
               setConsentWarningPatient(patientObj);
             }}
-            onUpdateInvoice={async (updated) => {
-              setInvoices(invoices.map(inv => inv.id === updated.id ? updated : inv));
-              if (session && updated._supabaseId) {
-                try {
-                  await e2eeFetchModifySave(session.access_token, updated._supabaseId, { paymentStatus: updated.paymentStatus });
-                  logActivity(updated._patientDbId, "rechnung", updated._supabaseId, "updated", `Zahlungsstatus: ${updated.paymentStatus === "bezahlt" ? "Bezahlt" : "Ausstehend"}`);
-                } catch (e) { console.error("Failed to persist status:", e); }
-              }
+            onUpdateInvoice={(updated) => {
+              // Only used for the paid toggle in the list
+              const current = invoices.find((inv) => inv.id === updated.id) || updated;
+              return setInvoicePaymentStatus(current, updated.paymentStatus);
             }}
             initialTab={listInitialTab}
             onTabChange={(tab) => {
@@ -4027,6 +4041,7 @@ export default function EphiaInvoice() {
             onCreateBehandlung={handleCreateBehandlung}
             onUpdateBehandlung={handleUpdateBehandlung}
             onDeleteBehandlung={handleDeleteBehandlung}
+            onSetPaymentStatus={setInvoicePaymentStatus}
             onLinkDocToBehandlung={handleLinkDocToBehandlung}
             onBack={() => navigate("/patients")}
             onView={(inv) => openDocModal(inv, "rechnung")}

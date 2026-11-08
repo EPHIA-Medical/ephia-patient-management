@@ -10,13 +10,14 @@ import BehandlungDetailPanel from "./BehandlungDetailPanel";
 import BehandlungAddPanel from "./BehandlungAddPanel";
 import PatientBehandlungenSidebar from "./PatientBehandlungenSidebar";
 import NoteEditor from "./NoteEditor";
+import PatientInvoicesTab from "./PatientInvoicesTab";
 import Modal from "../ui/Modal";
 import Spinner from "../ui/Spinner";
 import { emptyPraeparat } from "../../utils/praeparate";
 
 // ═══════════════════ Patient Detail View ═══════════════════
 
-export default function PatientDetailView({ patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, activityLog = [], onLogActivity }) {
+export default function PatientDetailView({ patient, invoices, behandlungen = [], docsMigrated, kleinunternehmer, practice, onBack, onView, onViewHV, onDownload, onDownloadHV, onPrint, onPrintHV, onDelete, onUpdateInvoice, onUpdatePatient, onCreateInvoice, onQuickInvoice, onNewHV, onStartConsent, onViewConsent, onDownloadConsent, onCreateBehandlung, onUpdateBehandlung, onDeleteBehandlung, onLinkDocToBehandlung, onSetPaymentStatus, activityLog = [], onLogActivity }) {
   // ── Derived data ──
   const rawData = (patient._raw && typeof patient._raw.data === "object" && patient._raw.data) ? patient._raw.data : {};
   const email = (rawData.email || patient.email || "").toLowerCase();
@@ -37,6 +38,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [expandedBeh, setExpandedBeh] = useState(null);
   const [historieOpen, setHistorieOpen] = useState(false);
   const [noteEditing, setNoteEditing] = useState(false);
+  const [centerTab, setCenterTab] = useState("behandlungen"); // "behandlungen" | "rechnungen"
 
   const closeTreatmentModal = () => { setViewingTreatment(null); setCenterView("timeline"); };
   const closeTreatmentForm = () => { setCenterView("timeline"); setEditingTreatmentInv(null); setNewTreatmentBehId(null); };
@@ -183,8 +185,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     }
     // A Behandlungsdoku has no payment of its own: once saved it is documented
     if ((inv._standalone || inv._treatmentDocOnly) || inv._docType === "behandlungsdoku") return { label: "Dokumentiert", color: "text-green-600", done: true };
-    if (inv.paymentStatus === "bezahlt") return { label: "Bezahlt", color: "text-green-600" };
-    return { label: "Ausstehend", color: "text-amber-500" };
+    if (inv.paymentStatus === "bezahlt") return { label: "Bezahlt", color: "text-green-600", payment: true, paid: true };
+    return { label: "Ausstehend", color: "text-amber-500", payment: true, paid: false };
   };
 
   const handleDocClick = (inv) => {
@@ -249,6 +251,9 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     };
     reader.readAsDataURL(file);
   };
+
+  // Rechnungen of this patient (no HV, Aufklärung or Behandlungsdoku)
+  const patientRechnungen = matchingInvoices.filter((inv) => getDocLabel(inv) === "Rechnung");
 
   // ── Render ──
   return (
@@ -339,9 +344,35 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
             </button>
           </div>
 
-          {/* Behandlungen (a Behandlungsdoku opens in a modal on top) */}
+          {/* Behandlungen | Rechnungen (documents open in modals on top) */}
           <div className="bg-white rounded-lg border border-[#DFE3EB] shadow-sm overflow-hidden lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto">
-            <PatientBehandlungenSidebar
+            <div className="px-5 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1 -mb-px" role="tablist">
+                {[
+                  { id: "behandlungen", label: "Behandlungen", count: patientBeh.length },
+                  { id: "rechnungen", label: "Rechnungen", count: patientRechnungen.length },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    role="tab"
+                    aria-selected={centerTab === t.id}
+                    className={`px-3 py-3.5 text-sm font-semibold border-b-2 transition outline-none focus-visible:ring-2 focus-visible:ring-blue-300 rounded-t ${centerTab === t.id ? "border-blue-500 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                    onClick={() => setCenterTab(t.id)}
+                  >
+                    {t.label} <span className={`ml-0.5 text-xs font-medium ${centerTab === t.id ? "text-gray-500" : "text-gray-300"}`}>{t.count}</span>
+                  </button>
+                ))}
+              </div>
+              {centerTab === "behandlungen" ? (
+                <button className="text-sm text-blue-500 hover:text-blue-700 font-medium transition whitespace-nowrap" onClick={() => setNewBehandlungOpen(true)}><span className="sm:hidden">+ Neu</span><span className="hidden sm:inline">+ Neue Behandlung</span></button>
+              ) : (
+                onCreateInvoice && <button className="text-sm text-blue-500 hover:text-blue-700 font-medium transition whitespace-nowrap" onClick={() => onCreateInvoice(patient)}><span className="sm:hidden">+ Neu</span><span className="hidden sm:inline">+ Neue Rechnung</span></button>
+              )}
+            </div>
+            {centerTab === "behandlungen" ? (
+              <PatientBehandlungenSidebar
+                hideHeader
+                onSetPaymentStatus={onSetPaymentStatus}
                 patientBeh={patientBeh} matchingInvoices={matchingInvoices} patientDbId={patientDbId} patient={patient}
                 newBehandlungOpen={newBehandlungOpen} setNewBehandlungOpen={setNewBehandlungOpen}
                 newBehDatum={newBehDatum} setNewBehDatum={setNewBehDatum}
@@ -356,7 +387,15 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                 onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
                 titleSuggestions={behTitleSuggestions}
               />
-
+            ) : (
+              <PatientInvoicesTab
+                invoices={patientRechnungen}
+                behandlungen={patientBeh}
+                kleinunternehmer={kleinunternehmer}
+                onView={onView}
+                onSetPaymentStatus={onSetPaymentStatus}
+              />
+            )}
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { fmtDate } from "../../utils/helpers";
 import { showToast } from "../../utils/toast";
 import NoteEditor from "./NoteEditor";
+import { spawnConfetti } from "../ui/ConfettiBurst";
 
 export default function PatientBehandlungenSidebar({
   patientBeh, matchingInvoices, patientDbId, patient,
@@ -12,8 +13,25 @@ export default function PatientBehandlungenSidebar({
   onViewConsent, onViewHV, onView,
   setViewingTreatment, setConfirmDeleteBeh,
   hasConsentRisks, getDocLabel, getDocStatus, handleDocClick,
-  onLinkDocToBehandlung, onDelete, titleSuggestions = [],
+  onLinkDocToBehandlung, onDelete, titleSuggestions = [], onSetPaymentStatus, hideHeader = false,
 }) {
+  // Rechnung: the payment status is a toggle (Ausstehend ⇄ Bezahlt); other documents show plain status text
+  const renderStatus = (doc, status) => (status.payment && onSetPaymentStatus ? (
+    <button
+      type="button"
+      title={status.paid ? "Als ausstehend markieren" : "Als bezahlt markieren"}
+      className={`text-xs px-2 py-0.5 rounded-full font-medium transition ${status.paid ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!status.paid) spawnConfetti(e.currentTarget);
+        onSetPaymentStatus(doc, status.paid ? "ausstehend" : "bezahlt");
+      }}
+    >
+      {status.label}
+    </button>
+  ) : (
+    <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
+  ));
   const [dragOverBehId, setDragOverBehId] = useState(null);
   // Inline editing of a Behandlungstermin (date + time)
   const [editingBehId, setEditingBehId] = useState(null);
@@ -79,11 +97,11 @@ export default function PatientBehandlungenSidebar({
 
   return (
     <div className="flex-1 min-w-0">
-      {/* Header with + button */}
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      {/* Header with + button (the patient page shows its own tab header instead) */}
+      {!hideHeader && <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Behandlungen ({patientBeh.length})</h3>
         <button className="text-sm text-blue-500 hover:text-blue-700 font-medium transition" onClick={() => setNewBehandlungOpen(true)}>+ Neue Behandlung</button>
-      </div>
+      </div>}
 
       {/* Suggestions for the Behandlung title: titles used before */}
       <datalist id="beh-titel-suggestions">
@@ -233,7 +251,7 @@ export default function PatientBehandlungenSidebar({
                           {status.risk && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Risiko</span>}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
+                          {renderStatus(doc, status)}
                           {onDelete && (
                             <button
                               className="p-1 text-gray-300 hover:text-red-500 transition"
@@ -295,7 +313,7 @@ export default function PatientBehandlungenSidebar({
                   {status.risk && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Risiko</span>}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={`text-xs ${status.color} inline-flex items-center gap-1`}>{status.done && <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}{status.label}</span>
+                  {renderStatus(doc, status)}
                   {onDelete && (
                     <button
                       className="p-1 text-gray-300 hover:text-red-500 transition"
