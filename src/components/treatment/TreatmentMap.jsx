@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { evalAmount } from "../../utils/helpers";
 import { FACE_IMAGE_B64 } from "../../constants";
 import { trackEvent } from "../../lib/analytics";
@@ -175,7 +176,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   };
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-  const faceSize = isMobile ? "min(85vw, 340px)" : "min(85vh - 100px, 700px)";
+  // Desktop: sized so the whole editor fits in the window next to the point list, same width as the form dialogs
+  const faceSize = isMobile ? "min(85vw, 340px)" : "clamp(320px, 100vh - 330px, 540px)";
   const markerSize = isMobile ? Math.max(10, 21 / zoom) : 21;
   const markerFontSize = isMobile ? Math.max(6, 11 / zoom) : 11;
 
@@ -231,43 +233,43 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
           const totalUnits = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
           const totalStr = totalUnits % 1 === 0 ? totalUnits.toString() : totalUnits.toFixed(2).replace(/0+$/, "").replace(".", ",");
           return (
-          <div>
-            <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:opacity-90 transition" style={{ width: 200, height: 200, background: "#fafafa" }} onClick={() => setModalOpen(true)} title="Klicken zum Bearbeiten">
+          <div className="flex items-center gap-4">
+            <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none cursor-pointer hover:border-blue-300 transition flex-shrink-0" style={{ width: 132, height: 132, background: "#fafafa" }} onClick={() => setModalOpen(true)} title="Klicken zum Bearbeiten">
               <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
               <VectorLayer markers={markers} />
               {markers.map((m, idx) => (
                 <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                  <MarkerDot marker={m} idx={idx} size={15} fontSize={8} shadow praepCount={praepCount} />
+                  <MarkerDot marker={m} idx={idx} size={12} fontSize={7} shadow praepCount={praepCount} />
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 mt-1.5">
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              <span className="text-xs text-gray-500">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"}{totalUnits > 0 && !multiPraep && ` · ${totalStr} ${einheit}`} dokumentiert</span>
-              <button className="text-xs text-blue-500 hover:text-blue-700" onClick={() => setModalOpen(true)}>Bearbeiten</button>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-800">{markers.length} {markers.length === 1 ? "Punkt" : "Punkte"} dokumentiert</p>
+              {totalUnits > 0 && !multiPraep && <p className="text-sm text-gray-500 mt-0.5">Gesamt {totalStr} {einheit}</p>}
+              <button className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium" onClick={() => setModalOpen(true)}>Bearbeiten</button>
             </div>
           </div>
           );
         })() : (
-          <button className="flex items-center gap-1.5 text-sm text-blue-500 hover:text-blue-700 font-medium transition py-1.5" onClick={() => setModalOpen(true)}>
+          <button className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50/50 text-sm text-blue-600 font-medium transition py-4" onClick={() => setModalOpen(true)}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            {planMode ? "Injektionspunkte planen" : "Injektionspunkte dokumentieren"}
+            {planMode ? "Injektionspunkte planen" : "Injektionspunkte im Gesichtsschema setzen"}
           </button>
         )
       )}
 
       {/* Large modal for precise placement */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 sm:flex sm:items-center sm:justify-center sm:p-4" onClick={() => { setModalOpen(false); if (onAutoCancel) onAutoCancel(); }}>
-          <div className="bg-white sm:rounded-xl shadow-2xl flex flex-col w-full h-full sm:h-auto" style={{ maxWidth: 1100, maxHeight: isMobile ? "100vh" : "95vh" }} onClick={(e) => e.stopPropagation()}>
-            {/* Fixed header on mobile */}
-            <div className="flex-shrink-0 p-4 sm:p-5 pb-0">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Injektionspunkte setzen</h3>
-                <button className="p-1 text-gray-400 hover:text-gray-600" onClick={() => { setModalOpen(false); if (onAutoCancel) onAutoCancel(); }}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
+      {modalOpen && createPortal(
+        <div data-stacked-dialog className="fixed inset-0 bg-black/40 z-[60] sm:flex sm:items-center sm:justify-center sm:p-4" onClick={() => { setModalOpen(false); if (onAutoCancel) onAutoCancel(); }}>
+          <div className="bg-white sm:rounded-xl shadow-2xl flex flex-col w-full h-full sm:h-auto" style={{ maxWidth: "calc(210mm + 3rem)", maxHeight: isMobile ? "100vh" : "95vh" }} onClick={(e) => e.stopPropagation()}>
+            {/* Header like the other dialogs (Modal.jsx) */}
+            <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3.5 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">{planMode ? "Injektionspunkte planen" : "Injektionspunkte setzen"}</h2>
+              <button className="ml-auto p-1.5 -mr-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition" aria-label="Schließen" onClick={() => { setModalOpen(false); if (onAutoCancel) onAutoCancel(); }}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex-shrink-0 px-4 sm:px-5 pt-4">
               {!readOnly && (
                 <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
                   const file = e.target.files?.[0];
@@ -377,16 +379,18 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       </React.Fragment>
                     ))}
                   </div>
+                  {markers.length === 0 && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte gesetzt.</p>}
                   <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />
                 </div>
               </div>
             </div>
             {/* Fixed footer */}
             <div className="flex-shrink-0 flex justify-end p-4 sm:px-5 sm:pb-5 pt-3 border-t border-gray-100">
-              <button className="px-4 py-1.5 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition" onClick={handleSave}>Speichern</button>
+              <button className="px-4 py-1.5 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition" onClick={handleSave}>{onAutoSave ? "Speichern" : "Fertig"}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

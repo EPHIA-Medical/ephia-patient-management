@@ -451,8 +451,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
 
       {/* Behandlungsdoku create/edit form: same shell, closes via X only (unsaved input) */}
       {centerView === "behandlungen_add" && (
-        <Modal title={editingTreatmentInv ? "Behandlung bearbeiten" : "Neue Behandlungsdokumentation"} onClose={closeTreatmentForm} z="z-50" dismissible={false} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 py-4 sm:py-6">
-          <div className="bg-white rounded-lg shadow-sm">
+        <Modal title={editingTreatmentInv ? "Behandlung bearbeiten" : "Neue Behandlungsdokumentation"} onClose={closeTreatmentForm} z="z-50" dismissible={false}>
+          <div>
             <BehandlungAddPanel
               patient={patient} email={email} rawData={rawData} patientDbId={patientDbId}
               matchingInvoices={matchingInvoices} rechnungsInvoices={rechnungsInvoices} copySourceDocs={copySourceDocs} practice={practice}

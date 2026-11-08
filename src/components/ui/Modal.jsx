@@ -30,7 +30,7 @@ export default function Modal({ title, badge, onClose, size = "document", z = "z
     const onKey = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || escapeBlocked) return;
       // A dialog opened inside this modal handles Escape itself
-      if (panelRef.current?.querySelector(".fixed.inset-0")) return;
+      if (panelRef.current?.querySelector(".fixed.inset-0") || document.querySelector("[data-stacked-dialog]")) return;
       onClose();
     };
     window.addEventListener("keydown", onKey);

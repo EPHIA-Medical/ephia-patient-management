@@ -76,170 +76,183 @@ export default function BehandlungAddPanel({
     setNewTreatmentPraeparate([first, ...praeparate.slice(1)]);
   };
 
-  const inputCls = "w-full border border-[#DFE3EB] rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
+  const inputCls = "w-full border border-[#DFE3EB] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
+  const sectionTitle = (text, extra) => (
+    <div className="flex items-center gap-1.5 mb-2.5">
+      <h3 className="text-sm font-semibold text-gray-800">{text}</h3>
+      {extra}
+    </div>
+  );
+  const fieldLabel = "block text-xs font-medium text-gray-500 mb-1";
+  // The patient hint is rarely used, so it stays folded until asked for (or already filled)
+  const [showHinweis, setShowHinweis] = React.useState(!!(patientHinweis || patientBetrag));
 
   return (
-    <div className="px-3 sm:px-5 py-4" style={{ maxWidth: 780 }}>
+    <div className="px-4 sm:px-6 pt-5">
 
-      <div className="flex flex-col sm:flex-row gap-5">
-        {/* Left column: Details + Notizen */}
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Behandlungsdetails</p>
-          <div className="space-y-3 mb-4">
+      {/* Behandlung: Datum + optional copy from an existing document */}
+      <section className="pb-5">
+        {sectionTitle("Behandlung")}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={fieldLabel}>Datum</label>
+            <input
+              type="date"
+              className={inputCls + " bg-white"}
+              style={{ WebkitAppearance: "none", appearance: "none", colorScheme: "light" }}
+              value={newTreatmentDate}
+              onChange={(e) => setNewTreatmentDate(e.target.value)}
+            />
+            {newTreatmentBehId && <p className="text-[11px] text-gray-400 mt-1">Ändert auch den Termin in der Übersicht.</p>}
+          </div>
+          {copySourceDocs.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-0.5">Datum *</label>
-              <input
-                type="date"
-                className={inputCls + " bg-white"}
-                style={{ WebkitAppearance: "none", appearance: "none", colorScheme: "light" }}
-                value={newTreatmentDate}
-                onChange={(e) => setNewTreatmentDate(e.target.value)}
-              />
-              {newTreatmentBehId && <p className="text-[10px] text-gray-400 mt-1">Vorbelegt mit dem Termin der Behandlung. Änderst Du das Datum, wird der Behandlungstermin in der Übersicht mit angepasst.</p>}
-            </div>
-            {copySourceDocs.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1 mb-0.5">
-                  <label className="block text-xs font-medium text-gray-500">Daten aus Dokument &uuml;bertragen</label>
-                  <InfoTooltip>Pr&auml;parat, Menge und Einheit aus einer bestehenden Rechnung oder Honorarvereinbarung &uuml;bernehmen. Es wird keine Verkn&uuml;pfung erstellt &mdash; die Felder lassen sich danach frei bearbeiten.</InfoTooltip>
-                </div>
-                <Select
-                  className={inputCls + " bg-white"}
-                  value={newTreatmentInvoiceId || ""}
-                  onChange={(e) => { const v = e.target.value; setNewTreatmentInvoiceId(v || null); if (v) copyFromDoc(v); }}
-                >
-                  <option value="">&mdash; Dokument w&auml;hlen &mdash;</option>
-                  {copySourceDocs.map((inv) => (
-                    <option key={inv.id} value={inv.id}>
-                      {docLabel(inv)}
-                    </option>
-                  ))}
-                </Select>
+              <div className="flex items-center gap-1 mb-1">
+                <label className="text-xs font-medium text-gray-500">Daten aus Dokument &uuml;bernehmen</label>
+                <InfoTooltip>Pr&auml;parat, Menge und Einheit aus einer bestehenden Rechnung oder Honorarvereinbarung &uuml;bernehmen. Es wird keine Verkn&uuml;pfung erstellt &mdash; die Felder lassen sich danach frei bearbeiten.</InfoTooltip>
               </div>
-            )}
-          </div>
+              <Select
+                className={inputCls + " bg-white"}
+                value={newTreatmentInvoiceId || ""}
+                onChange={(e) => { const v = e.target.value; setNewTreatmentInvoiceId(v || null); if (v) copyFromDoc(v); }}
+              >
+                <option value="">Kein Dokument</option>
+                {copySourceDocs.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {docLabel(inv)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+        </div>
+      </section>
 
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Notizen</p>
-          <textarea
-            className={inputCls}
-            rows={4}
-            placeholder="Optionale Notizen zur Behandlung…"
-            value={newTreatmentNotes}
-            onChange={(e) => setNewTreatmentNotes(e.target.value)}
-          />
-          <p className="text-[10px] text-gray-400 mt-1 mb-3">Notizen sind intern und erscheinen nicht auf dem PDF.</p>
+      {/* Präparat(e) */}
+      <section className="py-5 border-t border-gray-100">
+        {sectionTitle(multiPraep ? "Präparate" : "Präparat", <InfoTooltip>H&auml;ufig verwendete Pr&auml;parate kannst Du in den Praxis-Einstellungen speichern, um sie hier schnell auszuw&auml;hlen. Mit „Weiteres Pr&auml;parat“ dokumentierst Du mehrere Produkte in einer Sitzung, z.B. zwei Botulinum-Pr&auml;parate f&uuml;r verschiedene Regionen.</InfoTooltip>)}
+        <div className="space-y-2">
+          {praeparate.map((p, idx) => {
+            const t = totals[idx];
+            return (
+              <div key={idx} className="grid gap-2 items-end" style={{ gridTemplateColumns: multiPraep ? "18px minmax(0,1fr) 84px 76px 110px 28px" : "minmax(0,1fr) 84px 76px 110px" }}>
+                {multiPraep && (
+                  <div className="pb-2.5">
+                    <span className="block text-[10px] font-bold rounded bg-gray-800 text-white text-center" style={{ width: 18, height: 18, lineHeight: "18px" }}>{praepLetter(idx)}</span>
+                  </div>
+                )}
+                <div>
+                  {idx === 0 && <label className={fieldLabel}>Name</label>}
+                  <PraeparatAutocomplete
+                    className={inputCls}
+                    value={p.name}
+                    placeholder="z.B. Bocouture"
+                    suggestions={(practice.praeparate || []).filter((s) => s.name)}
+                    onChange={(v) => updatePraep(idx, { name: v })}
+                    onSelect={(s) => updatePraep(idx, { name: s.name, ...(s.einheit && s.einheit !== "Spritze" ? { einheit: s.einheit } : s.typ === "filler" ? { einheit: "ml" } : {}) })}
+                  />
+                </div>
+                <div>
+                  {idx === 0 && (
+                    <label className={fieldLabel + " flex items-center gap-1"}>
+                      Menge
+                      <Tooltip content={"Wird automatisch berechnet, wenn Injektionspunkte dokumentiert werden."} width={220}>
+                        <svg className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </Tooltip>
+                    </label>
+                  )}
+                  <input
+                    className={inputCls}
+                    value={hasMarkers ? (t.units > 0 ? fmtUnits(newTreatmentMarkers.filter((m) => (m.p || 0) === idx)) : "") : p.amount}
+                    placeholder={hasMarkers ? "–" : "z.B. 8,4"}
+                    readOnly={hasMarkers}
+                    onChange={(e) => { if (!hasMarkers) updatePraep(idx, { amount: e.target.value }); }}
+                    style={hasMarkers ? { background: "#f9fafb", color: "#6b7280" } : {}}
+                  />
+                </div>
+                <div>
+                  {idx === 0 && <label className={fieldLabel}>Einheit</label>}
+                  <Select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => updatePraep(idx, { einheit: e.target.value })}>
+                    <option value="ml">ml</option>
+                    <option value="SE">SE</option>
+                    <option value="IE">IE</option>
+                  </Select>
+                </div>
+                <div>
+                  {idx === 0 && <label className={fieldLabel}>Charge</label>}
+                  <input
+                    className={inputCls + (isFillerPraep(p) && !(p.charge || "").trim() ? " border-amber-400" : "")}
+                    value={p.charge || ""}
+                    placeholder={isFillerPraep(p) ? "Pflicht" : "optional"}
+                    onChange={(e) => updatePraep(idx, { charge: e.target.value })}
+                  />
+                </div>
+                {multiPraep && (
+                  <div className="pb-1">
+                    <button type="button" className="p-1.5 rounded text-gray-300 hover:text-red-500 transition" title="Pr&auml;parat entfernen" onClick={() => removePraep(idx)}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <button type="button" className="mt-2.5 text-sm text-blue-600 hover:text-blue-700 font-medium" onClick={addPraep}>+ Weiteres Pr&auml;parat</button>
+        {multiPraep && hasMarkers && (
+          <p className="text-[11px] text-gray-400 mt-1.5">Die Buchstaben in den Punkten zeigen das Pr&auml;parat. Beim Setzen eines Punkts w&auml;hlst Du das Pr&auml;parat aus.</p>
+        )}
+      </section>
 
-          <div className="flex items-center gap-1 mb-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Hinweis f&uuml;r Patient:in</p>
-            <InfoTooltip>Dieser Text wird auf die Behandlungsdokumentation gedruckt. Mit Betrag erscheinen zus&auml;tzlich Deine Bankdaten aus den Praxis-Einstellungen, z.B. wenn nur Materialkosten ohne Rechnung bezahlt werden.</InfoTooltip>
-          </div>
-          <textarea
-            className={inputCls}
-            rows={3}
-            placeholder="Optional, z.B. „Bitte überweise die Materialkosten innerhalb von 14 Tagen.“"
-            value={patientHinweis}
-            onChange={(e) => setPatientHinweis(e.target.value)}
-          />
-          <div className="mt-2">
-            <label className="block text-xs font-medium text-gray-500 mb-0.5">Zu zahlender Betrag (optional)</label>
-            <div className="relative w-36">
-              <input
-                type="text"
-                inputMode="decimal"
-                className={inputCls + " pr-7"}
-                placeholder="z.B. 45,00"
-                value={patientBetrag}
-                onChange={(e) => setPatientBetrag(e.target.value)}
+      {/* Injektionspunkte */}
+      <section className="py-5 border-t border-gray-100">
+        {sectionTitle("Injektionspunkte", <span className="text-xs text-gray-400">optional</span>)}
+        <TreatmentMap markers={newTreatmentMarkers} setMarkers={setNewTreatmentMarkers} einheit={activeEinheit} facePhoto={newTreatmentFacePhoto} onFacePhotoChange={setNewTreatmentFacePhoto} praeparate={praeparate} />
+      </section>
+
+      {/* Notizen + Hinweis für Patient:in */}
+      <section className="py-5 border-t border-gray-100">
+        {sectionTitle("Notizen", <span className="text-xs text-gray-400">intern, nicht auf dem PDF</span>)}
+        <textarea
+          className={inputCls}
+          rows={3}
+          placeholder="z.B. Verlauf, Besonderheiten, Absprachen …"
+          value={newTreatmentNotes}
+          onChange={(e) => setNewTreatmentNotes(e.target.value)}
+        />
+        {!showHinweis ? (
+          <button type="button" className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium" onClick={() => setShowHinweis(true)}>+ Hinweis f&uuml;r Patient:in</button>
+        ) : (
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <label className="text-xs font-medium text-gray-500">Hinweis f&uuml;r Patient:in</label>
+              <InfoTooltip>Dieser Text wird auf die Behandlungsdokumentation gedruckt. Mit Betrag erscheinen zus&auml;tzlich Deine Bankdaten aus den Praxis-Einstellungen, z.B. wenn nur Materialkosten ohne Rechnung bezahlt werden.</InfoTooltip>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px] items-start">
+              <textarea
+                className={inputCls}
+                rows={2}
+                autoFocus={!patientHinweis}
+                placeholder="Steht auf dem PDF, z.B. „Bitte überweise die Materialkosten innerhalb von 14 Tagen.“"
+                value={patientHinweis}
+                onChange={(e) => setPatientHinweis(e.target.value)}
               />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">&euro;</span>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className={inputCls + " pr-7"}
+                  placeholder="Betrag"
+                  title="Zu zahlender Betrag (optional)"
+                  value={patientBetrag}
+                  onChange={(e) => setPatientBetrag(e.target.value)}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">&euro;</span>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Right column: Praeparate + Injektionspunkte */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 mb-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">{multiPraep ? "Präparate" : "Präparat"}</p>
-            <InfoTooltip>H&auml;ufig verwendete Pr&auml;parate kannst Du in den Praxis-Einstellungen speichern, um sie hier schnell auszuw&auml;hlen. Mit „Weiteres Pr&auml;parat“ dokumentierst Du mehrere Produkte in einer Sitzung, z.B. zwei Botulinum-Pr&auml;parate f&uuml;r verschiedene Regionen.</InfoTooltip>
-          </div>
-          <div className="space-y-2 mb-2">
-            {praeparate.map((p, idx) => {
-              const t = totals[idx];
-              return (
-                <div key={idx} className="grid gap-2" style={{ gridTemplateColumns: multiPraep ? "18px 1fr 76px 72px 96px 28px" : "1fr 76px 72px 96px" }}>
-                  {multiPraep && (
-                    <div className="flex items-end pb-1.5">
-                      <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center" style={{ width: 18, height: 18, lineHeight: "18px" }}>{praepLetter(idx)}</span>
-                    </div>
-                  )}
-                  <div>
-                    {idx === 0 && <label className="block text-xs font-medium text-gray-500 mb-0.5">Name</label>}
-                    <PraeparatAutocomplete
-                      className={inputCls}
-                      value={p.name}
-                      placeholder="z.B. Bocouture"
-                      suggestions={(practice.praeparate || []).filter((s) => s.name)}
-                      onChange={(v) => updatePraep(idx, { name: v })}
-                      onSelect={(s) => updatePraep(idx, { name: s.name, ...(s.einheit && s.einheit !== "Spritze" ? { einheit: s.einheit } : s.typ === "filler" ? { einheit: "ml" } : {}) })}
-                    />
-                  </div>
-                  <div>
-                    {idx === 0 && (
-                      <label className="block text-xs font-medium text-gray-500 mb-0.5 flex items-center gap-1">
-                        Menge
-                        <Tooltip content={"Wird automatisch berechnet, wenn Injektionspunkte dokumentiert werden."} width={220}>
-                          <svg className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </Tooltip>
-                      </label>
-                    )}
-                    <input
-                      className={inputCls}
-                      value={hasMarkers ? (t.units > 0 ? fmtUnits(newTreatmentMarkers.filter((m) => (m.p || 0) === idx)) : "") : p.amount}
-                      placeholder={hasMarkers ? "–" : "z.B. 8,4"}
-                      readOnly={hasMarkers}
-                      onChange={(e) => { if (!hasMarkers) updatePraep(idx, { amount: e.target.value }); }}
-                      style={hasMarkers ? { background: "#f9fafb", color: "#6b7280" } : {}}
-                    />
-                  </div>
-                  <div>
-                    {idx === 0 && <label className="block text-xs font-medium text-gray-500 mb-0.5">Einheit</label>}
-                    <Select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => updatePraep(idx, { einheit: e.target.value })}>
-                      <option value="ml">ml</option>
-                      <option value="SE">SE</option>
-                      <option value="IE">IE</option>
-                    </Select>
-                  </div>
-                  <div>
-                    {idx === 0 && <label className="block text-xs font-medium text-gray-500 mb-0.5">Charge</label>}
-                    <input
-                      className={inputCls + (isFillerPraep(p) && !(p.charge || "").trim() ? " border-amber-400" : "")}
-                      value={p.charge || ""}
-                      placeholder={isFillerPraep(p) ? "Pflicht" : "optional"}
-                      onChange={(e) => updatePraep(idx, { charge: e.target.value })}
-                    />
-                  </div>
-                  {multiPraep && (
-                    <div className="flex items-end">
-                      <button type="button" className="p-1.5 rounded text-gray-300 hover:text-red-500 transition" title="Pr&auml;parat entfernen" onClick={() => removePraep(idx)}>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <button type="button" className="text-xs text-blue-500 hover:text-blue-700 font-medium mb-4" onClick={addPraep}>+ Weiteres Pr&auml;parat</button>
-          {multiPraep && hasMarkers && (
-            <p className="text-[10px] text-gray-400 -mt-3 mb-4">Die Buchstaben in den Punkten zeigen das Pr&auml;parat. Beim Setzen eines Punkts w&auml;hlst Du das Pr&auml;parat aus.</p>
-          )}
-
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Injektionspunkte <span className="normal-case tracking-normal text-gray-300">(optional)</span></p>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <TreatmentMap markers={newTreatmentMarkers} setMarkers={setNewTreatmentMarkers} einheit={activeEinheit} facePhoto={newTreatmentFacePhoto} onFacePhotoChange={setNewTreatmentFacePhoto} praeparate={praeparate} />
-          </div>
-        </div>
-      </div>
+        )}
+      </section>
 
       {newTreatmentDate && (() => {
         const saveTreatment = (openQuickInvoice) => {
@@ -281,6 +294,7 @@ export default function BehandlungAddPanel({
           setNewTreatmentNotes("");
           setPatientHinweis("");
           setPatientBetrag("");
+          setShowHinweis(false);
           if (setNewTreatmentBehId) setNewTreatmentBehId(null);
           setEditingTreatmentInv(null);
 
@@ -298,23 +312,28 @@ export default function BehandlungAddPanel({
         const quickEnabled = !editingTreatmentInv && hasPraep && hasAmount && !missingCharge;
 
         return (
-          <div className="mt-4 flex items-center gap-2 flex-wrap">
-            <button
-              className={`px-4 py-2 text-sm rounded-lg text-white transition ${missingCharge ? "bg-gray-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
-              disabled={missingCharge}
-              title={missingCharge ? "Bei Dermalfillern ist die Chargennummer Pflicht." : undefined}
-              onClick={() => !missingCharge && saveTreatment(false)}
-            >
-              Behandlung speichern
-            </button>
-            {missingCharge && <span className="text-xs text-amber-600">Bitte die Chargennummer des Fillers eintragen (Rückverfolgbarkeit, § 630f BGB).</span>}
-            <button
-              className={`px-4 py-2 text-sm rounded-lg text-white transition ${quickEnabled ? "bg-green-500 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"}`}
-              disabled={!quickEnabled}
-              onClick={() => quickEnabled && saveTreatment(true)}
-            >
-              Speichern &amp; Schnellrechnung erstellen
-            </button>
+          <div className="py-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
+            {missingCharge && <span className="text-xs text-amber-600 mr-auto">Bitte die Chargennummer des Fillers eintragen (Rückverfolgbarkeit, § 630f BGB).</span>}
+            <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+              {!editingTreatmentInv && (
+                <button
+                  className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] bg-white text-gray-700 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                  disabled={!quickEnabled}
+                  title={quickEnabled ? undefined : "Dafür braucht es Präparat und Menge (oder Injektionspunkte)."}
+                  onClick={() => quickEnabled && saveTreatment(true)}
+                >
+                  Speichern &amp; Rechnung erstellen
+                </button>
+              )}
+              <button
+                className="px-4 py-2 text-sm font-semibold rounded-lg text-white bg-blue-500 hover:bg-blue-600 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                disabled={missingCharge}
+                title={missingCharge ? "Bei Dermalfillern ist die Chargennummer Pflicht." : undefined}
+                onClick={() => !missingCharge && saveTreatment(false)}
+              >
+                Speichern
+              </button>
+            </div>
           </div>
         );
       })()}
