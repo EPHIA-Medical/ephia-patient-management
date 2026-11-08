@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 
 // ═══════════════════ Select ═══════════════════
 //
-// Drop-in replacement for <select> with <option> children. On mouse devices it
-// renders its own list directly under the field (flips up when there is no
-// room), because native popup menus are drawn by the browser/OS and can open
-// far away from the field in zoomed or embedded views. On touch devices the
-// native picker is kept: it is positioned by the OS and works best there.
+// Drop-in replacement for <select> with <option> children. Always renders its
+// own list directly under the field (flips up when there is no room), because
+// native popup menus are drawn by the browser/OS and can open far away from
+// the field in zoomed or embedded views. No native fallback on touch devices:
+// device detection proved unreliable (emulated or hybrid devices).
 //
 // onChange receives { target: { value } } like a native change event.
 
@@ -26,14 +26,11 @@ const flatten = (children) => {
   return out;
 };
 
-const isCoarsePointer = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-
 const PANEL_MAX_H = 288;
 const GAP = 4;
 
 export default function Select({ value, onChange, children, className = "", disabled, autoFocus, onBlur, onKeyDown, id, name, title, style, "aria-label": ariaLabel }) {
   const options = useMemo(() => flatten(children), [children]);
-  const native = useMemo(isCoarsePointer, []);
   const current = String(value ?? "");
   const selectedIdx = options.findIndex((o) => !o.separator && o.value === current);
   const selected = selectedIdx >= 0 ? options[selectedIdx] : options.find((o) => !o.separator && !o.disabled);
@@ -117,7 +114,7 @@ export default function Select({ value, onChange, children, className = "", disa
   }, [open, active]);
 
   useEffect(() => {
-    if (autoFocus && !native && btnRef.current) { btnRef.current.focus(); openList(); }
+    if (autoFocus && btnRef.current) { btnRef.current.focus(); openList(); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKey = (e) => {
@@ -144,14 +141,6 @@ export default function Select({ value, onChange, children, className = "", disa
       if (i >= 0) setActive(i);
     }
   };
-
-  if (native) {
-    return (
-      <select id={id} name={name} title={title} style={style} className={className} value={value} onChange={onChange} disabled={disabled} autoFocus={autoFocus} onBlur={onBlur} onKeyDown={onKeyDown} aria-label={ariaLabel}>
-        {children}
-      </select>
-    );
-  }
 
   return (
     <>
@@ -189,7 +178,7 @@ export default function Select({ value, onChange, children, className = "", disa
                 role="option"
                 aria-selected={o.value === current}
                 aria-disabled={o.disabled || undefined}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer select-none ${o.disabled ? "text-gray-300 cursor-default" : i === active ? "bg-blue-50 text-gray-900" : "text-gray-700"}`}
+                className={`flex items-center gap-2 px-3 py-2 [@media(pointer:coarse)]:py-3 cursor-pointer select-none ${o.disabled ? "text-gray-300 cursor-default" : i === active ? "bg-blue-50 text-gray-900" : "text-gray-700"}`}
                 // Keep focus on the field (inline editors close on blur)
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => selectable(i) && setActive(i)}
