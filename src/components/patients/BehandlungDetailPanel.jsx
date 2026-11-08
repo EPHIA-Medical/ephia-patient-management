@@ -5,7 +5,7 @@ import { MarkerDot, ColorSwatches, PraeparatChips, PraeparatBadge, serializeMark
 import { getPraeparate, praeparatTotals, praepMengeStr, praepLetter, markerPraepIdx, emptyPraeparat, withPraeparate } from "../../utils/praeparate";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import Select from "../ui/Select";
-import { useVectorTools, VectorToolbar, VectorLayer, vectorSummary, isVector } from "../treatment/vectors";
+import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EDITOR_LABEL_WIDTH } from "../treatment/vectors";
 import { HV_THRESHOLD, maxGesamtWithin, HV_WAIVER_TEXT } from "../../utils/hvRules";
 
 export default function BehandlungDetailPanel({
@@ -159,6 +159,7 @@ export default function BehandlungDetailPanel({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
               </button>
             </div>
+            <VectorLegend markers={td.markers || []} className="mt-2" />
             {markerCount > 0 ? (
               <p className="text-xs text-gray-500 mt-2">
                 {multiPraep ? praepSummary : `Gesamt: ${totalUnitsStr} ${einh}`} an {markerCount} {markerCount === 1 ? "Stelle" : "Stellen"}
@@ -253,7 +254,7 @@ export default function BehandlungDetailPanel({
                         <MarkerDot marker={m} idx={idx} size={22} fontSize={11} praepCount={praepCount} />
                         <span className="text-sm text-gray-700">{m.amount}{String(m.amount).match(/[xX×*]/) ? ` = ${evalAmount(m.amount)}` : ""} {unitFor(m)}</span>
                         {multiPraep && <span className="text-xs text-gray-400">{praeparate[markerPraepIdx(m, praepCount)]?.name || `Präparat ${praepLetter(markerPraepIdx(m, praepCount))}`}</span>}
-                        {isVector(m) && <span className="text-xs text-gray-500">{vectorSummary(m)}</span>}
+                        <VectorSummary marker={m} className="text-xs text-gray-500" />
                       </div>
                     ))}
                   </div>
@@ -595,11 +596,12 @@ export default function BehandlungDetailPanel({
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <p className="text-xs text-gray-400 mb-1">Klicke auf das Gesicht, um Injektionspunkte zu setzen.</p>
-              <p className="text-xs text-amber-500 mb-2">Die eingegebenen Mengen werden automatisch als Gesamtmenge des Pr&auml;parats &uuml;bernommen. In den Punkten werden die Einheiten angezeigt.</p>
-              <div className="mb-2"><VectorToolbar vt={inlineVt} /></div>
-              {multiPraep && <div className="mb-2"><PraeparatChips praeparate={praeparate} value={inlineEditPraep} onChange={setInlineEditPraep} /></div>}
-              <div className="mb-3"><ColorSwatches value={inlineEditColor} onChange={setInlineEditColor} /></div>
+              <div className="space-y-2 mb-3">
+                <VectorToolbar vt={inlineVt} />
+                {multiPraep && <PraeparatChips praeparate={praeparate} value={inlineEditPraep} onChange={setInlineEditPraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
+                <ColorSwatches value={inlineEditColor} onChange={setInlineEditColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
+              </div>
+              <p className="text-xs text-gray-500 mb-2">{vectorInstruction(inlineVt)} Die Mengen trägst Du rechts ein.</p>
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 overflow-y-auto">
                 <div className="flex-shrink-0">
                   <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none" style={{ width: faceSzFE, height: faceSzFE, cursor: "crosshair", background: "#fafafa" }}>
@@ -620,7 +622,9 @@ export default function BehandlungDetailPanel({
                         </div>
                       ))}
                     </div>
+                    <VectorDrawingBar vt={inlineVt} />
                   </div>
+                  <VectorLegend markers={inlineTempMarkers} force={inlineVt.mode !== "punkt"} className="mt-2" />
                 </div>
                 <div className="flex-shrink-0 overflow-y-auto" style={{ width: multiPraep ? 250 : 220, maxHeight: faceSzFE }}>
                   <div className="space-y-1.5">

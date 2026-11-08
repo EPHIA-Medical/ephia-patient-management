@@ -128,7 +128,7 @@ export const sameAmount = (a, b) => {
 
 // Dose chip row: pick the amount that new points receive. Selecting the active
 // chip again clears the preset; anything else goes into the free-text field.
-export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte" }) {
+export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte", labelWidth }) {
   const { main, more } = dosePresetsFor(einheit);
   const inMore = more.some((d) => sameAmount(d, value));
   const [expanded, setExpanded] = React.useState(false);
@@ -137,7 +137,7 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
   const isPreset = presets.some((d) => sameAmount(d, value));
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-xs text-gray-500 mr-0.5">{label}:</span>
+      <span className="text-xs text-gray-500 mr-0.5 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
       {presets.map((d) => {
         const active = sameAmount(d, value);
         return (
@@ -183,11 +183,11 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
 }
 
 // Präparat chip row: which Präparat newly placed points belong to
-export function PraeparatChips({ praeparate, value, onChange, label = "Präparat für neue Punkte" }) {
+export function PraeparatChips({ praeparate, value, onChange, label = "Präparat für neue Punkte", labelWidth }) {
   if (!praeparate || praeparate.length < 2) return null;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-xs text-gray-500 mr-0.5">{label}:</span>
+      <span className="text-xs text-gray-500 mr-0.5 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
       {praeparate.map((p, i) => {
         const active = value === i;
         return (
@@ -225,10 +225,10 @@ export function PraeparatBadge({ marker, praeparate, onCycle }) {
 }
 
 // Colour swatch row used in the editor
-export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte" }) {
+export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte", labelWidth }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-gray-500">{label}:</span>
+      <span className="text-xs text-gray-500 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
       {MARKER_COLORS.map((c) => (
         <button
           key={c.hex}

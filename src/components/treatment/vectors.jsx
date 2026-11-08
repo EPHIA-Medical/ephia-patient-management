@@ -129,9 +129,13 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
   const [activeFanId, setActiveFanId] = React.useState(null);
   const [hover, setHover] = React.useState(null);
 
-  const finish = () => { setLineStart(null); setActiveFanId(null); setHover(null); };
-  const setMode = (m) => { finish(); setModeRaw(m); };
   const activeFan = activeFanId != null ? markers.find((m) => m.id === activeFanId) : null;
+  // Ends the current line or fan. A fan without arms is dropped, it would only be a stray circle.
+  const finish = () => {
+    if (activeFan && !(activeFan.to || []).length) setMarkers(markers.filter((m) => m.id !== activeFan.id));
+    setLineStart(null); setActiveFanId(null); setHover(null);
+  };
+  const setMode = (m) => { finish(); setModeRaw(m); };
 
   const base = () => {
     const v = { id: Date.now() + Math.random(), amount: amount || "", color, tool };
@@ -143,7 +147,7 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
   const handleClick = (x, y) => {
     if (mode === "linie") {
       if (!lineStart) { setLineStart({ x, y }); return true; }
-      if (Math.hypot(x - lineStart.x, y - lineStart.y) < 1.5) return true; // second click on the start: ignore
+      if (Math.hypot(x - lineStart.x, y - lineStart.y) < 3) { finish(); return true; } // click on the start again: cancel
       setMarkers([...markers, { ...base(), kind: "line", x: lineStart.x, y: lineStart.y, to: [{ x, y }] }]);
       setLineStart(null); setHover(null);
       return true;
@@ -155,7 +159,8 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
         setActiveFanId(fan.id);
         return true;
       }
-      if (Math.hypot(x - activeFan.x, y - activeFan.y) < 1.5) return true;
+      // Clicking the entry point again closes the fan
+      if (Math.hypot(x - activeFan.x, y - activeFan.y) < 3) { finish(); return true; }
       setMarkers(markers.map((m) => (m.id === activeFan.id ? { ...m, to: [...(m.to || []), { x, y }] } : m)));
       return true;
     }
@@ -166,41 +171,124 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep }) {
   const from = lineStart || (activeFan ? { x: activeFan.x, y: activeFan.y } : null);
   const preview = from && hover ? { from, to: hover, color } : null;
 
-  const hint = mode === "linie"
-    ? (lineStart ? "Jetzt den Endpunkt anklicken. Der Pfeil zeigt die Vorschubrichtung." : "Eintrittspunkt anklicken, dann den Endpunkt.")
-    : mode === "faecher"
-      ? (activeFan ? `Jeder weitere Klick fügt einen Arm hinzu (${(activeFan.to || []).length} bisher).` : "Eintrittspunkt anklicken, dann die Arme des Fächers.")
-      : null;
+  // Enter or Escape ends the drawing (captured so Escape does not close the dialog)
+  const drawing = !!(lineStart || activeFan);
+  const finishRef = React.useRef(finish);
+  finishRef.current = finish;
+  React.useEffect(() => {
+    if (!drawing) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Enter" && e.key !== "Escape") return;
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      e.preventDefault(); e.stopPropagation();
+      finishRef.current();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [drawing]);
 
-  return { mode, setMode, tool, setTool, depth, setDepth, handleClick, handleMove, preview, finish, hint, activeFan, lineStart };
+  return { mode, setMode, tool, setTool, depth, setDepth, handleClick, handleMove, preview, finish, activeFan, lineStart, drawing };
 }
 
-const segBtn = (active) => `px-2.5 py-1 text-xs rounded-md transition ${active ? "bg-white text-gray-900 shadow-sm font-medium" : "text-gray-500 hover:text-gray-800"}`;
+const segBtn = (active) => `px-2.5 text-xs rounded-md transition ${active ? "bg-white text-gray-900 shadow-sm font-medium" : "text-gray-500 hover:text-gray-800"}`;
+
+// Shared label column for the editor's setting rows (Technik, Instrument, Präparat, Dosis, Farbe)
+export const EDITOR_LABEL_WIDTH = 72;
+export function EditorRow({ label, children }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-xs text-gray-500 flex-shrink-0" style={{ width: EDITOR_LABEL_WIDTH, marginRight: 2 }}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+const isTouch = () => typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+
+// One line telling the user what the next click does
+export function vectorInstruction(vt) {
+  const k = isTouch() ? "Tippe" : "Klicke";
+  if (vt.mode === "linie") return vt.lineStart ? `${k} auf das Ende der Linie.` : `${k} auf den Eintrittspunkt, dann auf das Ende der Linie. Der Pfeil zeigt die Vorschubrichtung.`;
+  if (vt.mode === "faecher") return vt.activeFan ? `${k} auf das Ende des nächsten Arms. Zum Abschließen auf den Eintrittspunkt oder auf Fertig.` : `${k} auf den Eintrittspunkt, dann auf das Ende jedes Arms.`;
+  return `${k} auf das Gesicht, um einen Punkt zu setzen.`;
+}
 
 export function VectorToolbar({ vt }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="inline-flex p-0.5 rounded-lg bg-gray-100" role="group" aria-label="Technik">
-        {[["punkt", "Punkt"], ["linie", "Linie"], ["faecher", "Fächer"]].map(([v, l]) => (
-          <button key={v} type="button" className={segBtn(vt.mode === v)} onClick={() => vt.setMode(v)}>{l}</button>
-        ))}
-      </div>
+    <>
+      <EditorRow label="Technik">
+        <div className="inline-flex p-0.5 rounded-lg bg-gray-100" role="group" aria-label="Technik">
+          {[["punkt", "Punkt"], ["linie", "Linie"], ["faecher", "Fächer"]].map(([v, l]) => (
+            <button key={v} type="button" className={segBtn(vt.mode === v)} style={{ height: 24 }} onClick={() => vt.setMode(v)}>{l}</button>
+          ))}
+        </div>
+      </EditorRow>
       {vt.mode !== "punkt" && (
-        <>
+        <EditorRow label="Instrument">
           <div className="inline-flex p-0.5 rounded-lg bg-gray-100" role="group" aria-label="Instrument">
             {VECTOR_TOOLS.map((t) => (
-              <button key={t.value} type="button" className={segBtn(vt.tool === t.value)} onClick={() => vt.setTool(t.value)}>{t.label}</button>
+              <button key={t.value} type="button" className={segBtn(vt.tool === t.value)} style={{ height: 24 }} onClick={() => vt.setTool(t.value)}>{t.label}</button>
             ))}
           </div>
+          <span className="text-xs text-gray-500 ml-2">Tiefe</span>
           <Select className="border border-[#DFE3EB] rounded-md px-2 py-1 text-xs bg-white" value={vt.depth} onChange={(e) => vt.setDepth(e.target.value)} aria-label="Tiefe">
             {VECTOR_DEPTHS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
           </Select>
-          {vt.activeFan && (
-            <button type="button" className="px-2.5 py-1 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition" onClick={vt.finish}>Fächer abschließen</button>
-          )}
-        </>
+        </EditorRow>
       )}
-      {vt.hint && <p className="w-full text-xs text-gray-500">{vt.hint}</p>}
+    </>
+  );
+}
+
+// Floating bar on the face while a line or fan is being drawn: shows the state and how to end it
+export function VectorDrawingBar({ vt }) {
+  if (!vt.drawing) return null;
+  const n = (vt.activeFan?.to || []).length;
+  const text = vt.activeFan ? `Fächer · ${n} ${n === 1 ? "Arm" : "Arme"}` : "Linie · Ende setzen";
+  const stop = (e) => e.stopPropagation();
+  return (
+    <div className="absolute left-1/2 top-2 -translate-x-1/2 flex items-center gap-2 rounded-full bg-gray-900/85 text-white text-xs pl-3 pr-1 py-1 shadow-lg" style={{ zIndex: 30, cursor: "default" }} onClick={stop} onTouchStart={stop} onTouchEnd={stop} onMouseMove={stop}>
+      <span className="whitespace-nowrap">{text}</span>
+      <button type="button" className={`rounded-full px-3 py-0.5 font-semibold transition ${vt.activeFan ? "bg-white text-gray-900 hover:bg-gray-100" : "text-white/80 hover:text-white"}`} onClick={vt.finish}>
+        {vt.activeFan ? "Fertig" : "Abbrechen"}
+      </button>
+    </div>
+  );
+}
+
+// Small line sample with arrowhead: solid for needle, dashed for cannula
+export function ToolSwatch({ tool, color = "#374151", width = 24 }) {
+  return (
+    <svg width={width} height="10" viewBox={`0 0 ${width} 10`} className="flex-shrink-0" aria-hidden="true">
+      <line x1="1" y1="5" x2={width - 6} y2="5" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeDasharray={tool === "kanuele" ? "3.5 2.5" : undefined} />
+      <polygon points={`${width - 1},5 ${width - 7},1.5 ${width - 7},8.5`} fill={color} />
+    </svg>
+  );
+}
+
+// "Fächer · 3 Arme · Kanüle" with the matching line sample in the marker's colour
+export function VectorSummary({ marker, className = "text-[11px] text-gray-500" }) {
+  if (!isVector(marker)) return null;
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <ToolSwatch tool={marker.tool} color={markerColor(marker)} />
+      {vectorSummary(marker)}
+    </span>
+  );
+}
+
+// Key for the symbols, shown under the face whenever lines or fans are on it
+export function VectorLegend({ markers, force = false, className = "" }) {
+  if (!force && !(markers || []).some(isVector)) return null;
+  return (
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 ${className}`}>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block rounded-full bg-white flex-shrink-0" style={{ width: 10, height: 10, border: "2px solid #374151" }} />
+        Eintrittspunkt
+      </span>
+      <span className="inline-flex items-center gap-1.5"><ToolSwatch tool="nadel" />Nadel</span>
+      <span className="inline-flex items-center gap-1.5"><ToolSwatch tool="kanuele" />Kanüle</span>
+      <span>Pfeil = Vorschubrichtung</span>
     </div>
   );
 }

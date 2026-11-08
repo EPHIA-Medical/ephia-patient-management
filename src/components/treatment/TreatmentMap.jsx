@@ -4,7 +4,7 @@ import { FACE_IMAGE_B64 } from "../../constants";
 import { trackEvent } from "../../lib/analytics";
 import { MarkerDot, ColorSwatches, DoseChips, PraeparatChips, PraeparatBadge, DEFAULT_MARKER_COLOR, markerColor, nextMarkerColor, sameAmount } from "./markerUtils";
 import { markerPraepIdx } from "../../utils/praeparate";
-import { useVectorTools, VectorToolbar, VectorLayer, vectorSummary, isVector } from "./vectors";
+import { useVectorTools, VectorToolbar, VectorLayer, VectorDrawingBar, VectorSummary, VectorLegend, isVector, vectorInstruction, EDITOR_LABEL_WIDTH } from "./vectors";
 
 // ═══════════════════ Treatment Map ═══════════════════
 
@@ -182,6 +182,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   if (readOnly) {
     return (
       <div className="flex flex-col sm:flex-row gap-4" style={{ alignItems: "flex-start" }}>
+        <div className="flex-shrink-0" style={{ width: 250 }}>
         <div className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none flex-shrink-0" style={{ width: 250, height: 250, background: "#fafafa" }}>
           <img src={faceImg} alt="Gesicht" className="w-full h-full object-contain pointer-events-none" draggable={false} />
           <VectorLayer markers={markers} />
@@ -190,6 +191,8 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
               <MarkerDot marker={m} idx={idx} size={17} fontSize={9} shadow praepCount={praepCount} />
             </div>
           ))}
+        </div>
+        <VectorLegend markers={markers} className="mt-1.5" />
         </div>
         {(markers.length > 0 || notes) && (
           <div className="flex gap-6" style={{ alignItems: "flex-start" }}>
@@ -201,7 +204,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                     <MarkerDot marker={m} idx={idx} size={20} fontSize={10} praepCount={praepCount} />
                     <input type="text" inputMode="decimal" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded bg-gray-50" value={m.amount} readOnly />
                     <span className="text-xs text-gray-400">{unitFor(m)}</span>
-                    {isVector(m) && <span className="text-[11px] text-gray-500">{vectorSummary(m)}</span>}
+                    <VectorSummary marker={m} />
                   </div>
                 ))}
               </div>
@@ -276,15 +279,15 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                   e.target.value = "";
                 }} />
               )}
-              <p className="text-xs text-gray-400 mb-1">
-                <span className="hidden sm:inline">{multiPraep ? "Präparat, Dosis und Farbe wählen" : "Dosis und Farbe wählen"}, dann auf das Gesicht klicken. Jeder neue Punkt übernimmt die Auswahl.</span>
-                <span className="sm:hidden">{multiPraep ? "Präparat, Dosis und Farbe wählen" : "Dosis und Farbe wählen"}, dann auf das Gesicht tippen. Zwei Finger zum Zoomen.</span>
+              <div className="space-y-2 mb-3">
+                <VectorToolbar vt={vt} />
+                {multiPraep && <PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
+                <DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} label="Dosis" labelWidth={EDITOR_LABEL_WIDTH} />
+                <ColorSwatches value={activeColor} onChange={setActiveColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
+              </div>
+              <p className="text-xs text-gray-500 mb-2">
+                {vectorInstruction(vt)}<span className="sm:hidden"> Zwei Finger zum Zoomen.</span>
               </p>
-              <p className="text-xs text-amber-500 mb-2">Die Mengen werden automatisch als Gesamtmenge des Präparats übernommen. In den Punkten werden die Einheiten angezeigt.</p>
-              <div className="mb-2"><VectorToolbar vt={vt} /></div>
-              {multiPraep && <div className="mb-2"><PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} /></div>}
-              <div className="mb-2"><DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} /></div>
-              <div className="mb-3"><ColorSwatches value={activeColor} onChange={setActiveColor} /></div>
               {zoom > 1 && (
                 <button className="text-xs text-blue-500 hover:text-blue-700 mb-2 sm:hidden" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Zoom zurücksetzen</button>
               )}
@@ -318,6 +321,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                         </div>
                       ))}
                     </div>
+                    <VectorDrawingBar vt={vt} />
                     {!readOnly && facePhoto && (
                       <button
                         className="absolute bottom-2 right-2 rounded-full bg-white bg-opacity-90 shadow-md hover:bg-opacity-100 transition flex items-center justify-center"
@@ -329,6 +333,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                       </button>
                     )}
                   </div>
+                  <VectorLegend markers={markers} force={vt.mode !== "punkt"} className="mt-2" />
                   {!readOnly && (
                     <div className="mt-2">
                       {facePhoto ? (
@@ -367,10 +372,11 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
-                      {isVector(m) && <div className="pl-6 -mt-1 text-[11px] text-gray-500">{vectorSummary(m)}</div>}
+                      {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
                       </React.Fragment>
                     ))}
                   </div>
+                  {markers.length > 0 && <p className="mt-3 text-[11px] text-gray-400">Die Summe der Mengen wird als Gesamtmenge des Präparats übernommen.</p>}
                 </div>
               </div>
             </div>
