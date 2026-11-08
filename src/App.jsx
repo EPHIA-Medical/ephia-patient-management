@@ -2787,10 +2787,13 @@ export default function EphiaInvoice() {
   }
 
   // ─── AVV gate: nothing else until the current version is accepted ───
-  if (dataLoaded && avvChecked && !avvAcceptance) {
+  // First-time accounts enter their practice data first (onboarding), so the
+  // contract names the practice; the gate fires right after that save.
+  if (dataLoaded && avvChecked && !avvAcceptance && !isFirstTimeUser) {
     return (
       <AVVAcceptScreen
         practice={practice}
+        onboarding={onboardingStep === "patient"}
         email={user?.email || ""}
         onAccept={handleAcceptAvv}
         onLogout={handleSignOut}

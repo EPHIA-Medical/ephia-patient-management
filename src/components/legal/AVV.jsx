@@ -68,7 +68,7 @@ export default function AVVPage({ onBack, practice, acceptance }) {
 }
 
 // Blocking screen shown after login until the current version is accepted.
-export function AVVAcceptScreen({ practice, email, onAccept, onLogout, isLoading, error }) {
+export function AVVAcceptScreen({ practice, email, onAccept, onLogout, isLoading, error, onboarding }) {
   const [checked, setChecked] = useState(false);
   const party = practiceLine(practice);
   return (
@@ -77,7 +77,8 @@ export function AVVAcceptScreen({ practice, email, onAccept, onLogout, isLoading
         <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4">
           <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
           <h1 className="text-lg font-bold text-gray-800 text-center mb-2">Auftragsverarbeitungsvertrag</h1>
-          <p className="text-sm text-gray-600 text-center">Bevor Du weiterarbeitest, schließen wir den Auftragsverarbeitungsvertrag nach Art. 28 DSGVO ab. Er regelt, wie EPHIA die Daten Deiner Patient:innen für Dich verarbeitet. Lies ihn in Ruhe; Du findest ihn später jederzeit unter Praxis-Einstellungen.</p>
+          {onboarding && <p className="text-xs text-gray-400 text-center mb-2">Praxisdaten gespeichert. Noch ein Schritt, dann geht es los.</p>}
+          <p className="text-sm text-gray-600 text-center">{onboarding ? "Zum Start schließen" : "Bevor Du weiterarbeitest, schließen"} wir den Auftragsverarbeitungsvertrag nach Art. 28 DSGVO ab. Er regelt, wie EPHIA die Daten Deiner Patient:innen für Dich verarbeitet. Lies ihn in Ruhe; Du findest ihn später jederzeit unter Praxis-Einstellungen.</p>
         </div>
 
         <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4 max-h-[60vh] overflow-y-auto">
