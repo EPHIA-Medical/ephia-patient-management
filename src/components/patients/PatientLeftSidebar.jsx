@@ -6,11 +6,13 @@ import Select from "../ui/Select";
 import CopyButton from "../ui/CopyButton";
 
 const inputCls = "border border-[#DFE3EB] rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
-const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-700 text-right hover:bg-gray-50 hover:text-gray-900 cursor-text transition";
+const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-900 text-left hover:bg-gray-50 cursor-text transition";
 const GESCHLECHT = { w: "Weiblich", m: "Männlich", d: "Divers" };
 
-// Click a value to edit it in place. Enter or leaving the field saves, Escape cancels.
-function InlineField({ label, value, display, type = "text", options, placeholder, onSave, copyable = false }) {
+// Label above the value, both left-aligned. Click the value to edit it in place:
+// Enter or leaving the field saves, Escape cancels.
+// options: [[value, label], ...]; null renders a separator line.
+function InlineField({ label, value, display, type = "text", options, allowEmpty = true, placeholder, onSave, copyable = false, sanitize, inputMode, maxLength }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const done = useRef(false); // blocks a second save from the blur that follows Enter/Escape
@@ -19,23 +21,28 @@ function InlineField({ label, value, display, type = "text", options, placeholde
   const commit = (v = draft) => { if (done.current) return; stop(); if ((v || "") !== (value || "")) onSave(v); };
   const keys = (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") stop(); };
   return (
-    <div className="flex justify-between items-center gap-3 min-h-[28px]">
-      <span className="text-sm text-gray-400 flex-shrink-0">{label}</span>
+    <div className="py-1.5">
+      <div className="text-[13px] text-gray-500 mb-0.5">{label}</div>
       {editing ? (
         options ? (
-          <Select autoFocus className={inputCls + " bg-white min-w-0"} value={draft} onChange={(e) => commit(e.target.value)} onBlur={stop} onKeyDown={keys}>
-            <option value="">--</option>
-            {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          <Select autoFocus className={inputCls + " bg-white w-full"} value={draft} onChange={(e) => commit(e.target.value)} onBlur={stop} onKeyDown={keys}>
+            {allowEmpty && <option value="">--</option>}
+            {options.map((o, i) => (o ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={"sep" + i} disabled>{"────────────"}</option>))}
           </Select>
         ) : (
-          <input autoFocus type={type} className={inputCls + " min-w-0 w-40 text-right"} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} onKeyDown={keys} />
+          <input
+            autoFocus type={type} inputMode={inputMode} maxLength={maxLength}
+            className={inputCls + " w-full"} value={draft} placeholder={placeholder}
+            onChange={(e) => setDraft(sanitize ? sanitize(e.target.value) : e.target.value)}
+            onBlur={() => commit()} onKeyDown={keys}
+          />
         )
       ) : (
-        <div className="flex items-center gap-0.5 min-w-0">
+        <div className="flex items-start gap-1 min-w-0">
           <button type="button" className={valueBtnCls + " min-w-0 break-words"} title="Klicken zum Bearbeiten" onClick={start}>
             {value ? (display ?? value) : <span className="text-gray-300">--</span>}
           </button>
-          {copyable && value && <CopyButton value={display ?? value} label={`${label} kopieren`} className="-mr-1" />}
+          {copyable && value && <CopyButton value={display ?? value} label={`${label} kopieren`} className="mt-0.5" />}
         </div>
       )}
     </div>
@@ -91,8 +98,17 @@ export default function PatientLeftSidebar({
   const nachname = data.nachname || patient.nachname || "";
   const shownEmail = "email" in overrides ? overrides.email : (email || data.email || "");
   const name = useGroupEdit({ vorname, nachname }, (d) => { if (d.vorname.trim() && d.nachname.trim()) save(d); });
-  const adresse = useGroupEdit({ address1: data.address1 || "", address2: data.address2 || "", country: data.country || "Deutschland" }, save);
-  const { plz, ort } = parsePlzOrt(adresse.draft.address2);
+  // Address is stored as address1 (Straße) and address2 ("PLZ Ort"), as on all documents;
+  // here it is shown and edited as separate fields.
+  const { plz, ort } = parsePlzOrt(data.address2 || "");
+  const country = data.country || "Deutschland";
+  const savePlz = async (v) => {
+    let city = ort;
+    if (!city && v.length === 5 && country === "Deutschland") city = (await lookupPlz(v)) || "";
+    save({ address2: combinePlzOrt(v, city) });
+  };
+  const fullAddress = [data.address1, data.address2, country].filter(Boolean).join("\n");
+  const countryOptions = [...PRIORITY_COUNTRIES.map((c) => [c, c]), null, ...OTHER_COUNTRIES.map((c) => [c, c])];
 
   return (
     <div className="lg:w-72 xl:w-80 lg:sticky lg:top-0 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
@@ -152,65 +168,25 @@ export default function PatientLeftSidebar({
       <div className={detailsOpen ? "" : "hidden lg:block"}>
       {/* Adressdaten section */}
       <div className="border-b border-gray-100">
-        <h3 className="px-5 py-3.5 text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</h3>
-        <div className="px-5 pb-4">
-          <div className="space-y-1.5">
-            <InlineField copyable label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
-            <InlineField copyable label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
-            <div className="flex justify-between items-start gap-3 min-h-[28px]">
-              <span className="text-sm text-gray-400 flex-shrink-0 pt-0.5">Adresse</span>
-              {adresse.editing ? (
-                <div className="space-y-1.5 w-44" {...adresse.groupProps}>
-                  <input autoFocus className={inputCls + " w-full"} value={adresse.draft.address1} placeholder="Musterstraße 5" onChange={(e) => adresse.setDraft({ ...adresse.draft, address1: e.target.value })} />
-                  <div className="flex gap-1.5">
-                    <input
-                      className={inputCls + " w-16"} value={plz} placeholder="PLZ" maxLength={5} inputMode="numeric"
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort) }));
-                        if (v.length === 5 && !ort && adresse.draft.country === "Deutschland") {
-                          lookupPlz(v).then((city) => { if (city) adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort || city) })); });
-                        }
-                      }}
-                    />
-                    <input className={inputCls + " flex-1 min-w-0"} value={ort} placeholder="Ort" onChange={(e) => adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(parsePlzOrt(d.address2).plz, e.target.value) }))} />
-                  </div>
-                  <Select className={inputCls + " w-full bg-white"} value={adresse.draft.country} onChange={(e) => adresse.setDraft((d) => ({ ...d, country: e.target.value }))}>
-                    {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    <option disabled>{"────────────"}</option>
-                    {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </Select>
-                </div>
-              ) : (
-                <div className="flex items-start gap-0.5 min-w-0">
-                  <button type="button" className={valueBtnCls + " flex flex-col items-end"} title="Klicken zum Bearbeiten" onClick={adresse.start}>
-                    {data.address1 || data.address2 ? (
-                      <>
-                        {data.address1 && <span>{data.address1}</span>}
-                        {data.address2 && <span>{data.address2}</span>}
-                        <span>{data.country || "Deutschland"}</span>
-                      </>
-                    ) : <span className="text-gray-300">--</span>}
-                  </button>
-                  {(data.address1 || data.address2) && (
-                    <CopyButton
-                      value={[data.address1, data.address2, data.country || "Deutschland"].filter(Boolean).join("\n")}
-                      label="Adresse kopieren"
-                      className="-mr-1 mt-0.5"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="px-5 pt-3.5 pb-1 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</h3>
+          {(data.address1 || data.address2) && <CopyButton value={fullAddress} label="Ganze Adresse kopieren" />}
+        </div>
+        <div className="px-5 pb-3">
+          <InlineField copyable label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
+          <InlineField copyable label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
+          <InlineField copyable label="Straße und Hausnummer" value={data.address1} placeholder="Musterstraße 5" onSave={(v) => save({ address1: v })} />
+          <InlineField copyable label="PLZ" value={plz} placeholder="10115" inputMode="numeric" maxLength={5} sanitize={(v) => v.replace(/\D/g, "")} onSave={savePlz} />
+          <InlineField copyable label="Ort" value={ort} placeholder="Berlin" onSave={(v) => save({ address2: combinePlzOrt(plz, v.trim()) })} />
+          <InlineField label="Land" value={country} options={countryOptions} allowEmpty={false} onSave={(v) => save({ country: v || "Deutschland" })} />
         </div>
       </div>
 
       {/* Medizinische Daten section */}
       <div className="border-b border-gray-100">
-        <h3 className="px-5 py-3.5 text-sm font-semibold text-gray-500 uppercase tracking-wider">Medizinische Daten</h3>
-        <div className="px-5 pb-4">
-          <div className="space-y-1.5">
+        <h3 className="px-5 pt-3.5 pb-1 text-sm font-semibold text-gray-500 uppercase tracking-wider">Medizinische Daten</h3>
+        <div className="px-5 pb-3">
+          <div>
             <InlineField label="Geschlecht" value={data.geschlecht} display={GESCHLECHT[data.geschlecht] || data.geschlecht} options={Object.entries(GESCHLECHT)} onSave={(v) => save({ geschlecht: v })} />
             <InlineField label="Geburtsdatum" type="date" value={data.geburtsdatum} display={data.geburtsdatum ? new Date(data.geburtsdatum).toLocaleDateString("de-DE") : ""} onSave={(v) => save({ geburtsdatum: v })} />
             <InlineField label="Größe" type="number" value={data.groesse ? String(data.groesse) : ""} display={`${data.groesse} cm`} placeholder="cm" onSave={(v) => save({ groesse: v })} />
