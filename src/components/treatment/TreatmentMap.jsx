@@ -93,21 +93,31 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
   const justDragged = React.useRef(false);
   const dragRef = React.useRef(null);
   const MAX_ZOOM = 5;
+  // Below 100 % for an overview of the whole chart while placing points
+  const MIN_ZOOM = 0.5;
 
-  // Keep the zoomed image covering the box: pan at most half the overflow on each side
+  // Keep the zoomed image covering the box: pan at most half the overflow on each side.
+  // Zoomed out (below 100 %) there is no overflow, so the chart stays centred.
   const clampPanPx = (p, z) => {
     const size = boxRef.current ? boxRef.current.clientWidth : 500;
-    const maxP = ((z - 1) * size) / 2;
+    const maxP = Math.max(0, ((z - 1) * size) / 2);
     return { x: Math.min(maxP, Math.max(-maxP, p.x)), y: Math.min(maxP, Math.max(-maxP, p.y)) };
   };
   // Zoom by a factor while the point `s` (offset from the box centre, in px) stays under the cursor
   const zoomAt = (factor, s = { x: 0, y: 0 }) => {
     const z = zoomRef.current, p = panRef.current;
-    const nz = Math.min(MAX_ZOOM, Math.max(1, z * factor));
+    const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * factor));
     if (nz === z) return;
     const np = clampPanPx({ x: s.x - (nz * (s.x - p.x)) / z, y: s.y - (nz * (s.y - p.y)) / z }, nz);
     zoomRef.current = nz; panRef.current = np;
     setZoom(nz); setPan(np);
+  };
+  // The +/− buttons step through fixed levels so 80 % and 100 % are reachable exactly
+  const ZOOM_STEPS = [0.5, 0.65, 0.8, 1, 1.5, 2, 3, 4, 5];
+  const stepZoom = (dir) => {
+    const z = zoomRef.current;
+    const target = dir > 0 ? ZOOM_STEPS.find((v) => v > z + 0.001) : [...ZOOM_STEPS].reverse().find((v) => v < z - 0.001);
+    if (target) zoomAt(target / z);
   };
   const resetZoom = () => { zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; setZoom(1); setPan({ x: 0, y: 0 }); };
 
@@ -174,7 +184,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
       const newCenter = getTouchCenter(e.touches[0], e.touches[1]);
       if (lastTouchDist.current) {
         const scale = newDist / lastTouchDist.current;
-        setZoom((z) => Math.min(5, Math.max(1, z * scale)));
+        setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * scale)));
       }
       if (lastTouchCenter.current) {
         const dx = newCenter.x - lastTouchCenter.current.x;
@@ -238,9 +248,43 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
     if (onAutoSave) onAutoSave(markers);
   };
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-  // Desktop: sized so the whole editor fits in the window next to the point list, same width as the form dialogs
-  const faceSize = isMobile ? "min(85vw, 340px)" : "clamp(300px, 100vh - 390px, 540px)";
+  // Window width as state, so rotating a tablet or resizing the window switches the layout live
+  const [winW, setWinW] = React.useState(() => (typeof window !== "undefined" ? window.innerWidth : 1280));
+  React.useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const isMobile = winW < 640;
+  // Phones and portrait tablets (< 900px wide): one scroll column, controls above the chart, the chart as
+  // wide as the screen allows. Wider screens: the chart fills the height next to a side column (measured).
+  const SIDE_COLUMN_PX = 320;
+  const sideLayout = !isMobile && winW >= 900;
+  const [chartPx, setChartPx] = React.useState(0);
+  const chartAreaEl = React.useRef(null);
+  const measureChart = React.useCallback(() => {
+    const el = chartAreaEl.current;
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0) return;
+    const px = Math.max(260, Math.floor(Math.min(el.clientWidth, el.clientHeight)));
+    setChartPx((prev) => (prev === px ? prev : px));
+  }, []);
+  // Callback ref: (re)attaches a ResizeObserver whenever the chart cell mounts (dialog resized by content)
+  const chartObserver = React.useRef(null);
+  const chartAreaRef = React.useCallback((el) => {
+    if (chartObserver.current) { chartObserver.current.disconnect(); chartObserver.current = null; }
+    chartAreaEl.current = el;
+    if (!el) return;
+    measureChart();
+    const ro = new ResizeObserver(measureChart);
+    ro.observe(el);
+    chartObserver.current = ro;
+  }, [measureChart]);
+  // Also measure right after every layout change (window resize, rotation), without waiting for a frame
+  React.useLayoutEffect(() => { if (modalOpen && sideLayout) measureChart(); });
+  React.useEffect(() => () => chartObserver.current?.disconnect(), []);
+  const faceSize = isMobile
+    ? "min(calc(100vw - 2rem), 460px)"
+    : sideLayout ? `${chartPx || 480}px` : "max(320px, min(calc(100vw - 6rem), calc(100vh - 440px), 760px))";
   // Points, labels and lines keep their size on screen at any zoom
   const markerSize = 21 / zoom;
   const markerFontSize = 11 / zoom;
@@ -309,7 +353,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
       {/* Large modal for precise placement */}
       {modalOpen && createPortal(
         <div data-stacked-dialog className="fixed inset-0 bg-black/40 z-[60] sm:flex sm:items-center sm:justify-center sm:p-4" onClick={() => { setModalOpen(false); if (onAutoCancel) onAutoCancel(); }}>
-          <div className="bg-white sm:rounded-xl shadow-2xl flex flex-col w-full h-full sm:h-auto" style={{ maxWidth: "calc(210mm + 3rem)", maxHeight: isMobile ? "100vh" : "95vh" }} onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white sm:rounded-xl shadow-2xl flex flex-col w-full h-full sm:h-auto" style={isMobile ? { maxHeight: "100vh" } : { maxWidth: 1240, height: "min(96vh, 1100px)" }} onClick={(e) => e.stopPropagation()}>
             {/* Header like the other dialogs (Modal.jsx) */}
             <div className="flex-shrink-0 flex items-center gap-3 px-5 py-3.5 border-b border-gray-100">
               <h2 className="text-sm font-semibold text-gray-800">{planMode ? "Injektionspunkte planen" : "Injektionspunkte setzen"}</h2>
@@ -317,141 +361,143 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex-shrink-0 px-4 sm:px-5 pt-4">
-              {!readOnly && (
-                <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const compressed = await compressImage(file);
-                    if (onFacePhotoChange) onFacePhotoChange(compressed);
-                    trackEvent("face_photo_uploaded");
-                  } catch (err) { console.error("Photo compress error", err); }
-                  e.target.value = "";
-                }} />
-              )}
-              <div className="space-y-2 mb-3">
-                <EditorRow label="Region">
-                  <div className="flex flex-wrap gap-1">
-                    {CHARTS.map((c) => {
-                      const n = markers.filter((m) => markerView(m) === c.id).length;
-                      const active = view === c.id;
-                      return (
-                        <button key={c.id} type="button" onClick={() => setView(c.id)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition ${active ? "bg-gray-800 text-white font-medium" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                          style={{ height: 26 }}>
-                          {c.label}
-                          {n > 0 && <span className={`text-[10px] font-semibold rounded-full px-1.5 ${active ? "bg-white/20" : "bg-white text-gray-700"}`}>{n}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </EditorRow>
-                <VectorToolbar vt={vt} />
-                {multiPraep && <PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
-                <DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} label="Dosis" labelWidth={EDITOR_LABEL_WIDTH} />
-                <ColorSwatches value={activeColor} onChange={setActiveColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
+            {!readOnly && (
+              <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const compressed = await compressImage(file);
+                  if (onFacePhotoChange) onFacePhotoChange(compressed);
+                  trackEvent("face_photo_uploaded");
+                } catch (err) { console.error("Photo compress error", err); }
+                e.target.value = "";
+              }} />
+            )}
+            {/* Phones: one scroll column (controls, chart, points). Tablets and desktops: the chart takes the full
+                height left of a side column with the controls on top and the point list below. */}
+            <div className="flex-1 min-h-0 px-4 sm:px-5 pt-4 pb-4" style={{ overflowY: sideLayout ? "hidden" : "auto", display: "grid", gap: isMobile ? 16 : 20, gridTemplateColumns: sideLayout ? `minmax(0, 1fr) ${SIDE_COLUMN_PX}px` : "minmax(0, 1fr)", gridTemplateRows: sideLayout ? "auto minmax(0, 1fr)" : "auto auto auto", gridTemplateAreas: sideLayout ? '"chart controls" "chart points"' : '"controls" "chart" "points"' }}>
+              <div style={{ gridArea: "controls" }}>
+                <div className="space-y-2 mb-3">
+                  <EditorRow label="Region">
+                    <div className="flex flex-wrap gap-1">
+                      {CHARTS.map((c) => {
+                        const n = markers.filter((m) => markerView(m) === c.id).length;
+                        const active = view === c.id;
+                        return (
+                          <button key={c.id} type="button" onClick={() => setView(c.id)}
+                            className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition ${active ? "bg-gray-800 text-white font-medium" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                            style={{ height: 26 }}>
+                            {c.label}
+                            {n > 0 && <span className={`text-[10px] font-semibold rounded-full px-1.5 ${active ? "bg-white/20" : "bg-white text-gray-700"}`}>{n}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </EditorRow>
+                  <VectorToolbar vt={vt} />
+                  {multiPraep && <PraeparatChips praeparate={praepList} value={activePraep} onChange={setActivePraep} label="Präparat" labelWidth={EDITOR_LABEL_WIDTH} />}
+                  <DoseChips value={activeAmount} onChange={selectDose} einheit={activeEinheit} color={activeColor} label="Dosis" labelWidth={EDITOR_LABEL_WIDTH} />
+                  <ColorSwatches value={activeColor} onChange={setActiveColor} label="Farbe" labelWidth={EDITOR_LABEL_WIDTH} />
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  {vectorInstruction(vt)}
+                  <span className="text-gray-400"><span className="sm:hidden"> Zwei Finger zum Zoomen.</span><span className="hidden sm:inline"> Zoomen mit Mausrad oder +/−, gezoomt lässt sich das Bild ziehen.</span></span>
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mb-2">
-                {vectorInstruction(vt)}
-                <span className="text-gray-400"><span className="sm:hidden"> Zwei Finger zum Zoomen.</span><span className="hidden sm:inline"> Zoomen mit Mausrad oder +/−, gezoomt lässt sich das Bild ziehen.</span></span>
-              </p>
-            </div>
-            {/* Single scrollable area on mobile, side-by-side on desktop */}
-            <div className="flex-1 overflow-y-auto sm:overflow-y-auto px-4 sm:px-5">
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
-                <div className="flex-shrink-0">
+              {/* Side layout: the chart sits absolutely inside its cell so its size never feeds back into the row heights it is measured from */}
+              <div ref={sideLayout ? chartAreaRef : undefined} className="min-w-0 min-h-0" style={{ gridArea: "chart", position: sideLayout ? "relative" : "static" }}>
+                <div className="flex items-start justify-center" style={sideLayout ? { position: "absolute", inset: 0 } : undefined}>
+                <div
+                  ref={boxRef}
+                  className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none"
+                  style={{ width: faceSize, height: faceSize, cursor: "crosshair", background: "#ffffff", touchAction: "none" }}
+                  onMouseDown={handleMouseDown}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                >
                   <div
-                    ref={boxRef}
-                    className="relative border border-[#DFE3EB] rounded-lg overflow-hidden select-none"
-                    style={{ width: faceSize, height: faceSize, cursor: "crosshair", background: "#ffffff", touchAction: "none" }}
-                    onMouseDown={handleMouseDown}
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
+                    ref={modalRef}
+                    onClick={handleClick}
+                    onMouseMove={(e) => { if (modalRef.current && (vt.lineStart || vt.activeFan)) { const p = facePos(e); vt.handleMove(p.x, p.y); } }}
+                    className="relative w-full h-full"
+                    style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isMobile && !isPinching.current ? "transform 0.15s ease-out" : "none" }}
                   >
-                    <div
-                      ref={modalRef}
-                      onClick={handleClick}
-                      onMouseMove={(e) => { if (modalRef.current && (vt.lineStart || vt.activeFan)) { const p = facePos(e); vt.handleMove(p.x, p.y); } }}
-                      className="relative w-full h-full"
-                      style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transformOrigin: "center center", transition: isMobile && !isPinching.current ? "transform 0.15s ease-out" : "none" }}
+                    <img src={chartImage(view, facePhoto)} alt={chartById(view).label} className="w-full h-full object-contain pointer-events-none" draggable={false} />
+                    <VectorLayer markers={markers.filter(inView)} preview={vt.preview} scale={1 / zoom} />
+                    {vt.lineStart && (
+                      <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12 / zoom, height: 12 / zoom, transform: "translate(-50%, -50%)", zIndex: 11 }} />
+                    )}
+                    {markers.map((m, idx) => inView(m) && (
+                      <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
+                        <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
+                      </div>
+                    ))}
+                  </div>
+                  <VectorDrawingBar vt={vt} />
+                  <div className="absolute bottom-2 left-2 flex items-center rounded-lg bg-white/95 shadow-md text-gray-600" style={{ zIndex: 20, cursor: "default" }} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom <= MIN_ZOOM} onClick={() => stepZoom(-1)} aria-label="Verkleinern" title="Verkleinern">&minus;</button>
+                    <button type="button" className="px-1 min-w-[3rem] h-8 text-xs tabular-nums hover:text-gray-900" onClick={resetZoom} title="Zurück auf 100 %">{Math.round(zoom * 100)} %</button>
+                    <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom >= MAX_ZOOM} onClick={() => stepZoom(1)} aria-label="Vergrößern" title="Vergrößern">+</button>
+                  </div>
+                  {!readOnly && facePhoto && view === "face" && (
+                    <button
+                      className="absolute bottom-2 right-2 rounded-full bg-white bg-opacity-90 shadow-md hover:bg-opacity-100 transition flex items-center justify-center"
+                      style={{ width: 36, height: 36, zIndex: 20 }}
+                      title="Foto entfernen"
+                      onClick={(e) => { e.stopPropagation(); onFacePhotoChange?.(""); }}
                     >
-                      <img src={chartImage(view, facePhoto)} alt={chartById(view).label} className="w-full h-full object-contain pointer-events-none" draggable={false} />
-                      <VectorLayer markers={markers.filter(inView)} preview={vt.preview} scale={1 / zoom} />
-                      {vt.lineStart && (
-                        <div className="absolute rounded-full border-2 border-gray-500 bg-white pointer-events-none" style={{ left: `${vt.lineStart.x}%`, top: `${vt.lineStart.y}%`, width: 12 / zoom, height: 12 / zoom, transform: "translate(-50%, -50%)", zIndex: 11 }} />
-                      )}
-                      {markers.map((m, idx) => inView(m) && (
-                        <div key={m.id} className="absolute flex items-center justify-center" style={{ left: `${m.x}%`, top: `${m.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>
-                          <MarkerDot marker={m} idx={idx} size={markerSize} fontSize={markerFontSize} shadow praepCount={praepCount} />
-                        </div>
-                      ))}
+                      <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  )}
+                </div>
+                </div>
+              </div>
+              <div className="min-h-0" style={{ gridArea: "points", overflowY: sideLayout ? "auto" : "visible", paddingRight: sideLayout ? 4 : 0 }}>
+                <VectorLegend markers={markers.filter(inView)} force={vt.mode !== "punkt"} className="mb-2" />
+                <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
+                <div className="space-y-1.5">
+                  {markers.map((m, idx) => inView(m) && (
+                    <React.Fragment key={m.id}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
+                      <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
+                        <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
+                      </button>
+                      <PraeparatBadge marker={m} praeparate={praepList} onCycle={(p) => setPraep(m.id, p)} />
+                      <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => updateAmount(m.id, e.target.value)} />
+                      <span className="text-xs text-gray-400">{unitFor(m)}</span>
+                      <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => { if (vt.activeFan?.id === m.id) vt.finish(); removeMarker(m.id); }} title="Löschen">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
                     </div>
-                    <VectorDrawingBar vt={vt} />
-                    <div className="absolute bottom-2 left-2 flex items-center rounded-lg bg-white/95 shadow-md text-gray-600" style={{ zIndex: 20, cursor: "default" }} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                      <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom <= 1} onClick={() => zoomAt(1 / 1.5)} aria-label="Verkleinern" title="Verkleinern">&minus;</button>
-                      <button type="button" className="px-1 min-w-[3rem] h-8 text-xs tabular-nums hover:text-gray-900" onClick={resetZoom} title="Zurück auf 100 %">{Math.round(zoom * 100)} %</button>
-                      <button type="button" className="w-8 h-8 text-lg leading-none hover:text-gray-900 disabled:opacity-30" disabled={zoom >= MAX_ZOOM} onClick={() => zoomAt(1.5)} aria-label="Vergrößern" title="Vergrößern">+</button>
-                    </div>
-                    {!readOnly && facePhoto && view === "face" && (
+                    {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
+                    </React.Fragment>
+                  ))}
+                </div>
+                {!markers.some(inView) && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte in dieser Region.</p>}
+                <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />
+                {!readOnly && view === "face" && (
+                  <div className="mt-3">
+                    {facePhoto ? (
                       <button
-                        className="absolute bottom-2 right-2 rounded-full bg-white bg-opacity-90 shadow-md hover:bg-opacity-100 transition flex items-center justify-center"
-                        style={{ width: 36, height: 36, zIndex: 20 }}
-                        title="Foto entfernen"
-                        onClick={(e) => { e.stopPropagation(); onFacePhotoChange?.(""); }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 border border-[#DFE3EB] rounded-lg transition"
+                        onClick={() => photoInputRef.current?.click()}
                       >
-                        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+                        Foto ändern
+                      </button>
+                    ) : (
+                      <button
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition"
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+                        <span className="sm:hidden">Patient:innenfoto aufnehmen</span><span className="hidden sm:inline">Patient:innenfoto hochladen</span>
                       </button>
                     )}
                   </div>
-                  <VectorLegend markers={markers.filter(inView)} force={vt.mode !== "punkt"} className="mt-2" />
-                  {!readOnly && view === "face" && (
-                    <div className="mt-2">
-                      {facePhoto ? (
-                        <button
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 border border-[#DFE3EB] rounded-lg transition"
-                          onClick={() => photoInputRef.current?.click()}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
-                          Foto ändern
-                        </button>
-                      ) : (
-                        <button
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition"
-                          onClick={() => photoInputRef.current?.click()}
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
-                          <span className="sm:hidden">Patient:innenfoto aufnehmen</span><span className="hidden sm:inline">Patient:innenfoto hochladen</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-shrink-0 sm:overflow-y-auto" style={{ width: isMobile ? "100%" : 220, maxHeight: isMobile ? "none" : faceSize }}>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
-                  <div className="space-y-1.5">
-                    {markers.map((m, idx) => inView(m) && (
-                      <React.Fragment key={m.id}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-gray-400 w-4 text-right flex-shrink-0">{idx + 1}.</span>
-                        <button type="button" className="flex-shrink-0 rounded-full" title="Farbe ändern (klicken)" onClick={() => cycleColor(m.id)}>
-                          <MarkerDot marker={m} idx={idx} size={18} fontSize={9} praepCount={praepCount} />
-                        </button>
-                        <PraeparatBadge marker={m} praeparate={praepList} onCycle={(p) => setPraep(m.id, p)} />
-                        <input type="text" inputMode="text" className="w-20 px-2 py-1 text-sm border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400" value={m.amount} placeholder={idx % 2 === 0 ? "z.B. 1,90" : "z.B. 2x3"} onChange={(e) => updateAmount(m.id, e.target.value)} />
-                        <span className="text-xs text-gray-400">{unitFor(m)}</span>
-                        <button className="p-1 rounded border border-[#DFE3EB] text-gray-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition flex-shrink-0" onClick={() => { if (vt.activeFan?.id === m.id) vt.finish(); removeMarker(m.id); }} title="Löschen">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                      </div>
-                      {isVector(m) && <div className="pl-6 -mt-1"><VectorSummary marker={m} /></div>}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  {!markers.some(inView) && <p className="text-sm text-gray-400 pt-1">Noch keine Punkte in dieser Region.</p>}
-                  <LiveTotal markers={markers} praeparate={multiPraep ? praepList : null} einheit={einheit} />
-                </div>
+                )}
               </div>
             </div>
             {/* Fixed footer */}

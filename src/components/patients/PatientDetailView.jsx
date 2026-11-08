@@ -1,5 +1,6 @@
 import { showToast } from "../../utils/toast";
 import React, { useState, useRef, useEffect } from "react";
+import { treatmentCopySources } from "../../utils/copySources";
 import { fmtDate } from "../../utils/helpers";
 import { resolveConsentTemplate } from "../consent/consentTemplateStore";
 import { FACE_IMAGE_B64 } from "../../constants";
@@ -79,10 +80,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
     return email && invEmail && invEmail === email;
   });
   const rechnungsInvoices = matchingInvoices.filter((inv) => !inv._standalone && !inv._hvOnly && !inv._consentForm);
-  // Rechnungen + Honorarvereinbarungen of this patient that carry Präparat data to copy from
-  const copySourceDocs = matchingInvoices
-    .filter((inv) => !inv._standalone && !inv._consentForm && (inv.praeparat || inv.einheit))
-    .sort((a, b) => (b.invoiceMeta?.datum || b.savedAt || "").localeCompare(a.invoiceMeta?.datum || a.savedAt || ""));
+  // Earlier treatments to take over Präparate and points from (utils/copySources.js)
+  const copySourceDocs = treatmentCopySources(matchingInvoices);
   // Titles used before (all patients), most frequent first, as suggestions
   const behTitleSuggestions = React.useMemo(() => {
     const counts = new Map();

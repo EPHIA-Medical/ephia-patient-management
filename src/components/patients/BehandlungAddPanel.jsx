@@ -5,7 +5,7 @@ import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import TreatmentMap from "../treatment/TreatmentMap";
 import InfoTooltip, { Tooltip } from "../ui/InfoTooltip";
 import { serializeMarkers } from "../treatment/markerUtils";
-import { emptyPraeparat, praepLetter, praeparatTotals, withPraeparate } from "../../utils/praeparate";
+import { emptyPraeparat, getPraeparate, praepLetter, praeparatTotals, withPraeparate } from "../../utils/praeparate";
 import Select from "../ui/Select";
 
 export default function BehandlungAddPanel({
@@ -53,16 +53,31 @@ export default function BehandlungAddPanel({
   const [patientBetrag, setPatientBetrag] = React.useState(editingTreatmentInv?.treatmentDoc?.patientBetrag || "");
 
   const docLabel = (d) => {
-    const datum = d.invoiceMeta?.datum ? fmtDate(d.invoiceMeta.datum) : "";
-    const base = d._hvOnly
-      ? "Honorarvereinbarung"
-      : (d.invoiceMeta?.nummer && d.invoiceMeta.nummer !== "—" ? d.invoiceMeta.nummer : "Rechnung");
-    return datum ? `${base} — ${datum}` : base;
+    const iso = d.treatmentDoc?.behandlungsDatum || d.invoiceMeta?.datum || "";
+    const datum = iso ? fmtDate(iso) : "";
+    const base = d._standalone
+      ? "Behandlungsdoku"
+      : d._hvOnly
+        ? "Honorarvereinbarung"
+        : (d.invoiceMeta?.nummer && d.invoiceMeta.nummer !== "—" ? d.invoiceMeta.nummer : "Rechnung");
+    const n = (d.treatmentDoc?.markers || []).length;
+    const punkte = n > 0 ? ` (${n} ${n === 1 ? "Punkt" : "Punkte"})` : "";
+    return (datum ? `${datum} · ${base}` : base) + punkte;
   };
 
   const copyFromDoc = (id) => {
     const src = copySourceDocs.find((d) => String(d.id) === String(id));
     if (!src) return;
+    // A documented treatment brings all its Präparate (the points refer to them by index); the
+    // Chargennummer belongs to the earlier treatment and is never taken over
+    if (src.treatmentDoc) {
+      const list = getPraeparate(src.treatmentDoc).map((p) => ({ ...p, charge: "" }));
+      setNewTreatmentPraeparate(list.length > 0 ? list : [emptyPraeparat()]);
+      const srcMarkers = src.treatmentDoc.markers || [];
+      setNewTreatmentMarkers(srcMarkers.map((m, i) => ({ ...m, id: Date.now() + i })));
+      if (src.treatmentDoc.facePhoto) setNewTreatmentFacePhoto(src.treatmentDoc.facePhoto);
+      return;
+    }
     const first = { ...praeparate[0], name: src.praeparat || "", einheit: src.einheit || praeparate[0].einheit };
     // Transfer the documented injection points, if the source has any
     const srcMarkers = src.treatmentDoc?.markers || [];
@@ -109,8 +124,8 @@ export default function BehandlungAddPanel({
           {copySourceDocs.length > 0 && (
             <div>
               <div className="flex items-center gap-1 mb-1">
-                <label className="text-xs font-medium text-gray-500">Daten aus Dokument &uuml;bernehmen</label>
-                <InfoTooltip>Pr&auml;parat, Menge und Einheit aus einer bestehenden Rechnung oder Honorarvereinbarung &uuml;bernehmen. Es wird keine Verkn&uuml;pfung erstellt &mdash; die Felder lassen sich danach frei bearbeiten.</InfoTooltip>
+                <label className="text-xs font-medium text-gray-500">Aus fr&uuml;herer Behandlung &uuml;bernehmen</label>
+                <InfoTooltip>Pr&auml;parate und Injektionspunkte aus einer fr&uuml;heren Behandlungsdoku, Rechnung oder Honorarvereinbarung &uuml;bernehmen. Die Chargennummer wird nicht &uuml;bernommen. Es entsteht keine Verkn&uuml;pfung, alle Felder bleiben frei bearbeitbar.</InfoTooltip>
               </div>
               <Select
                 className={inputCls + " bg-white"}
