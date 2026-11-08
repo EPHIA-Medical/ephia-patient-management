@@ -1,12 +1,9 @@
 # Plan: replace the plaintext recovery key with EPHIA key escrow
 
-Status 2026-11-08, evening: steps 0 to 4 done. Release B is live on main (31d6eeb) after
-all eight step 4 checks passed on the test account against a preview build. Recovery now
-runs only through the escrow release; the old `recovery_*` columns are still filled but no
-longer read by the app.
-
-Next: step 5 (null the old recovery columns) not before 2026-11-15, and only after the
-encrypted export from step 0.4 exists. Step 6 (drop the columns) two weeks after that.
+Status 2026-11-08, late: steps 0 to 4 done, release B live on main (31d6eeb). Marc decided
+to run steps 5 and 6 without the waiting weeks: the backups keep the old keys for 7 days,
+the encrypted export (step 0.4) keeps them beyond that. Recovery log: `docs/recovery-log.md`.
+Migration `0003_drop_recovery_key.sql` holds step 6.
 
 ## 1. Why
 
