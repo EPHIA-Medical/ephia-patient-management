@@ -2882,7 +2882,7 @@ export default function EphiaInvoice() {
         />
       )}
 
-      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || isSettingsPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
+      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || isVoucherListPage || isSettingsPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
         {/* ═══ PRAXISEINSTELLUNGEN ═══ */}
         {isSettingsPage && (
           <SettingsPage
@@ -3647,7 +3647,6 @@ export default function EphiaInvoice() {
             onNew={handleNewVoucher}
             onView={handleViewVoucher}
             onDelete={handleDeleteVoucher}
-            onBack={() => navigate("/patients")}
           />
         )}
 

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { PrimaryButton, ListSearch, thCls } from "../ui/ListCard";
 import { fmtDate, fmt, evalAmount } from "../../utils/helpers";
 import { resolveConsentTemplate, consentTemplateLabel } from "../consent/consentTemplateStore";
 import { spawnConfetti } from "../ui/ConfettiBurst";
@@ -75,7 +76,6 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
     });
   };
 
-  const thCls = "text-left px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide cursor-pointer hover:text-gray-600 select-none whitespace-nowrap";
   const thClsR = "text-right px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wide cursor-pointer hover:text-gray-600 select-none whitespace-nowrap";
 
   const tabBtnCls = (active) =>
@@ -160,13 +160,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
         <div className="flex items-center gap-2">
           {patients && patients.length > 0 && (tab === "rechnungen" || tab === "hv" || tab === "consent") && (
             <div ref={newPickerRef} className="relative">
-              <button
-                onClick={() => { setShowNewPicker(!showNewPicker); setNewPickerSearch(""); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded transition"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                <span className="hidden sm:inline">Neu</span>
-              </button>
+              <PrimaryButton onClick={() => { setShowNewPicker(!showNewPicker); setNewPickerSearch(""); }}>Neu</PrimaryButton>
               {showNewPicker && (() => {
                 const filtered = (patients || []).filter(p => {
                   if (!newPickerSearch.trim()) return true;
@@ -214,15 +208,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
               })()}
             </div>
           )}
-          <div className="relative">
-            <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input
-              className="pl-8 pr-3 py-1.5 text-xs border border-[#DFE3EB] rounded focus:outline-none focus:ring-1 focus:ring-blue-400 w-full sm:w-56"
-              placeholder="Suchen..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <ListSearch value={search} onChange={setSearch} />
         </div>
       </div>
 
