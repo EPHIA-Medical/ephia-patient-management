@@ -1,21 +1,54 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { fmtPhone, parsePlzOrt, combinePlzOrt, lookupPlz } from "../../utils/helpers";
 import { PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "../../constants";
 
-const inputCls = "border border-[#DFE3EB] rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
+const inputCls = "border border-[#DFE3EB] rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
+const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-700 text-right hover:bg-gray-50 hover:text-gray-900 cursor-text transition";
+const GESCHLECHT = { w: "Weiblich", m: "Männlich", d: "Divers" };
 
-function PencilIcon({ onClick }) {
+// Click a value to edit it in place. Enter or leaving the field saves, Escape cancels.
+function InlineField({ label, value, display, type = "text", options, placeholder, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const done = useRef(false); // blocks a second save from the blur that follows Enter/Escape
+  const start = () => { done.current = false; setDraft(value || ""); setEditing(true); };
+  const stop = () => { done.current = true; setEditing(false); };
+  const commit = (v = draft) => { if (done.current) return; stop(); if ((v || "") !== (value || "")) onSave(v); };
+  const keys = (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") stop(); };
   return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className="ml-2 text-gray-300 hover:text-blue-400 transition flex-shrink-0"
-      title="Bearbeiten"
-    >
-      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-1.414A2 2 0 019.586 13z" />
-      </svg>
-    </button>
+    <div className="flex justify-between items-center gap-3 min-h-[28px]">
+      <span className="text-sm text-gray-400 flex-shrink-0">{label}</span>
+      {editing ? (
+        options ? (
+          <select autoFocus className={inputCls + " bg-white min-w-0"} value={draft} onChange={(e) => commit(e.target.value)} onBlur={stop} onKeyDown={keys}>
+            <option value="">--</option>
+            {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        ) : (
+          <input autoFocus type={type} className={inputCls + " min-w-0 w-40 text-right"} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} onKeyDown={keys} />
+        )
+      ) : (
+        <button type="button" className={valueBtnCls + " min-w-0 break-words"} title="Klicken zum Bearbeiten" onClick={start}>
+          {value ? (display ?? value) : <span className="text-gray-300">--</span>}
+        </button>
+      )}
+    </div>
   );
+}
+
+// Several inputs edited together; saves when focus leaves the group.
+function useGroupEdit(initial, onSave) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(initial);
+  const done = useRef(false);
+  const start = () => { done.current = false; setDraft(initial); setEditing(true); };
+  const stop = () => { done.current = true; setEditing(false); };
+  const commit = () => { if (done.current) return; stop(); if (JSON.stringify(draft) !== JSON.stringify(initial)) onSave(draft); };
+  const groupProps = {
+    onBlur: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) commit(); },
+    onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } if (e.key === "Escape") stop(); },
+  };
+  return { editing, draft, setDraft, start, groupProps };
 }
 
 export default function PatientLeftSidebar({
@@ -23,29 +56,27 @@ export default function PatientLeftSidebar({
   adressdatenOpen, setAdressdatenOpen, medizinischeOpen, setMedizinischeOpen, anamneseOpen, setAnamneseOpen,
   anamnese, onUpdatePatient,
 }) {
-  const [editingSection, setEditingSection] = useState(null);
-  const [nameData, setNameData] = useState({ vorname: "", nachname: "" });
-  const [adresseData, setAdresseData] = useState({ email: "", phone: "", address1: "", address2: "", country: "Deutschland" });
-  const [medizinData, setMedizinData] = useState({ geschlecht: "", geburtsdatum: "", groesse: "", gewicht: "" });
+  // The parent re-fetches after encrypting and saving, which takes a moment. Show saved values
+  // right away and build every save on top of earlier unsynced edits so none get lost.
+  const [overrides, setOverrides] = useState({});
+  useEffect(() => {
+    setOverrides((o) => {
+      const rest = Object.fromEntries(Object.entries(o).filter(([k, v]) => (rawData[k] ?? "") !== v));
+      return Object.keys(rest).length === Object.keys(o).length ? o : rest;
+    });
+  }, [rawData]);
+  const data = { ...rawData, ...overrides };
+  const save = (patch) => {
+    setOverrides((o) => ({ ...o, ...patch }));
+    if (onUpdatePatient) onUpdatePatient({ ...rawData, ...overrides, ...patch });
+  };
 
-  const startEditName = () => {
-    setNameData({ vorname: rawData.vorname || patient.vorname || "", nachname: rawData.nachname || patient.nachname || "" });
-    setEditingSection("name");
-  };
-  const startEditAdresse = () => {
-    setAdresseData({ email: rawData.email || patient.email || "", phone: rawData.phone || "", address1: rawData.address1 || "", address2: rawData.address2 || "", country: rawData.country || "Deutschland" });
-    setEditingSection("adresse");
-    if (!adressdatenOpen) setAdressdatenOpen(true);
-  };
-  const startEditMedizin = () => {
-    setMedizinData({ geschlecht: rawData.geschlecht || "", geburtsdatum: rawData.geburtsdatum || "", groesse: rawData.groesse || "", gewicht: rawData.gewicht || "" });
-    setEditingSection("medizin");
-    if (!medizinischeOpen) setMedizinischeOpen(true);
-  };
-  const saveName = () => { if (onUpdatePatient) onUpdatePatient({ ...rawData, vorname: nameData.vorname, nachname: nameData.nachname }); setEditingSection(null); };
-  const saveAdresse = () => { if (onUpdatePatient) onUpdatePatient({ ...rawData, ...adresseData }); setEditingSection(null); };
-  const saveMedizin = () => { if (onUpdatePatient) onUpdatePatient({ ...rawData, ...medizinData }); setEditingSection(null); };
-  const cancel = () => setEditingSection(null);
+  const vorname = data.vorname || patient.vorname || "";
+  const nachname = data.nachname || patient.nachname || "";
+  const shownEmail = "email" in overrides ? overrides.email : (email || data.email || "");
+  const name = useGroupEdit({ vorname, nachname }, (d) => { if (d.vorname.trim() && d.nachname.trim()) save(d); });
+  const adresse = useGroupEdit({ address1: data.address1 || "", address2: data.address2 || "" }, save);
+  const { plz, ort } = parsePlzOrt(adresse.draft.address2);
 
   return (
     <div className="lg:w-72 xl:w-80 lg:sticky lg:top-0 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
@@ -69,20 +100,15 @@ export default function PatientLeftSidebar({
             )}
           </button>
           <input ref={profilePhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoUpload} />
-          {editingSection === "name" ? (
-            <div className="space-y-2 w-full">
-              <input className={inputCls + " w-full"} value={nameData.vorname} placeholder="Vorname" autoFocus onChange={(e) => setNameData({ ...nameData, vorname: e.target.value })} />
-              <input className={inputCls + " w-full"} value={nameData.nachname} placeholder="Nachname" onChange={(e) => setNameData({ ...nameData, nachname: e.target.value })} />
-              <div className="flex gap-2 pt-1 justify-center">
-                <button className="px-3 py-1.5 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition" onClick={saveName}>Speichern</button>
-                <button className="px-3 py-1.5 text-xs rounded-md border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" onClick={cancel}>Abbrechen</button>
-              </div>
+          {name.editing ? (
+            <div className="flex gap-2 w-full" {...name.groupProps}>
+              <input autoFocus className={inputCls + " w-full min-w-0"} value={name.draft.vorname} placeholder="Vorname" onChange={(e) => name.setDraft({ ...name.draft, vorname: e.target.value })} />
+              <input className={inputCls + " w-full min-w-0"} value={name.draft.nachname} placeholder="Nachname" onChange={(e) => name.setDraft({ ...name.draft, nachname: e.target.value })} />
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-1">
-              <h2 className="text-lg font-semibold text-gray-800">{patient.vorname} {patient.nachname}</h2>
-              <PencilIcon onClick={startEditName} />
-            </div>
+            <button type="button" className="px-2 py-0.5 rounded hover:bg-gray-50 cursor-text transition" title="Klicken zum Bearbeiten" onClick={name.start}>
+              <h2 className="text-lg font-semibold text-gray-800">{vorname} {nachname}</h2>
+            </button>
           )}
         </div>
       </div>
@@ -90,93 +116,43 @@ export default function PatientLeftSidebar({
       {/* Adressdaten section */}
       <div className="border-b border-gray-100">
         <button className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition" onClick={() => setAdressdatenOpen(!adressdatenOpen)}>
-          <div className="flex items-center">
-            <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</span>
-            <PencilIcon onClick={startEditAdresse} />
-          </div>
+          <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</span>
           <svg className={`w-4 h-4 text-gray-400 transition-transform ${adressdatenOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {adressdatenOpen && (
           <div className="px-5 pb-4">
-            {editingSection === "adresse" ? (
-              <div className="space-y-2.5">
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">E-Mail</label>
-                  <input type="email" className={inputCls + " w-full mt-1"} value={adresseData.email} onChange={(e) => setAdresseData({ ...adresseData, email: e.target.value })} autoFocus />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Telefon</label>
-                  <input type="tel" className={inputCls + " w-full mt-1"} value={adresseData.phone} placeholder="+49 123 456789" onChange={(e) => setAdresseData({ ...adresseData, phone: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Straße</label>
-                  <input className={inputCls + " w-full mt-1"} value={adresseData.address1} placeholder="Musterstraße 5" onChange={(e) => setAdresseData({ ...adresseData, address1: e.target.value })} />
-                </div>
-                <div className="flex gap-2">
-                  <div className="w-24">
-                    <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">PLZ</label>
-                    <input
-                      className={inputCls + " w-full mt-1"} value={parsePlzOrt(adresseData.address2).plz} placeholder="PLZ" maxLength={5} inputMode="numeric"
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        const { ort } = parsePlzOrt(adresseData.address2);
-                        setAdresseData({ ...adresseData, address2: combinePlzOrt(v, ort) });
-                        if (v.length === 5 && !ort && (!adresseData.country || adresseData.country === "Deutschland")) {
-                          lookupPlz(v).then(city => {
-                            if (city) setAdresseData(d => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort || city) }));
-                          });
-                        }
-                      }}
-                    />
+            <div className="space-y-1.5">
+              <InlineField label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
+              <InlineField label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
+              <div className="flex justify-between items-start gap-3 min-h-[28px]">
+                <span className="text-sm text-gray-400 flex-shrink-0 pt-0.5">Adresse</span>
+                {adresse.editing ? (
+                  <div className="space-y-1.5 w-44" {...adresse.groupProps}>
+                    <input autoFocus className={inputCls + " w-full"} value={adresse.draft.address1} placeholder="Musterstraße 5" onChange={(e) => adresse.setDraft({ ...adresse.draft, address1: e.target.value })} />
+                    <div className="flex gap-1.5">
+                      <input
+                        className={inputCls + " w-16"} value={plz} placeholder="PLZ" maxLength={5} inputMode="numeric"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort) }));
+                          if (v.length === 5 && !ort && (!data.country || data.country === "Deutschland")) {
+                            lookupPlz(v).then((city) => { if (city) adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(v, parsePlzOrt(d.address2).ort || city) })); });
+                          }
+                        }}
+                      />
+                      <input className={inputCls + " flex-1 min-w-0"} value={ort} placeholder="Ort" onChange={(e) => adresse.setDraft((d) => ({ ...d, address2: combinePlzOrt(parsePlzOrt(d.address2).plz, e.target.value) }))} />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Ort</label>
-                    <input
-                      className={inputCls + " w-full mt-1"} value={parsePlzOrt(adresseData.address2).ort} placeholder="Ort"
-                      onChange={(e) => { const { plz } = parsePlzOrt(adresseData.address2); setAdresseData({ ...adresseData, address2: combinePlzOrt(plz, e.target.value) }); }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Land</label>
-                  <select className={inputCls + " w-full mt-1 bg-white"} value={adresseData.country} onChange={(e) => setAdresseData({ ...adresseData, country: e.target.value })}>
-                    {PRIORITY_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    <option disabled>{"────────────"}</option>
-                    {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button className="px-3 py-1.5 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition" onClick={saveAdresse}>Speichern</button>
-                  <button className="px-3 py-1.5 text-xs rounded-md border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" onClick={cancel}>Abbrechen</button>
-                </div>
+                ) : (
+                  <button type="button" className={valueBtnCls} title="Klicken zum Bearbeiten" onClick={adresse.start}>
+                    {data.address1 || data.address2 ? [data.address1, data.address2].filter(Boolean).join(", ") : <span className="text-gray-300">--</span>}
+                  </button>
+                )}
               </div>
-            ) : (
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">E-Mail</span>
-                  <span className="text-sm">{email ? <a href={`mailto:${email}`} className="text-blue-500 hover:text-blue-700">{email}</a> : <span className="text-gray-400">--</span>}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Telefon</span>
-                  <span className="text-sm text-gray-700">{rawData.phone ? (
-                    <>
-                      <a href={`tel:${rawData.phone.replace(/[^\d+]/g, "")}`} className="lg:hidden text-blue-500 hover:text-blue-700">{fmtPhone(rawData.phone)}</a>
-                      <span className="hidden lg:inline">{fmtPhone(rawData.phone)}</span>
-                    </>
-                  ) : <span className="text-gray-400">--</span>}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Adresse</span>
-                  <span className="text-sm text-gray-700 text-right">{rawData.address1 ? `${rawData.address1}, ${rawData.address2 || ""}` : "--"}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Land</span>
-                  <span className="text-sm text-gray-700">{rawData.country || "Deutschland"}</span>
-                </div>
-              </div>
-            )}
+              <InlineField label="Land" value={data.country || "Deutschland"} options={[...PRIORITY_COUNTRIES, ...OTHER_COUNTRIES].map((c) => [c, c])} onSave={(v) => save({ country: v || "Deutschland" })} />
+            </div>
           </div>
         )}
       </div>
@@ -184,65 +160,19 @@ export default function PatientLeftSidebar({
       {/* Medizinische Daten section */}
       <div className="border-b border-gray-100">
         <button className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition" onClick={() => setMedizinischeOpen(!medizinischeOpen)}>
-          <div className="flex items-center">
-            <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Medizinische Daten</span>
-            <PencilIcon onClick={startEditMedizin} />
-          </div>
+          <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Medizinische Daten</span>
           <svg className={`w-4 h-4 text-gray-400 transition-transform ${medizinischeOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {medizinischeOpen && (
           <div className="px-5 pb-4">
-            {editingSection === "medizin" ? (
-              <div className="space-y-2.5">
-                <p className="text-xs text-gray-400 italic">Felder werden automatisch aus Aufklärungsbögen übernommen.</p>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Geschlecht</label>
-                  <select className={inputCls + " w-full mt-1 bg-white"} value={medizinData.geschlecht} onChange={(e) => setMedizinData({ ...medizinData, geschlecht: e.target.value })} autoFocus>
-                    <option value="">--</option>
-                    <option value="w">Weiblich</option>
-                    <option value="m">Männlich</option>
-                    <option value="d">Divers</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Geburtsdatum</label>
-                  <input type="date" className={inputCls + " w-full mt-1"} value={medizinData.geburtsdatum} onChange={(e) => setMedizinData({ ...medizinData, geburtsdatum: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Größe (cm)</label>
-                  <input type="number" className={inputCls + " w-full mt-1"} value={medizinData.groesse} placeholder="170" onChange={(e) => setMedizinData({ ...medizinData, groesse: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-gray-400 font-medium">Gewicht (kg)</label>
-                  <input type="number" className={inputCls + " w-full mt-1"} value={medizinData.gewicht} placeholder="70" onChange={(e) => setMedizinData({ ...medizinData, gewicht: e.target.value })} />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button className="px-3 py-1.5 text-xs rounded-md bg-blue-500 text-white hover:bg-blue-600 transition" onClick={saveMedizin}>Speichern</button>
-                  <button className="px-3 py-1.5 text-xs rounded-md border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" onClick={cancel}>Abbrechen</button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Geschlecht</span>
-                  <span className="text-sm text-gray-700">{rawData.geschlecht === "w" ? "Weiblich" : rawData.geschlecht === "m" ? "Männlich" : rawData.geschlecht === "d" ? "Divers" : rawData.geschlecht || "--"}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Geburtsdatum</span>
-                  <span className="text-sm text-gray-700">{rawData.geburtsdatum ? new Date(rawData.geburtsdatum).toLocaleDateString("de-DE") : "--"}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Größe</span>
-                  <span className="text-sm text-gray-700">{rawData.groesse ? `${rawData.groesse} cm` : "--"}</span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-gray-400">Gewicht</span>
-                  <span className="text-sm text-gray-700">{rawData.gewicht ? `${rawData.gewicht} kg` : "--"}</span>
-                </div>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <InlineField label="Geschlecht" value={data.geschlecht} display={GESCHLECHT[data.geschlecht] || data.geschlecht} options={Object.entries(GESCHLECHT)} onSave={(v) => save({ geschlecht: v })} />
+              <InlineField label="Geburtsdatum" type="date" value={data.geburtsdatum} display={data.geburtsdatum ? new Date(data.geburtsdatum).toLocaleDateString("de-DE") : ""} onSave={(v) => save({ geburtsdatum: v })} />
+              <InlineField label="Größe" type="number" value={data.groesse ? String(data.groesse) : ""} display={`${data.groesse} cm`} placeholder="cm" onSave={(v) => save({ groesse: v })} />
+              <InlineField label="Gewicht" type="number" value={data.gewicht ? String(data.gewicht) : ""} display={`${data.gewicht} kg`} placeholder="kg" onSave={(v) => save({ gewicht: v })} />
+            </div>
           </div>
         )}
       </div>
