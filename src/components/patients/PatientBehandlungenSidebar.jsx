@@ -12,13 +12,15 @@ export default function PatientBehandlungenSidebar({
   onViewConsent, onViewHV, onView,
   setViewingTreatment, setConfirmDeleteBeh,
   hasConsentRisks, getDocLabel, getDocStatus, handleDocClick,
-  onLinkDocToBehandlung, onDelete,
+  onLinkDocToBehandlung, onDelete, titleSuggestions = [],
 }) {
   const [dragOverBehId, setDragOverBehId] = useState(null);
   // Inline editing of a Behandlungstermin (date + time)
   const [editingBehId, setEditingBehId] = useState(null);
   const [editDatum, setEditDatum] = useState("");
   const [editZeit, setEditZeit] = useState("");
+  const [editTitel, setEditTitel] = useState("");
+  const [newBehTitel, setNewBehTitel] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   // Free-text note per Behandlung (stored in the encrypted Behandlung payload)
   const [noteEditingBehId, setNoteEditingBehId] = useState(null);
@@ -30,6 +32,7 @@ export default function PatientBehandlungenSidebar({
   const startEditBeh = (beh) => {
     setEditDatum(beh.datum || "");
     setEditZeit(beh.zeit || "");
+    setEditTitel(beh.titel || "");
     setEditingBehId(beh._id);
   };
   const saveEditBeh = async (beh) => {
@@ -38,7 +41,7 @@ export default function PatientBehandlungenSidebar({
     const data = Object.fromEntries(Object.entries(beh).filter(([k]) => !k.startsWith("_")));
     setEditSaving(true);
     try {
-      await onUpdateBehandlung(beh._id, { ...data, datum: editDatum, zeit: editZeit || "" });
+      await onUpdateBehandlung(beh._id, { ...data, datum: editDatum, zeit: editZeit || "", titel: editTitel.trim() });
       setEditingBehId(null);
     } catch (e) { showToast("Fehler: " + e.message, { error: true }); }
     finally { setEditSaving(false); }
@@ -82,6 +85,11 @@ export default function PatientBehandlungenSidebar({
         <button className="text-sm text-blue-500 hover:text-blue-700 font-medium transition" onClick={() => setNewBehandlungOpen(true)}>+ Neue Behandlung</button>
       </div>
 
+      {/* Suggestions for the Behandlung title: titles used before */}
+      <datalist id="beh-titel-suggestions">
+        {titleSuggestions.map((t) => <option key={t} value={t} />)}
+      </datalist>
+
       {/* New Behandlung form */}
       {newBehandlungOpen && (
         <div className="mx-5 my-3 p-4 border border-blue-100 rounded-lg bg-blue-50/50">
@@ -95,19 +103,24 @@ export default function PatientBehandlungenSidebar({
               <label className="text-xs text-gray-500 block mb-1">Uhrzeit (optional)</label>
               <input type="time" value={newBehZeit} onChange={e => setNewBehZeit(e.target.value)} className="w-full border rounded-md px-3 py-1.5 text-sm" />
             </div>
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500 block mb-1">Titel (optional)</label>
+              <input type="text" list="beh-titel-suggestions" maxLength={80} value={newBehTitel} onChange={e => setNewBehTitel(e.target.value)} placeholder="z.B. Botulinum Stirn + Glabella" className="w-full border rounded-md px-3 py-1.5 text-sm bg-white" />
+            </div>
           </div>
           <div className="flex gap-2">
             <button className="px-4 py-2 text-sm rounded-md bg-gray-800 text-white hover:bg-gray-700 transition" onClick={async () => {
               if (!newBehDatum) return;
               try {
-                const newId = await onCreateBehandlung(patientDbId, { datum: newBehDatum, zeit: newBehZeit || "", status: "planned" });
+                const newId = await onCreateBehandlung(patientDbId, { datum: newBehDatum, zeit: newBehZeit || "", titel: newBehTitel.trim(), status: "planned" });
                 setNewBehandlungOpen(false);
                 setNewBehDatum(new Date().toISOString().slice(0, 10));
                 setNewBehZeit("");
+                setNewBehTitel("");
                 if (newId) setExpandedBeh(newId);
               } catch (e) { showToast("Fehler: " + e.message, { error: true }); }
             }}>Erstellen</button>
-            <button className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition" onClick={() => setNewBehandlungOpen(false)}>Abbrechen</button>
+            <button className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition" onClick={() => { setNewBehandlungOpen(false); setNewBehTitel(""); }}>Abbrechen</button>
           </div>
         </div>
       )}
@@ -132,8 +145,9 @@ export default function PatientBehandlungenSidebar({
             >
               <button className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 transition" onClick={() => setExpandedBeh(isExpanded ? null : beh._id)}>
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-sm font-semibold text-gray-800">{fmtDate(beh.datum)}</span>
-                  {beh.zeit && <span className="text-sm text-gray-500">{beh.zeit} Uhr</span>}
+                  <span className="text-sm font-semibold text-gray-800 flex-shrink-0">{fmtDate(beh.datum)}</span>
+                  {beh.zeit && <span className="text-sm text-gray-500 flex-shrink-0">{beh.zeit} Uhr</span>}
+                  {beh.titel && <span className="text-sm text-gray-600 truncate" title={beh.titel}>{beh.titel}</span>}
                   {beh.notiz && (
                     <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Hat eine Notiz"><title>Hat eine Notiz</title><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 8l-3 1 1-3V6a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H9l-2 2z" /></svg>
                   )}
@@ -158,6 +172,10 @@ export default function PatientBehandlungenSidebar({
                           <label className="text-[10px] text-gray-500 block mb-0.5">Uhrzeit</label>
                           <input type="time" value={editZeit} onChange={(e) => setEditZeit(e.target.value)} className="border border-[#DFE3EB] rounded-md px-2 py-1 text-sm bg-white" style={{ WebkitAppearance: "none", appearance: "none", colorScheme: "light" }} />
                         </div>
+                        <div className="flex-1 min-w-[10rem]">
+                          <label className="text-[10px] text-gray-500 block mb-0.5">Titel</label>
+                          <input type="text" list="beh-titel-suggestions" maxLength={80} value={editTitel} onChange={(e) => setEditTitel(e.target.value)} placeholder="optional" className="w-full border border-[#DFE3EB] rounded-md px-2 py-1 text-sm bg-white" onKeyDown={(e) => { if (e.key === "Enter") saveEditBeh(beh); if (e.key === "Escape") setEditingBehId(null); }} />
+                        </div>
                         <button className="px-2.5 py-1.5 text-xs rounded bg-blue-500 text-white hover:bg-blue-600 transition disabled:opacity-50" disabled={!editDatum || editSaving} onClick={() => saveEditBeh(beh)}>{editSaving ? "Speichert…" : "Speichern"}</button>
                         <button className="px-2.5 py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-500 hover:bg-gray-50 transition" disabled={editSaving} onClick={() => setEditingBehId(null)}>Abbrechen</button>
                         <p className="w-full text-[10px] text-gray-400">Das Datum einer zugeordneten Behandlungsdoku wird mit angepasst, Rechnungen und Aufklärungen nicht.</p>
@@ -166,7 +184,7 @@ export default function PatientBehandlungenSidebar({
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">Termin: {fmtDate(beh.datum)}{beh.zeit ? `, ${beh.zeit} Uhr` : ""}</span>
                         {onUpdateBehandlung && (
-                          <button className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Termin bearbeiten" onClick={() => startEditBeh(beh)}>
+                          <button className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition" title="Termin und Titel bearbeiten" onClick={() => startEditBeh(beh)}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                         )}

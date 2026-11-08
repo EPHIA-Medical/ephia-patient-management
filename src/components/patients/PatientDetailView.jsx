@@ -81,6 +81,12 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const copySourceDocs = matchingInvoices
     .filter((inv) => !inv._standalone && !inv._consentForm && (inv.praeparat || inv.einheit))
     .sort((a, b) => (b.invoiceMeta?.datum || b.savedAt || "").localeCompare(a.invoiceMeta?.datum || a.savedAt || ""));
+  // Titles used before (all patients), most frequent first, as suggestions
+  const behTitleSuggestions = React.useMemo(() => {
+    const counts = new Map();
+    for (const b of behandlungen) { const t = (b.titel || "").trim(); if (t) counts.set(t, (counts.get(t) || 0) + 1); }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "de")).slice(0, 40).map(([t]) => t);
+  }, [behandlungen]);
   const patientBeh = behandlungen.filter(b => b._patientId === patientDbId).sort((a, b) => (b.datum || b._createdAt || "").localeCompare(a.datum || a._createdAt || ""));
   const lastActivity = matchingInvoices.length > 0 ? matchingInvoices.reduce((best, inv) => {
     const t = inv._createdAt || inv.savedAt || "";
@@ -329,6 +335,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
                 setViewingTreatment={setViewingTreatment} setConfirmDeleteBeh={setConfirmDeleteBeh}
                 hasConsentRisks={hasConsentRisks} getDocLabel={getDocLabel} getDocStatus={getDocStatus} handleDocClick={handleDocClick}
                 onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
+                titleSuggestions={behTitleSuggestions}
               />
             )}
 

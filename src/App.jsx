@@ -1823,7 +1823,8 @@ export default function EphiaInvoice() {
     await persistBehandlung(behId, behData);
     const dateChanged = !!(beh && behData.datum && beh.datum !== behData.datum);
     const noteChanged = !!beh && (beh.notiz || "") !== (behData.notiz || "");
-    logActivity(beh?._patientId, "behandlung", behId, "updated", dateChanged ? `Behandlungstermin auf ${fmtDate(behData.datum)} geändert` : noteChanged ? `Notiz zur Behandlung vom ${fmtDate(behData.datum)} aktualisiert` : `Behandlung aktualisiert`);
+    const titleChanged = !!beh && (beh.titel || "") !== (behData.titel || "");
+    logActivity(beh?._patientId, "behandlung", behId, "updated", dateChanged ? `Behandlungstermin auf ${fmtDate(behData.datum)} geändert` : titleChanged ? `Titel der Behandlung vom ${fmtDate(behData.datum)} geändert` : noteChanged ? `Notiz zur Behandlung vom ${fmtDate(behData.datum)} aktualisiert` : `Behandlung aktualisiert`);
     if (!dateChanged) return;
     const docs = invoices.filter(inv => inv._behandlungId === behId && isBehandlungsdoku(inv));
     // A lone Behandlungsdoku always follows; with several, only those that still matched the old date
