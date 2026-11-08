@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import {
-  DAILY_LIMIT_PER_PRACTICE, DOC_KINDS, MAX_FILES, MAX_TOTAL_BYTES, DEFAULT_EXPIRY_DAYS,
-  b64url, buildShareMail, cleanMessage, cleanPractice, cleanupExpired, corsHeaders, fromB64url, hashAnswer, isB64url,
+  DAILY_LIMIT_PER_PRACTICE, DOC_KINDS, hasAcceptedAvv, practiceOf, type PracticeInfo, MAX_FILES, MAX_TOTAL_BYTES, DEFAULT_EXPIRY_DAYS,
+  b64url, buildShareMail, cleanMessage, cleanupExpired, corsHeaders, fromB64url, hashAnswer, isB64url,
   isValidEmail, maskEmail, newShareId, rest, restJson, sealHalfB, sendShareMail, shareLink, storageRemove,
   storageUpload, userFromToken, wipeShare,
 } from "@/lib/shares";
@@ -22,12 +22,22 @@ export function OPTIONS(req: NextRequest) {
 interface InFile { kind: string; ref: string; iv: string; data: string; label_iv: string; label_enc: string }
 
 export async function POST(req: NextRequest) {
-  let user: { id: string } | null;
+  let user: { id: string; emailConfirmed: boolean } | null;
   try { user = await userFromToken(req.headers.get("authorization")); } catch (e) {
     console.error("[shares] not configured:", e);
     return json(req, { error: "Der Versand ist noch nicht eingerichtet." }, 503);
   }
   if (!user) return json(req, { error: "Bitte melde Dich erneut an." }, 401);
+  if (!user.emailConfirmed) return json(req, { error: "Bitte bestätige zuerst Deine E-Mail-Adresse." }, 403);
+
+  let practice: PracticeInfo | null;
+  try {
+    if (!(await hasAcceptedAvv(user.id))) return json(req, { error: "Bitte akzeptiere zuerst den Auftragsverarbeitungsvertrag in den Praxiseinstellungen." }, 403);
+    practice = await practiceOf(user.id);
+  } catch (e) {
+    console.error("[shares] profile lookup failed:", e);
+    return json(req, { error: "Der Versand ist noch nicht eingerichtet." }, 503);
+  }
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(req, { error: "Ungültige Anfrage." }, 400); }
@@ -35,7 +45,6 @@ export async function POST(req: NextRequest) {
   const files = Array.isArray(body.files) ? (body.files as InFile[]) : [];
   const factor = (body.factor || {}) as { type?: string; verifier?: unknown };
   const recipient = (body.recipient || {}) as { email?: unknown; first_name?: unknown };
-  const practice = cleanPractice(body.practice);
   const message = cleanMessage(body.message);
   const factorType = factor.type === "code" ? "code" : factor.type === "dob" ? "dob" : "";
 

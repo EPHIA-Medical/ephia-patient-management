@@ -30,7 +30,8 @@ async function call(path, { method = "GET", token, body } = {}) {
  * files: [{ kind: "rechnung"|"behandlung"|"hv"|"aufklaerung", ref, label, file: File|Blob }]
  * factor: { type: "dob"|"code", value }
  */
-export async function sendSecureShare({ token, files, factor, recipient, practice, message }) {
+// The sender name and Reply-To come from the practice settings stored on the server.
+export async function sendSecureShare({ token, files, factor, recipient, message }) {
   const answer = normalizeAnswer(factor.type, factor.value);
   if (!answer) throw new Error(factor.type === "code" ? "Der Code muss sechs Ziffern haben." : "Bitte ein gültiges Geburtsdatum eingeben.");
   const halfA = randomBytes(32), halfB = randomBytes(32), keySalt = randomBytes(16);
@@ -53,7 +54,6 @@ export async function sendSecureShare({ token, files, factor, recipient, practic
       key_salt: toB64url(keySalt),
       factor: { type: factor.type, verifier },
       recipient,
-      practice,
       message: message || "",
     },
   });

@@ -19,7 +19,7 @@ export const BUCKET = "document-shares";
 export const MAX_ATTEMPTS = 5;
 export const MAX_FILES = 5;
 export const MAX_TOTAL_BYTES = 15 * 1024 * 1024;
-export const DAILY_LIMIT_PER_PRACTICE = 200;
+export const DAILY_LIMIT_PER_PRACTICE = 50;
 export const IP_ATTEMPTS_PER_HOUR = 20;
 export const DEFAULT_EXPIRY_DAYS = 30;
 export const STATUS_RETENTION_DAYS = 365;
@@ -149,13 +149,30 @@ export async function restJson<T>(path: string, init: RequestInit & { prefer?: s
 }
 
 /** The practice behind a request: verified by Supabase Auth itself. */
-export async function userFromToken(authHeader: string | null): Promise<{ id: string } | null> {
+export async function userFromToken(authHeader: string | null): Promise<{ id: string; emailConfirmed: boolean } | null> {
   const token = (authHeader || "").replace(/^Bearer\s+/i, "");
   if (!token) return null;
   const res = await fetch(`${supabaseUrl()}/auth/v1/user`, { headers: { apikey: serviceKey(), Authorization: `Bearer ${token}` } });
   if (!res.ok) return null;
-  const user = (await res.json()) as { id?: string };
-  return user?.id ? { id: user.id } : null;
+  const user = (await res.json()) as { id?: string; email_confirmed_at?: string | null; confirmed_at?: string | null };
+  return user?.id ? { id: user.id, emailConfirmed: !!(user.email_confirmed_at || user.confirmed_at) } : null;
+}
+
+/**
+ * Sender details come from the practice's own stored settings (profiles.practice_data,
+ * plaintext business data), never from the request: a misused account must not be
+ * able to send "Deine Unterlagen von <any name>" from our domain.
+ */
+export async function practiceOf(userId: string): Promise<PracticeInfo | null> {
+  const rows = await restJson<{ practice_data: unknown }[]>(`profiles?id=eq.${encodeURIComponent(userId)}&select=practice_data`);
+  const data = rows[0]?.practice_data;
+  return data && typeof data === "object" ? cleanPractice(data) : null;
+}
+
+/** Only accounts that accepted the AVV (professional use) may send. */
+export async function hasAcceptedAvv(userId: string): Promise<boolean> {
+  const rows = await restJson<unknown[]>(`avv_acceptances?user_id=eq.${encodeURIComponent(userId)}&select=version&limit=1`);
+  return rows.length > 0;
 }
 
 export async function storageUpload(path: string, bytes: Buffer): Promise<void> {

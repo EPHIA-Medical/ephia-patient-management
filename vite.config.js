@@ -18,8 +18,30 @@ const versionFile = () => ({
   },
 });
 
+// Patient opening page (/d/): only our own code may run there; it may only talk to
+// the API and Supabase Storage (signed file URLs). Build only: the dev server needs
+// inline scripts for hot reload.
+const SHARE_CSP = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src https://api.pms.ephia.de https://grfngjgjiipbgntsduom.supabase.co",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "object-src 'none'",
+].join("; ");
+const shareCsp = () => ({
+  name: "share-csp",
+  apply: "build",
+  transformIndexHtml(html, ctx) {
+    if (!ctx.filename.replace(/\\/g, "/").endsWith("/d/index.html")) return html;
+    return html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${SHARE_CSP}" />`);
+  },
+});
+
 export default defineConfig({
-  plugins: [react(), versionFile()],
+  plugins: [react(), versionFile(), shareCsp()],
   define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   base: "/",
   // Second page: the patient's opening page for protected document links (/d/)

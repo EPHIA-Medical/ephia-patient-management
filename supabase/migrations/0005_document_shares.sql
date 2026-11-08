@@ -77,6 +77,19 @@ drop policy if exists "own shares readable" on public.document_shares;
 create policy "own shares readable" on public.document_shares
   for select to authenticated using (user_id = auth.uid());
 
+-- Claims one unlock attempt atomically before the answer is checked, so parallel
+-- requests cannot get more than 5 guesses. Returns the new count, or null when the
+-- link is locked, revoked or out of attempts. Only the API (service role) calls it.
+create or replace function public.share_claim_attempt(p_id text)
+returns integer language sql security definer set search_path = public as $$
+  update public.document_shares
+     set attempts = attempts + 1
+   where id = p_id and locked_at is null and revoked_at is null and attempts < 5
+  returning attempts;
+$$;
+revoke all on function public.share_claim_attempt(text) from public, anon, authenticated;
+grant execute on function public.share_claim_attempt(text) to service_role;
+
 -- Private bucket for the encrypted PDFs; only the API (service role) reads and writes.
 insert into storage.buckets (id, name, public, file_size_limit)
   values ('document-shares', 'document-shares', false, 16777216)

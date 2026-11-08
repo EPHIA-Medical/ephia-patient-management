@@ -115,7 +115,6 @@ export default function SendToPatientDialog({ docs, makeFile, onClose, onDone, s
         files: chosenDocs.map((d) => ({ kind: d.key, ref: d.ref, label: d.label, file: files[d.key] })),
         factor: { type: factorType, value: factorType === "code" ? code : dobValue },
         recipient: { email: email.trim(), first_name: secure.firstName || "" },
-        practice: secure.practice,
         message,
       });
       setResult({ ...res, code });

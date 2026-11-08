@@ -14,8 +14,11 @@ export function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
 }
 
+// Railway's proxy sets X-Real-IP; in X-Forwarded-For the client can prepend anything,
+// only the last entry (added by the proxy) is trustworthy.
 function clientIp(req: NextRequest): string {
-  return (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || "unknown";
+  const xff = (req.headers.get("x-forwarded-for") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return req.headers.get("x-real-ip") || xff.at(-1) || "unknown";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -38,17 +41,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const state = shareState(s);
   if (state !== "ok" || !s.factor_hash || !s.factor_salt) return reply({ state }, 410);
 
+  // Claim the attempt in the database first (atomic), then check: parallel requests
+  // cannot get past the limit
+  const claimed = await restJson<number | null>("rpc/share_claim_attempt", { method: "POST", body: JSON.stringify({ p_id: id }) });
+  if (claimed == null) return reply({ state: "locked" }, 410);
+
   const ok = answerMatches(body.verifier as string, s.factor_salt, s.factor_hash);
   await rest("document_share_attempts", { method: "POST", prefer: "return=minimal", body: JSON.stringify({ share_id: id, ok, ip_hash: ipKey }) });
 
   if (!ok) {
-    const attempts = s.attempts + 1;
-    const lock = attempts >= MAX_ATTEMPTS;
-    await rest(`document_shares?id=eq.${id}&attempts=eq.${s.attempts}`, {
-      method: "PATCH",
-      body: JSON.stringify({ attempts, ...(lock ? { locked_at: new Date().toISOString() } : {}) }),
-    });
-    return reply({ state: lock ? "locked" : "ok", attempts_left: Math.max(0, MAX_ATTEMPTS - attempts) }, 401);
+    const lock = claimed >= MAX_ATTEMPTS;
+    if (lock) await rest(`document_shares?id=eq.${id}&locked_at=is.null`, { method: "PATCH", body: JSON.stringify({ locked_at: new Date().toISOString() }) });
+    return reply({ state: lock ? "locked" : "ok", attempts_left: Math.max(0, MAX_ATTEMPTS - claimed) }, 401);
   }
 
   const files = await restJson<{ position: number; storage_path: string; iv: string; label_iv: string; label_enc: string; size_bytes: number }[]>(

@@ -26,6 +26,7 @@ function matches(row: Row, params: URLSearchParams): boolean {
     else if (raw.startsWith("lt.")) { if (!(String(v) < raw.slice(3))) return false; }
     else if (raw.startsWith("gt.")) { if (!(String(v) > raw.slice(3))) return false; }
     else if (raw === "not.is.null") { if (v == null) return false; }
+    else if (raw === "is.null") { if (v != null) return false; }
     else if (raw.startsWith("ov.")) {
       const want = raw.slice(3).replace(/^\{|\}$/g, "").split(",").map((s) => s.replace(/^"|"$/g, ""));
       if (!Array.isArray(v) || !v.some((x) => want.includes(String(x)))) return false;
@@ -38,8 +39,19 @@ async function fakeSupabase(url: URL, init: RequestInit): Promise<Response> {
   const method = (init.method || "GET").toUpperCase();
   const headers = new Headers(init.headers);
   if (url.pathname === "/auth/v1/user") {
-    return headers.get("authorization") === "Bearer practice-token"
-      ? Response.json({ id: "user-1" }) : new Response("{}", { status: 401 });
+    const auth = headers.get("authorization");
+    if (auth === "Bearer practice-token") return Response.json({ id: "user-1", email_confirmed_at: "2026-01-01T00:00:00Z" });
+    if (auth === "Bearer unconfirmed-token") return Response.json({ id: "user-2", email_confirmed_at: null });
+    if (auth === "Bearer no-avv-token") return Response.json({ id: "user-3", email_confirmed_at: "2026-01-01T00:00:00Z" });
+    return new Response("{}", { status: 401 });
+  }
+  if (url.pathname === "/rest/v1/rpc/share_claim_attempt") {
+    // Same semantics as the SQL function: atomic claim, null when locked or used up
+    const { p_id } = JSON.parse(String(init.body));
+    const row = (db.document_shares || []).find((r) => r.id === p_id && r.locked_at == null && r.revoked_at == null && (r.attempts as number) < 5);
+    if (!row) return Response.json(null);
+    row.attempts = (row.attempts as number) + 1;
+    return Response.json(row.attempts);
   }
   if (url.pathname.startsWith("/rest/v1/")) {
     const table = url.pathname.slice("/rest/v1/".length);
@@ -110,7 +122,15 @@ beforeAll(async () => {
   app = await import(/* @vite-ignore */ path);
 });
 
-beforeEach(() => { for (const k of Object.keys(db)) delete db[k]; storage.clear(); mails.length = 0; });
+beforeEach(() => {
+  for (const k of Object.keys(db)) delete db[k];
+  storage.clear(); mails.length = 0;
+  db.profiles = [
+    { id: "user-1", practice_data: { name: "Praxis Test", email: "praxis@example.de", phone: "030 123", iban: "not sent" } },
+    { id: "user-3", practice_data: { name: "Praxis Drei" } },
+  ];
+  db.avv_acceptances = [{ user_id: "user-1", version: "1.0" }, { user_id: "user-2", version: "1.0" }];
+});
 
 const pdf = new TextEncoder().encode("%PDF-1.4 Rechnung RE-0004 Botulinum 20 SE");
 
@@ -120,7 +140,8 @@ async function send(type: "dob" | "code", value: string) {
     files: [{ kind: "rechnung", ref: "inv-1", label: "Rechnung RE-0004", file: new Blob([pdf]) }],
     factor: { type, value },
     recipient: { email: "anna.muster@example.de", first_name: "Anna" },
-    practice: { name: "Praxis Test", email: "praxis@example.de", phone: "030 123" },
+    // Ignored by the server: sender details come from the stored practice settings
+    practice: { name: "Sparkasse Kundenservice", email: "phish@example.com" },
     message: "",
   });
   const link = mails.at(-1)!.text.match(/https:\/\/invoicing\.ephia\.de\/d\/\?s=([A-Za-z0-9_-]+)#([A-Za-z0-9_-]+)/)!;
@@ -191,6 +212,32 @@ describe("secure document sending, end to end", () => {
     expect((await app.fetchShareMeta(id)).state).toBe("revoked");
     await expect(app.unlockShare({ id, halfAB64: halfA, factorType: "dob", value: "01.01.1990", keySaltB64: meta.key_salt })).rejects.toMatchObject({ status: 410 });
     await expect(app.revokeShare("someone-else", id)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("never lets the request choose the sender name", async () => {
+    await send("dob", "07.03.1988");
+    expect(mails[0].from).toBe('"Praxis Test über EPHIA" <noreply@ephia.de>');
+    expect(mails[0].html).not.toContain("Sparkasse");
+    expect(mails[0].reply_to).toBe("praxis@example.de");
+  });
+
+  it("refuses accounts without a confirmed email or without the AVV", async () => {
+    const file = [{ kind: "rechnung", ref: "x", label: "R", file: new Blob([pdf]) }];
+    const args = { files: file, factor: { type: "dob", value: "07.03.1988" }, recipient: { email: "a@example.de" } };
+    await expect(app.sendSecureShare({ ...args, token: "unconfirmed-token" })).rejects.toMatchObject({ status: 403 });
+    await expect(app.sendSecureShare({ ...args, token: "no-avv-token" })).rejects.toMatchObject({ status: 403 });
+    expect(mails).toHaveLength(0);
+  });
+
+  it("gives at most five guesses even when they arrive in parallel", async () => {
+    const { id, halfA } = await send("code", "123456");
+    const meta = await app.fetchShareMeta(id);
+    const results = await Promise.allSettled(Array.from({ length: 20 }, () =>
+      app.unlockShare({ id, halfAB64: halfA, factorType: "code", value: "000000", keySaltB64: meta.key_salt })));
+    const counted = results.filter((r) => r.status === "rejected" && (r.reason as { status: number }).status === 401).length;
+    expect(counted).toBe(5);
+    expect(db.document_share_attempts.length).toBe(5);
+    expect((await app.fetchShareMeta(id)).state).toBe("locked");
   });
 
   it("rejects sending without a valid practice login", async () => {
