@@ -368,9 +368,11 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
   const measRefA = React.useRef(null);
   const measRefB = React.useRef(null);
   const measRefC = React.useRef(null);
-  const [pagesA, setPagesA] = React.useState(1);
-  const [pagesB, setPagesB] = React.useState(1);
-  const [pagesC, setPagesC] = React.useState(1);
+  // Page breaks per content group: offsets (px) where each page starts, plus the total height
+  const [breaksA, setBreaksA] = React.useState([0, 1]);
+  const [breaksB, setBreaksB] = React.useState([0, 1]);
+  const [breaksC, setBreaksC] = React.useState([0, 1]);
+  const pagesA = breaksA.length - 1, pagesB = breaksB.length - 1, pagesC = breaksC.length - 1;
 
   const baseFont = { fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: "11px", lineHeight: "1.55", color: "#1a1a1a", textAlign: "justify" };
 
@@ -394,11 +396,40 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
   const sectionsGroupA = erfIdx >= 0 ? template.sections.slice(0, erfIdx) : template.sections;
   const sectionsGroupB = erfIdx >= 0 ? template.sections.slice(erfIdx) : [];
 
-  // Measure each content group independently
+  // Choose page breaks between elements instead of at fixed heights, so no
+  // paragraph, list item, question row or heading is cut across two pages.
+  // A heading near the end of a page moves to the next page with its text.
+  const computeBreaks = (el) => {
+    if (!el) return [0, CONTENT_H];
+    const base = el.getBoundingClientRect().top;
+    const total = Math.max(1, el.scrollHeight);
+    const box = (n) => { const r = n.getBoundingClientRect(); return [r.top - base, r.bottom - base]; };
+    const atoms = [...el.querySelectorAll("p, li, tr, [data-pdf-heading], [data-pdf-keep]")].map(box)
+      .filter(([t, b]) => b - t > 0 && b - t < CONTENT_H * 0.8); // taller blocks must be cut anyway
+    const headings = [...el.querySelectorAll("[data-pdf-heading]")].map(box);
+    const breaks = [0];
+    let start = 0;
+    while (total - start > CONTENT_H + 0.5) {
+      let y = start + CONTENT_H;
+      for (let guard = 0; guard < 100; guard++) {
+        const spanning = atoms.filter(([t, b]) => t < y - 0.5 && b > y + 0.5);
+        const orphan = headings.filter(([t, b]) => t < y - 0.5 && b > y - 28 && t > start + 0.5);
+        if (!spanning.length && !orphan.length) break;
+        y = Math.min(...spanning.map(([t]) => t), ...orphan.map(([t]) => t));
+      }
+      if (y <= start + 40) y = start + CONTENT_H; // nothing sensible to break at: hard cut
+      breaks.push(y);
+      start = y;
+    }
+    breaks.push(total);
+    return breaks;
+  };
+  const sameBreaks = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.5);
   React.useLayoutEffect(() => {
-    if (measRefA.current) setPagesA(Math.max(1, Math.ceil(measRefA.current.scrollHeight / CONTENT_H)));
-    if (measRefB.current) setPagesB(Math.max(1, Math.ceil(measRefB.current.scrollHeight / CONTENT_H)));
-    if (measRefC.current) setPagesC(Math.max(1, Math.ceil(measRefC.current.scrollHeight / CONTENT_H)));
+    const nA = computeBreaks(measRefA.current), nB = computeBreaks(measRefB.current), nC = computeBreaks(measRefC.current);
+    setBreaksA((o) => (sameBreaks(o, nA) ? o : nA));
+    setBreaksB((o) => (sameBreaks(o, nB) ? o : nB));
+    setBreaksC((o) => (sameBreaks(o, nC) ? o : nC));
   }, [template, consentData]);
 
   const totalPages = pagesA + pagesB + pagesC;
@@ -472,7 +503,7 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
 
   const sectionHtml = (sections) => sections.map((section, i) => (
     <div key={i}>
-      <div style={h2Style}>{section.title}</div>
+      <div data-pdf-heading style={h2Style}>{section.title}</div>
       <div className="consent-section-html" style={bodyText} dangerouslySetInnerHTML={{ __html: justifyHtml(section.html) }} />
     </div>
   ));
@@ -494,7 +525,7 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
       {sectionHtml(sectionsGroupB)}
       {cssReset}
 
-      <div style={h2Style}>Fragebogen (Anamnese)</div>
+      <div data-pdf-heading style={h2Style}>Fragebogen (Anamnese)</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px 12px", fontSize: "10px", marginBottom: "12px", padding: "8px 10px", background: "#f8f8f8", borderRadius: "4px" }}>
         <div>Alter: <strong>{a.geburtsdatum ? (() => { const b = new Date(a.geburtsdatum); const t = new Date(); let age = t.getFullYear() - b.getFullYear(); if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--; return age; })() : (a.alter || "–")}</strong></div>
         <div>Geschlecht: <strong>{a.geschlecht === "w" ? "Weiblich" : a.geschlecht === "m" ? "Männlich" : a.geschlecht === "d" ? "Divers" : "–"}</strong></div>
@@ -602,13 +633,16 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
   );
 
   // Helper to render clipped pages for a content group
-  const renderPages = (ContentComp, groupPages, pageOffset) =>
-    Array.from({ length: groupPages }).map((_, i) => (
+  const renderPages = (ContentComp, breaks, pageOffset) =>
+    breaks.slice(0, -1).map((startY, i) => (
       <div key={pageOffset + i} data-pdf-page={pageOffset + i + 1} style={pageStyle}>
         <PageHeader pageNum={pageOffset + i + 1} />
         <div style={{ height: CONTENT_H, overflow: "hidden", padding: "0 44px" }}>
-          <div style={{ marginTop: -(i * CONTENT_H) }}>
-            <ContentComp />
+          {/* Show exactly this page's slice; the rest of the content area stays white */}
+          <div style={{ height: Math.min(CONTENT_H, breaks[i + 1] - startY), overflow: "hidden" }}>
+            <div style={{ marginTop: -startY }}>
+              <ContentComp />
+            </div>
           </div>
         </div>
         <PageFooter />
@@ -624,9 +658,9 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
 
       {/* Visible A4 pages */}
       <div id="consent-form-pdf-target" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        {renderPages(ContentA, pagesA, 0)}
-        {renderPages(ContentB, pagesB, pagesA)}
-        {renderPages(ContentC, pagesC, pagesA + pagesB)}
+        {renderPages(ContentA, breaksA, 0)}
+        {renderPages(ContentB, breaksB, pagesA)}
+        {renderPages(ContentC, breaksC, pagesA + pagesB)}
       </div>
     </>
   );

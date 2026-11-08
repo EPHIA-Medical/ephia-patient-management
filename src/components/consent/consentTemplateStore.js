@@ -60,7 +60,8 @@ export function getPracticeTemplates(practice) {
 export function getAvailableConsentTemplates(practice) {
   const own = getPracticeTemplates(practice).map(cleanTemplate);
   const overridden = new Set(own.map((t) => t.basedOn).filter(Boolean));
-  return [...own, ...CONSENT_TEMPLATES.filter((b) => !overridden.has(b.id))];
+  // Retired built-ins (older versions) only render existing forms, they are not offered anymore
+  return [...own, ...CONSENT_TEMPLATES.filter((b) => !b.retired && !overridden.has(b.id))];
 }
 
 // The template a stored consent form must be rendered with.
