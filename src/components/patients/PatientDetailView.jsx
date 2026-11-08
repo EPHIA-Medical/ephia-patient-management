@@ -106,16 +106,17 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   // Anamnese data
   const anamnese = (rawData.anamnese || []).slice().sort((a, b) => (a.addedAt || "").localeCompare(b.addedAt || ""));
 
-  // ── Retroactive demographic sync from existing consent forms ──
+  // ── Retroactive sync from existing consent forms: demographics + Anamnese ──
+  // Fills missing demographic fields and adds Anamnese entries for every "Ja" answer that is
+  // not on the patient yet (same rule as the Risiko badge). Also repairs records whose
+  // Anamnese was wiped by the old invoice save. One update, so the two can't overwrite each other.
   const retroSyncDoneRef = useRef(false);
   useEffect(() => {
     if (retroSyncDoneRef.current || !onUpdatePatient) return;
-    const missingFields = ["geschlecht", "geburtsdatum", "groesse", "gewicht"].filter(f => !rawData[f]);
-    if (missingFields.length === 0) return;
     const consentForms = matchingInvoices.filter(inv => inv._consentForm && inv.consentData?.answers);
     if (consentForms.length === 0) return;
-    // Use the most recent consent form with demographic data
     const sorted = [...consentForms].sort((a, b) => (b._createdAt || b.savedAt || "").localeCompare(a._createdAt || a.savedAt || ""));
+    const missingFields = ["geschlecht", "geburtsdatum", "groesse", "gewicht"].filter(f => !rawData[f]);
     const demoFields = {};
     for (const form of sorted) {
       const ans = form.consentData.answers;
@@ -123,10 +124,23 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
         if (ans[f] && !demoFields[f]) demoFields[f] = ans[f];
       }
     }
-    if (Object.keys(demoFields).length === 0) return;
+    // Oldest first, so an entry keeps the date it was first answered with "Ja"
+    const anamnese = [...(rawData.anamnese || [])];
+    for (const form of [...sorted].reverse()) {
+      const ans = form.consentData.answers;
+      const tpl = resolveConsentTemplate(form.consentData, practice);
+      if (!tpl) continue;
+      const qs = [...(tpl.questions || []), ...(ans.geschlecht === "w" ? (tpl.additionalQuestionsWomen || []) : [])];
+      for (const q of qs) {
+        if (ans[q.id] !== true || anamnese.some(e => e.questionId === q.id)) continue;
+        anamnese.push({ questionId: q.id, questionLabel: q.label, detailText: ans[q.id + "_text"] || "", addedAt: (form._createdAt || form.savedAt || "").slice(0, 10) });
+      }
+    }
+    const anamneseAdded = anamnese.length > (rawData.anamnese || []).length;
+    if (Object.keys(demoFields).length === 0 && !anamneseAdded) return;
     retroSyncDoneRef.current = true;
-    Promise.resolve(onUpdatePatient({ ...rawData, ...demoFields })).catch(() => { /* background sync, logged in App */ });
-  }, [patientDbId]); // eslint-disable-line
+    Promise.resolve(onUpdatePatient({ ...rawData, ...demoFields, ...(anamneseAdded ? { anamnese } : {}) })).catch(() => { /* background sync, logged in App */ });
+  }, [patientDbId, matchingInvoices.length]); // eslint-disable-line
 
   // ── Helper functions (shared across components) ──
   const hasConsentRisks = (inv) => {

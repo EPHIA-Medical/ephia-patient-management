@@ -1329,6 +1329,12 @@ export default function EphiaInvoice() {
           if (currentMEK) {
             const patientHash = await computePatientHash(getPatientIdentifier(patient), currentMEK);
             const { ciphertext: ptCipher, iv: ptIv } = await encryptData(patient, currentMEK);
+            // The invoice form only carries name, contact and address. Merge it into the stored
+            // record instead of replacing it, or Anamnese, medical data, note and photo get wiped.
+            const mergeIntoStored = (stored) => {
+              const filled = Object.fromEntries(Object.entries(patient).filter(([, v]) => v != null && String(v).trim() !== ""));
+              return { ...stored, ...filled };
+            };
             // Check if patient with this hash already exists (E2EE records)
             const existingRes = await fetch(
               `${SUPABASE_URL}/rest/v1/patients?user_id=eq.${pgv(user.id)}&patient_hash=eq.${pgv(patientHash)}`,
@@ -1336,12 +1342,25 @@ export default function EphiaInvoice() {
             );
             const existing = await existingRes.json();
             if (existing.length > 0) {
-              // Update existing patient (found by hash)
-              await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${pgv(existing[0].id)}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
-                body: JSON.stringify({ data: ptCipher, iv: ptIv, patient_hash: patientHash, encryption_version: 1 }),
-              });
+              // Update existing patient (found by hash), merged with what is stored
+              const rec = existing[0];
+              let stored = null;
+              if (rec.encryption_version >= 1 && rec.iv && typeof rec.data === "string") {
+                try { stored = await decryptData(rec.data, rec.iv, currentMEK); } catch (e) { stored = null; }
+              } else if (rec.data && typeof rec.data === "object") {
+                stored = rec.data;
+              }
+              if (stored && typeof stored === "object") {
+                const { ciphertext: mCipher, iv: mIv } = await encryptData(mergeIntoStored(stored), currentMEK);
+                await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${pgv(rec.id)}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
+                  body: JSON.stringify({ data: mCipher, iv: mIv, patient_hash: patientHash, encryption_version: 1 }),
+                });
+              } else {
+                // Never overwrite a record we cannot read: that would destroy its other fields.
+                console.warn("Skipping patient update: stored record could not be decrypted", rec.id);
+              }
             } else {
               // Also check for pre-E2EE record by plain email (only if email exists)
               let legacy = [];
@@ -1353,11 +1372,13 @@ export default function EphiaInvoice() {
                 legacy = await legacyRes.json();
               }
               if (legacy.length > 0) {
-                // Migrate pre-E2EE patient to encrypted
+                // Migrate pre-E2EE patient to encrypted, keeping its other fields
+                const legacyData = (legacy[0].data && typeof legacy[0].data === "object") ? legacy[0].data : {};
+                const { ciphertext: lCipher, iv: lIv } = await encryptData(mergeIntoStored(legacyData), currentMEK);
                 await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${pgv(legacy[0].id)}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
-                  body: JSON.stringify({ data: ptCipher, iv: ptIv, patient_hash: patientHash, email: patientHash, encryption_version: 1 }),
+                  body: JSON.stringify({ data: lCipher, iv: lIv, patient_hash: patientHash, email: patientHash, encryption_version: 1 }),
                 });
               } else {
                 // Insert new patient
