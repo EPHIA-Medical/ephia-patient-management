@@ -284,6 +284,31 @@ export default function EphiaInvoice() {
     }
   };
 
+  // ─── Document modal: Rechnung/HV opened from the patient page show in a modal ───
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const openDocModal = (inv, tab) => { setPreviewTab(tab); setViewingInvoice(inv); setDocModalOpen(true); };
+  const closeDocModal = () => { setDocModalOpen(false); setViewingInvoice(null); };
+  // Any route change (Bearbeiten, back button, header nav) closes the modal
+  useEffect(() => { setDocModalOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!docModalOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape" && !document.querySelector("[data-doc-modal-inner-dialog]")) closeDocModal(); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prevOverflow; window.removeEventListener("keydown", onKey); };
+  }, [docModalOpen]);
+  const wrapDocModal = (content) => {
+    if (!docModalOpen) return content;
+    return (
+      <div className="fixed inset-0 z-40 bg-black/40 overflow-y-auto" onMouseDown={(e) => { if (e.target === e.currentTarget) closeDocModal(); }}>
+        <div className="relative mx-auto my-4 sm:my-8 w-[calc(100%-1.5rem)] lg:w-[calc(210mm+3rem)] bg-[#F5F8FA] rounded-xl shadow-2xl px-3 sm:px-6 pt-4 pb-6" role="dialog" aria-modal="true">
+          {content}
+        </div>
+      </div>
+    );
+  };
+
   // ─── Force patients page when no patients exist ───
   useEffect(() => {
     if (dataLoaded && patients.length === 0 && pathname !== "/patients") {
@@ -4033,8 +4058,8 @@ export default function EphiaInvoice() {
             onDeleteBehandlung={handleDeleteBehandlung}
             onLinkDocToBehandlung={handleLinkDocToBehandlung}
             onBack={() => navigate("/patients")}
-            onView={(inv) => { setPreviewTab("rechnung"); navigateToPreview(inv); }}
-            onViewHV={(inv) => { setPreviewTab("honorar"); navigateToPreview(inv); }}
+            onView={(inv) => openDocModal(inv, "rechnung")}
+            onViewHV={(inv) => openDocModal(inv, "honorar")}
             onDownload={handleDownloadInvoice}
             onDownloadHV={handleDownloadHV}
             onCreateInvoice={(p, behId) => { pendingDocBehIdRef.current = behId || null; handleNewForPatient(p); }}
@@ -4330,7 +4355,7 @@ export default function EphiaInvoice() {
         })()}
 
         {/* ═══ PREVIEW PAGE ═══ */}
-        {isPreviewPage && viewingInvoice && !viewingInvoice._consentForm && (() => {
+        {(isPreviewPage || docModalOpen) && viewingInvoice && !viewingInvoice._consentForm && (() => {
           const isHvOnly = !!viewingInvoice._hvOnly;
           const isStandaloneTD = !!viewingInvoice._standalone;
           const linkedHV = viewingInvoice._fromHvId ? invoices.find((inv) => inv.id === viewingInvoice._fromHvId) : null;
@@ -4346,7 +4371,7 @@ export default function EphiaInvoice() {
           const signedHvUpload = hvSource._signedHvUpload || null;
           const hvSigsOuter = hvSource?._signatures;
           const hvIsFullySigned = !!(signedHvUpload || (hvSigsOuter?.patient && hvSigsOuter?.doctor));
-          return (
+          return wrapDocModal(
           <div>
             {/* Toolbar - aligned with document */}
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4 mx-auto" style={{ maxWidth: "210mm" }}>
@@ -4409,6 +4434,7 @@ export default function EphiaInvoice() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                 </button>
                 <button className="px-3 py-2 rounded-lg border border-[#DFE3EB] text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition" onClick={() => {
+                  if (docModalOpen) { closeDocModal(); return; }
                   setViewingInvoice(null);
                   const patId = viewingInvoice?._patientDbId || selectedPatient?.id || selectedPatient?._raw?.id;
                   navigate(patId ? `/patients/${patId}` : "/patients");
@@ -4546,15 +4572,17 @@ export default function EphiaInvoice() {
             <input ref={hvUploadRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleHvUpload} />
             {/* Signature Modal — patient only */}
             {showSignatureModal && (
-              <SignatureModal
-                onComplete={handleSignatureComplete}
-                onClose={() => setShowSignatureModal(false)}
-                existingSignatures={viewingInvoice._signatures}
-              />
+              <div data-doc-modal-inner-dialog>
+                <SignatureModal
+                  onComplete={handleSignatureComplete}
+                  onClose={() => setShowSignatureModal(false)}
+                  existingSignatures={viewingInvoice._signatures}
+                />
+              </div>
             )}
             {/* Doctor signature modal for HV */}
             {showHvDoctorSign && (
-              <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowHvDoctorSign(false)}>
+              <div data-doc-modal-inner-dialog className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowHvDoctorSign(false)}>
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-800">Unterschrift Ärzt:in</h3>
