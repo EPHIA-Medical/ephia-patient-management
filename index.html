@@ -44,6 +44,11 @@
       }
       select:disabled, .ephia-select:disabled { cursor: not-allowed; opacity: 0.6; }
       select::-ms-expand { display: none; }
+      /* PDF export: html2canvas finds the text baseline with a hidden 1px image
+         inside a hidden div on <body>. Tailwind makes every img display:block,
+         which pushes that image onto its own line, so all PDF text came out
+         too low in its row. Keep only that measuring image inline. */
+      body > div[style*="visibility: hidden"] > img[width="1"][height="1"] { display: inline !important; }
       @supports (-webkit-touch-callout: none) {
         input, select, textarea { font-size: 16px !important; }
       }
