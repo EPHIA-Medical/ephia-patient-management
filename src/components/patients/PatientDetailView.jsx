@@ -10,6 +10,7 @@ import BehandlungDetailPanel from "./BehandlungDetailPanel";
 import BehandlungAddPanel from "./BehandlungAddPanel";
 import PatientBehandlungenSidebar from "./PatientBehandlungenSidebar";
 import NoteEditor from "./NoteEditor";
+import Modal from "../ui/Modal";
 import Spinner from "../ui/Spinner";
 import { emptyPraeparat } from "../../utils/praeparate";
 
@@ -37,21 +38,8 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   const [historieOpen, setHistorieOpen] = useState(false);
   const [noteEditing, setNoteEditing] = useState(false);
 
-  // Behandlungsdoku view modal: close via X, backdrop or Escape (an overlay
-  // opened inside it, e.g. a confirmation, takes Escape first)
-  const treatmentModalRef = useRef(null);
   const closeTreatmentModal = () => { setViewingTreatment(null); setCenterView("timeline"); };
-  const treatmentModalOpen = centerView === "behandlung_detail" && !!viewingTreatment;
-  useEffect(() => {
-    if (!treatmentModalOpen) return;
-    const onKey = (e) => {
-      if (e.key !== "Escape") return;
-      if (treatmentModalRef.current?.querySelector(".fixed.inset-0") || confirmDeleteTreatment) return;
-      closeTreatmentModal();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [treatmentModalOpen, confirmDeleteTreatment]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeTreatmentForm = () => { setCenterView("timeline"); setEditingTreatmentInv(null); setNewTreatmentBehId(null); };
 
   // Close the Historie drawer with Escape
   useEffect(() => {
@@ -393,16 +381,10 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
         </div>
       )}
 
-      {/* Behandlungsdoku view modal (like Rechnung, HV and Aufklärungsbogen) */}
+      {/* Behandlungsdoku view modal (same shell as Rechnung, HV and Aufklärungsbogen) */}
       {centerView === "behandlung_detail" && viewingTreatment && (
-        <div className="fixed inset-0 bg-black/40 z-40 flex items-start justify-center overflow-y-auto py-6 px-4" onMouseDown={(e) => { if (e.target === e.currentTarget) closeTreatmentModal(); }}>
-          <div ref={treatmentModalRef} className="bg-white rounded-xl shadow-2xl w-full max-w-5xl" role="dialog" aria-modal="true" aria-label="Behandlungsdokumentation">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">Behandlungsdokumentation</h2>
-              <button className="p-1 text-gray-400 hover:text-gray-600 transition" onClick={closeTreatmentModal} aria-label="Schließen">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
+        <Modal title="Behandlungsdokumentation" onClose={closeTreatmentModal} escapeBlocked={!!confirmDeleteTreatment} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 py-4 sm:py-6">
+          <div className="bg-white rounded-lg shadow-sm">
             <BehandlungDetailPanel
               inModal
               viewingTreatment={viewingTreatment} setViewingTreatment={setViewingTreatment}
@@ -415,19 +397,13 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
             />
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Behandlungsdoku create/edit modal */}
+      {/* Behandlungsdoku create/edit form: same shell, closes via X only (unsaved input) */}
       {centerView === "behandlungen_add" && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-y-auto py-6 px-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">{editingTreatmentInv ? "Behandlung bearbeiten" : "Neue Behandlungsdokumentation"}</h2>
-              <button className="p-1 text-gray-400 hover:text-gray-600 transition" onClick={() => { setCenterView("timeline"); setEditingTreatmentInv(null); setNewTreatmentBehId(null); }}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
+        <Modal title={editingTreatmentInv ? "Behandlung bearbeiten" : "Neue Behandlungsdokumentation"} onClose={closeTreatmentForm} z="z-50" dismissible={false} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 py-4 sm:py-6">
+          <div className="bg-white rounded-lg shadow-sm">
             <BehandlungAddPanel
               patient={patient} email={email} rawData={rawData} patientDbId={patientDbId}
               matchingInvoices={matchingInvoices} rechnungsInvoices={rechnungsInvoices} copySourceDocs={copySourceDocs} practice={practice}
@@ -444,7 +420,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
               setViewingTreatment={setViewingTreatment} setPendingQuickInvoice={setPendingQuickInvoice}
             />
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete treatment doc confirmation */}

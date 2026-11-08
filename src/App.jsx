@@ -57,6 +57,12 @@ import PatientDetailView from "./components/patients/PatientDetailView";
 import InvoiceListView from "./components/invoices/InvoiceListView";
 import NotFoundPage from "./components/ui/NotFoundPage";
 import Select from "./components/ui/Select";
+import Modal from "./components/ui/Modal";
+
+// Rechnung/HV form: a page of its own, or the shared modal on the patient page
+const CreateFormShell = ({ enabled, title, onClose, children }) => (enabled
+  ? <Modal title={title} onClose={onClose} size="wide" z="z-50" dismissible={false} bodyClassName="bg-[#F5F8FA] p-3 sm:p-6">{children}</Modal>
+  : <>{children}</>);
 import { APP_VERSION } from "./components/ui/UpdateNotice";
 
 let currentMEK = null;
@@ -294,22 +300,21 @@ export default function EphiaInvoice() {
   const closeDocModal = () => { setDocModalOpen(false); setViewingInvoice(null); };
   // Any route change (Bearbeiten, back button, header nav) closes the modal
   useEffect(() => { setDocModalOpen(false); }, [pathname]);
-  useEffect(() => {
-    if (!docModalOpen) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e) => { if (e.key === "Escape" && !document.querySelector("[data-doc-modal-inner-dialog]")) closeDocModal(); };
-    window.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = prevOverflow; window.removeEventListener("keydown", onKey); };
-  }, [docModalOpen]);
-  const wrapDocModal = (content) => {
+  // Title of the document shown in the modal header
+  const docModalTitle = (inv) => {
+    if (!inv) return "";
+    if (inv._consentForm) return "Aufklärungsbogen";
+    if (inv._hvOnly) return "Honorarvereinbarung";
+    if (inv._standalone) return "Behandlungsdokumentation";
+    const nr = inv.invoiceMeta?.nummer;
+    return nr && nr !== "\u2014" ? `Rechnung ${nr}` : "Rechnung";
+  };
+  const wrapDocModal = (content, badge) => {
     if (!docModalOpen) return content;
     return (
-      <div className="fixed inset-0 z-40 bg-black/40 overflow-y-auto" onMouseDown={(e) => { if (e.target === e.currentTarget) closeDocModal(); }}>
-        <div className="relative mx-auto my-4 sm:my-8 w-[calc(100%-1.5rem)] lg:w-[calc(210mm+3rem)] bg-[#F5F8FA] rounded-xl shadow-2xl px-3 sm:px-6 pt-4 pb-6" role="dialog" aria-modal="true">
-          {content}
-        </div>
-      </div>
+      <Modal title={docModalTitle(viewingInvoice)} badge={badge} onClose={closeDocModal} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 pt-4 pb-6">
+        {content}
+      </Modal>
     );
   };
 
@@ -2810,15 +2815,7 @@ export default function EphiaInvoice() {
 
       {/* Consent form modal (desktop patient detail) */}
       {patientCreateModal === "aufklaerung" && consentTemplate && consentPatient && (
-        <div className="fixed inset-0 bg-black/40 z-50 overflow-y-auto">
-          <div className="min-h-full flex items-start justify-center py-6 px-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-800">Neuer Aufklärungsbogen</h2>
-                <button className="p-1 text-gray-400 hover:text-gray-600 transition" onClick={() => { setPatientCreateModal(null); setConsentPatient(null); setConsentTemplate(null); }}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
+        <Modal title="Neuer Aufklärungsbogen" z="z-50" dismissible={false} onClose={() => { setPatientCreateModal(null); setConsentPatient(null); setConsentTemplate(null); }}>
               <ConsentFormView
                 template={consentTemplate}
                 patient={consentPatient}
@@ -2828,9 +2825,7 @@ export default function EphiaInvoice() {
                 onCancel={() => { setPatientCreateModal(null); setConsentPatient(null); setConsentTemplate(null); }}
                 isModal
               />
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Kiosk handback screen: shown after the patient completed/refused the consent
@@ -2879,17 +2874,12 @@ export default function EphiaInvoice() {
         {/* ═══ CREATE PAGE ═══ */}
         {(isCreatePage || patientCreateModal === "rechnung" || patientCreateModal === "hv") && (
           <>
-          {/* Modal backdrop + wrapper for patient detail mode */}
-          {patientCreateModal && !showIndicationModal && <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setPatientCreateModal(null)} />}
-          <div className={patientCreateModal ? "fixed inset-0 z-50 overflow-y-auto" : ""}>
-          <div className={patientCreateModal ? "max-w-7xl mx-auto py-6 px-3 sm:px-6" : ""}>
-          {patientCreateModal && !showIndicationModal && (
-            <div className="flex justify-end mb-2">
-              <button className="p-2 rounded-full bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition" onClick={() => setPatientCreateModal(null)}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-          )}
+          {/* On the patient page the form opens in the shared modal shell */}
+          <CreateFormShell
+            enabled={!!patientCreateModal && !showIndicationModal}
+            title={hvOnlyMode ? (amendingId ? "Honorarvereinbarung ändern" : "Neue Honorarvereinbarung") : (amendingId ? "Rechnung ändern" : "Neue Rechnung")}
+            onClose={() => setPatientCreateModal(null)}
+          >
           {/* ═══ Indication Type Modal ═══ */}
           {showIndicationModal && (
             <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center p-4">
@@ -3504,8 +3494,7 @@ export default function EphiaInvoice() {
           </div>
           </div>
           )}
-          </div>
-          </div>
+          </CreateFormShell>
           </>
         )}
 
@@ -4250,20 +4239,23 @@ export default function EphiaInvoice() {
             setSaveToast("Arzt Unterschrift gespeichert");
             setTimeout(() => setSaveToast(""), 2500);
           };
+          const consentBadge = cd.refused
+            ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-red-100 text-red-700 rounded">Abgelehnt</span>
+            : isComplete
+            ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Vollständig</span>
+            : needsDoctorSig
+            ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Ärzt:in fehlt</span>
+            : <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">Entwurf</span>;
           return wrapDocModal(
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4 mx-auto" style={{ maxWidth: "210mm" }}>
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-medium text-gray-700">Aufklärungsbogen</h2>
-                {cd.refused
-                  ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-red-100 text-red-700 rounded">Abgelehnt</span>
-                  : isComplete
-                  ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Vollständig</span>
-                  : needsDoctorSig
-                  ? <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Ärzt:in fehlt</span>
-                  : <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">Entwurf</span>
-                }
-              </div>
+              {/* In the modal, title and status sit in the modal header */}
+              {!docModalOpen && (
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-medium text-gray-700">Aufklärungsbogen</h2>
+                  {consentBadge}
+                </div>
+              )}
               <div className="flex gap-1.5 ml-auto">
                 <button className="p-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition sm:hidden" title="Teilen" onClick={async () => {
                   const patName = [viewingInvoice.patient?.vorname, viewingInvoice.patient?.nachname].filter(Boolean).join("_") || "Patient";
@@ -4341,7 +4333,7 @@ export default function EphiaInvoice() {
                 </div>
               </div>
             )}
-          </div>
+          </div>, consentBadge
           );
         })()}
 
