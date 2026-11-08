@@ -3,7 +3,7 @@ import { fmtDate, fmtUnits, toDE } from "../../utils/helpers";
 import { trackEvent } from "../../lib/analytics";
 import PraeparatAutocomplete from "../ui/PraeparatAutocomplete";
 import TreatmentMap from "../treatment/TreatmentMap";
-import InfoTooltip from "../ui/InfoTooltip";
+import InfoTooltip, { Tooltip } from "../ui/InfoTooltip";
 import { serializeMarkers } from "../treatment/markerUtils";
 import { emptyPraeparat, praepLetter, praeparatTotals, withPraeparate } from "../../utils/praeparate";
 import Select from "../ui/Select";
@@ -183,10 +183,9 @@ export default function BehandlungAddPanel({
                     {idx === 0 && (
                       <label className="block text-xs font-medium text-gray-500 mb-0.5 flex items-center gap-1">
                         Menge
-                        <span className="relative group">
+                        <Tooltip content={"Wird automatisch berechnet, wenn Injektionspunkte dokumentiert werden."} width={220}>
                           <svg className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 text-[11px] leading-tight text-white bg-gray-800 rounded-md shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">Wird automatisch berechnet, wenn<br/>Injektionspunkte dokumentiert werden.</span>
-                        </span>
+                        </Tooltip>
                       </label>
                     )}
                     <input
