@@ -14,11 +14,13 @@ export function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
 }
 
-// Railway's proxy sets X-Real-IP; in X-Forwarded-For the client can prepend anything,
-// only the last entry (added by the proxy) is trustworthy.
+// Only the right-most X-Forwarded-For entry is trusted: Railway's edge appends the
+// connecting address there, anything to its left (and X-Real-IP) a client can set.
+// This per-IP limit only slows down scanning; the real limit is the per-link
+// counter in the database (5 attempts), which no header can influence.
 function clientIp(req: NextRequest): string {
   const xff = (req.headers.get("x-forwarded-for") || "").split(",").map((s) => s.trim()).filter(Boolean);
-  return req.headers.get("x-real-ip") || xff.at(-1) || "unknown";
+  return xff.at(-1) || "unknown";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
