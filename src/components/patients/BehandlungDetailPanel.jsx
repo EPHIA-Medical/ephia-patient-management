@@ -199,7 +199,7 @@ export default function BehandlungDetailPanel({
                       {praepTotals.map((t) => (
                         <p key={t.idx} className="flex items-center gap-2">
                           {multiPraep && <span className="text-[10px] font-bold rounded bg-gray-800 text-white text-center flex-shrink-0" style={{ width: 18, height: 18, lineHeight: "18px" }}>{t.letter}</span>}
-                          <span>{t.name || "—"}{multiPraep && praepMengeStr(t) ? <span className="text-gray-400"> &middot; {praepMengeStr(t)}</span> : null}</span>
+                          <span>{t.name || "—"}{multiPraep && praepMengeStr(t) ? <span className="text-gray-400"> &middot; {praepMengeStr(t)}</span> : null}{t.charge ? <span className="text-gray-400"> &middot; Ch. {t.charge}</span> : null}</span>
                         </p>
                       ))}
                     </div>
@@ -223,6 +223,7 @@ export default function BehandlungDetailPanel({
                         <Select className={inputCls + " bg-white"} value={p.einheit} onChange={(e) => setInlineTempPraeparate(inlineTempPraeparate.map((q, i) => (i === idx ? { ...q, einheit: e.target.value } : q)))}>
                           <option value="ml">ml</option><option value="SE">SE</option><option value="IE">IE</option>
                         </Select>
+                        <input className={inputCls + " w-24"} value={p.charge || ""} placeholder="Charge" title="Chargennummer" onChange={(e) => setInlineTempPraeparate(inlineTempPraeparate.map((q, i) => (i === idx ? { ...q, charge: e.target.value } : q)))} />
                         {inlineTempPraeparate.length > 1 && (
                           <button type="button" className="p-1 rounded text-gray-300 hover:text-red-500 transition" title="Pr&auml;parat entfernen" onClick={() => setInlineTempPraeparate(inlineTempPraeparate.filter((_, i) => i !== idx))}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -349,6 +350,8 @@ export default function BehandlungDetailPanel({
           // The first Präparat is the product line; further Präparate go in as material lines
           const mainT = praepTotals[0];
           const extraT = praepTotals.slice(1).filter((t) => t.units > 0);
+          // A Dermalfiller (per the practice's Präparate list) is billed per whole syringe, which the Schnellrechnung cannot do
+          const fillerPraep = (practice.praeparate || []).some((s) => s.typ === "filler" && s.name && s.name.trim().toLowerCase() === (praep || "").trim().toLowerCase());
           const qMl = multiPraep ? mainT.units : totalUnits;
           const qEinh = mainT.einheit || einh;
           const extraPrice = (t) => parseDE(quickInvoiceExtraPreis[t.idx] || "");
@@ -393,6 +396,9 @@ export default function BehandlungDetailPanel({
                   <p className="text-xs text-gray-400 mb-1">{multiPraep ? praepSummary : `${praep} · ${totalUnitsStr} ${einh}`} &middot; {markerCount} {markerCount === 1 ? "Punkt" : "Punkte"}</p>
                   {totalUnits <= 0 && markerCount > 0 && (
                     <p className="text-xs text-amber-600 mb-2">Hinweis: Bitte trage zuerst die Mengen an den Injektionspunkten ein.</p>
+                  )}
+                  {fillerPraep && (
+                    <p className="text-xs text-amber-600 mb-2">Dermalfiller werden pro ganzer Spritze als Auslage berechnet. Die Schnellrechnung rechnet pro {qEinh}; nutze für Filler bitte „Neue Rechnung" mit Behandlungstyp Dermalfiller.</p>
                   )}
 
                   <div className="space-y-3">
@@ -459,7 +465,7 @@ export default function BehandlungDetailPanel({
                                     className="block mt-1.5 px-2.5 py-1 rounded bg-white border border-amber-300 font-medium text-amber-900 hover:bg-amber-100 transition"
                                     onClick={() => {
                                       setQuickInvoiceOpen(false);
-                                      onStartHvFromValues({ behandlungId: inv._behandlungId || null, praeparat: praep, einheit: qEinh, ml: qMl, preisProMl: qPreisProMl, wunschGesamt: effectiveWunsch });
+                                      onStartHvFromValues({ behandlungId: inv._behandlungId || null, praeparat: praep, einheit: qEinh, ml: qMl, preisProMl: qPreisProMl, wunschGesamt: effectiveWunsch, treatmentType: fillerPraep ? "filler" : "botox" });
                                       setViewingTreatment(null);
                                       setCenterView("timeline");
                                     }}

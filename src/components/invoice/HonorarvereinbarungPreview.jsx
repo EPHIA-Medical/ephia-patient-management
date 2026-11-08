@@ -90,7 +90,7 @@ export default function HonorarvereinbarungPreview({ practice, patient: rawPatie
           {tableItems.map((it, i) => (
             <tr key={i}>
               <td style={S.tdFirst}>{it.goaCode || (it.isPraeparat ? "—" : "")}</td>
-              <td style={S.td}>{it.isPraeparat ? (it.ganzeAmpulle ? `1 Ampulle ${it.praeparatName || it.description} (Präparat)` : `${it.quantity || ""}${it.einheit || "ml"} ${it.praeparatName || it.description} (Präparat, ${fmt(it.unitPrice || 0)} €/${it.einheit || "ml"})`) : it.description}</td>
+              <td style={S.td}>{it.isPraeparat ? (it.einheit === "Spritze" ? `${it.description} (Präparat, ${fmt(it.unitPrice || 0)} €/Spritze)` : it.ganzeAmpulle ? `1 Ampulle ${it.praeparatName || it.description} (Präparat)` : `${it.quantity || ""}${it.einheit || "ml"} ${it.praeparatName || it.description} (Präparat, ${fmt(it.unitPrice || 0)} €/${it.einheit || "ml"})`) : it.description}</td>
               <td style={S.tdR}>{it.punkte != null ? it.punkte : ""}</td>
               <td style={S.tdR}>{it.steigerung != null ? (Math.round(it.steigerung * 100) / 100).toFixed(2).replace(".", ",") : ""}</td>
               <td style={S.tdRLast}>{fmt(it.betrag)}</td>
@@ -146,7 +146,7 @@ export default function HonorarvereinbarungPreview({ practice, patient: rawPatie
       {hasPraeparat && !isStandalone && (
         <div style={{ marginBottom: "16px", fontSize: "10px", color: "#444" }}>
           {praeparatItems.map((it, i) => (
-            <div key={i}>Präparat: {it.praeparatName || it.description} — {fmt(it.unitPrice)} € pro {it.einheit || "ml"} (nach tatsächlichem Verbrauch)</div>
+            <div key={i}>Präparat: {it.praeparatName || it.description} — {fmt(it.unitPrice)} € pro {it.einheit || "ml"} {it.einheit === "Spritze" ? "(ganze Spritze, Auslage nach § 10 GOÄ)" : "(nach tatsächlichem Verbrauch)"}</div>
           ))}
           <div style={{ marginTop: "4px" }}>
             Die Kosten für Präparate und Sachkosten richten sich nach dem tatsächlichen Verbrauch im Rahmen der Behandlung und werden in der abschließenden Rechnung gesondert ausgewiesen.

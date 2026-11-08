@@ -32,6 +32,13 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
   initAnswers["q13_komplikationen"] = null; initAnswers["q13_komplikationen_text"] = "";
   const [answers, setAnswers] = React.useState(initAnswers);
   const [doctorNotes, setDoctorNotes] = React.useState("");
+  // Templates with regionOptions (Dermalfiller) let the doctor tick the planned regions and name the substance
+  const regionOptions = Array.isArray(template.regionOptions) ? template.regionOptions : null;
+  const [regions, setRegions] = React.useState([]);
+  const [regionsOther, setRegionsOther] = React.useState("");
+  const [substanz, setSubstanz] = React.useState("");
+  const toggleRegion = (r) => setRegions((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  const plannedExtra = regionOptions ? { regions, regionsOther: regionsOther.trim(), substanz: substanz.trim() } : {};
   const [treatmentDate, setTreatmentDate] = React.useState(new Date().toISOString().split("T")[0]);
   const [ort, setOrt] = React.useState(practice.city || practice.stadt || practice.ort || "");
   const [validationErrors, setValidationErrors] = React.useState(new Set());
@@ -96,6 +103,7 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
       treatmentDate,
       ort,
       refused,
+      ...plannedExtra,
       _signatures: sigs,
       signedAt: new Date().toISOString(),
     });
@@ -112,6 +120,7 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
       treatmentDate,
       ort,
       refused,
+      ...plannedExtra,
       _signatures: sigs,
       signedAt: new Date().toISOString(),
     });
@@ -276,6 +285,26 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
         <div>
           <h3 className="text-sm md:text-base font-bold text-teal-700 mb-2 md:mb-3">Vorgesehene Behandlung</h3>
           <p className="text-sm md:text-base text-gray-700 mb-2">{template.plannedTreatment}</p>
+          {regionOptions && (
+            <div className="mb-3">
+              <p className="text-xs md:text-sm text-gray-500 mb-1.5">Behandlungsregionen (wird von der Ärztin/dem Arzt angekreuzt)</p>
+              <div className="flex flex-wrap gap-2">
+                {regionOptions.map((r) => (
+                  <button key={r} type="button" onClick={() => toggleRegion(r)} className={`px-3 py-1.5 text-xs md:text-sm rounded-full border transition ${regions.includes(r) ? "bg-blue-500 text-white border-blue-500" : "bg-white text-gray-600 border-[#DFE3EB] hover:border-gray-300"}`}>{r}</button>
+                ))}
+              </div>
+              <div className="flex flex-col md:flex-row gap-3 md:gap-6 mt-3">
+                <div className="flex-1">
+                  <label className="text-xs md:text-sm text-gray-500">Andere Region</label>
+                  <input type="text" className={inputCls + " mt-1 block"} value={regionsOther} onChange={e => setRegionsOther(e.target.value)} placeholder="z.B. Handrücken" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs md:text-sm text-gray-500">Vorgesehene Substanz / Präparat</label>
+                  <input type="text" className={inputCls + " mt-1 block"} value={substanz} onChange={e => setSubstanz(e.target.value)} placeholder="z.B. Hyaluronsäure (Handelsname)" />
+                </div>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col md:flex-row gap-3 md:gap-6">
             <div>
               <label className="text-xs md:text-sm text-gray-500">Vorgesehener Behandlungsbeginn</label>
@@ -581,6 +610,16 @@ export default function ConsentFormPreview({ template, consentData, patient, pra
       <div style={{ marginBottom: "16px" }}>
         <div style={h2Style}>Vorgesehene Behandlung</div>
         <div style={bodyText}>{template.plannedTreatment}</div>
+        {((consentData.regions && consentData.regions.length > 0) || consentData.regionsOther) && (
+          <div style={{ fontSize: "10px", marginTop: "6px" }}>
+            <strong>Behandlungsregionen:</strong> {[...(consentData.regions || []), consentData.regionsOther].filter(Boolean).join(", ")}
+          </div>
+        )}
+        {consentData.substanz && (
+          <div style={{ fontSize: "10px", marginTop: "4px" }}>
+            <strong>Vorgesehene Substanz:</strong> {consentData.substanz}
+          </div>
+        )}
         <div style={{ fontSize: "10px", marginTop: "6px" }}>
           <strong>Vorgesehener Behandlungsbeginn:</strong> {datumStr}
         </div>

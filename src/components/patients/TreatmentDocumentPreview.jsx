@@ -142,7 +142,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
           {praepTotals.map((t) => (
             <div key={t.idx} style={{ fontSize: "11px", color: "#333", display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
               <span style={{ display: "inline-block", minWidth: 14, height: 14, lineHeight: "14px", textAlign: "center", borderRadius: 3, background: "#1f2937", color: "#fff", fontSize: "9px", fontWeight: 700 }}>{t.letter}</span>
-              <span>{t.name || "Präparat"}{praepMengeStr(t) ? ` — ${praepMengeStr(t)}` : ""}{t.count > 0 ? ` (${t.count} ${t.count === 1 ? "Punkt" : "Punkte"})` : ""}</span>
+              <span>{t.name || "Präparat"}{praepMengeStr(t) ? ` — ${praepMengeStr(t)}` : ""}{t.count > 0 ? ` (${t.count} ${t.count === 1 ? "Punkt" : "Punkte"})` : ""}{t.charge ? ` · Charge ${t.charge}` : ""}</span>
             </div>
           ))}
           {totalUnits > 0 && sameEinh && <div style={{ fontSize: "11px", color: "#666", marginTop: "4px" }}>Gesamt: {totalStr} {einh}</div>}
@@ -151,7 +151,7 @@ export default function TreatmentDocPreview({ practice, patient, treatmentDoc, e
         <div style={{ marginBottom: "16px" }}>
           <div style={S.sectionTitle}>Präparat</div>
           <div style={{ fontSize: "11px", color: "#333" }}>
-            {praep}{totalUnits > 0 ? ` — ${totalStr} ${einh} gesamt` : td.amount ? ` — ${td.amount} ${einh} gesamt` : ""}
+            {praep}{totalUnits > 0 ? ` — ${totalStr} ${einh} gesamt` : td.amount ? ` — ${td.amount} ${einh} gesamt` : ""}{(td.charge || praeparate[0]?.charge) ? ` · Charge ${td.charge || praeparate[0].charge}` : ""}
           </div>
         </div>
       )}
