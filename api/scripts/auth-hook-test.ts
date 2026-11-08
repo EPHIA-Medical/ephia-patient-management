@@ -12,7 +12,7 @@
 import { signStandardWebhook } from "../src/lib/auth-hook";
 
 const [url, to, action = "recovery"] = process.argv.slice(2);
-const secret = process.env.AUTH_EMAIL_HOOK_SECRET;
+const secret = process.env.AUTH_EMAIL_HOOK_SECRET ?? "";
 if (!url || !to || !secret) {
   console.error("usage: AUTH_EMAIL_HOOK_SECRET=... npx tsx scripts/auth-hook-test.ts <url> <to> [action]");
   process.exit(1);
