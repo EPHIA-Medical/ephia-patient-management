@@ -1,5 +1,7 @@
 // ═══════════════════ Consent Form Templates ═══════════════════
 
+import { THERAPEUTIC_TEMPLATES } from "./therapeuticTemplates";
+
 export const CONSENT_TEMPLATES = [
   // Current template. Written independently for EPHIA; medical content reviewed
   // against current standard patient information for botulinum toxin.
@@ -50,6 +52,8 @@ export const CONSENT_TEMPLATES = [
     refusalText: "Ich wurde über die geplante Behandlung aufgeklärt und habe diesen Aufklärungsbogen gelesen. Ich willige in die Behandlung nicht ein.",
     plannedTreatment: "Injektion von Botulinumtoxin A in die mimische Muskulatur zur Faltenbehandlung.",
   },
+  // Therapeutic indications (Migräne, Hyperhidrose, Bruxismus)
+  ...THERAPEUTIC_TEMPLATES,
   // Previous template. No longer offered for new Aufklärungen; kept so that forms
   // signed with it (before signed forms stored a snapshot) still render.
   {
