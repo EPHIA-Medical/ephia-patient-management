@@ -1,0 +1,27 @@
+{
+  "name": "ephia-patient-management-api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Server side of the EPHIA Patient:innenverwaltung: Supabase auth mails, later Stripe.",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.8",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.37",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
