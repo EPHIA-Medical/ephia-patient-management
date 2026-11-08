@@ -135,3 +135,24 @@ describe("POST /api/auth/email-hook", () => {
     expect(sent).toHaveLength(0);
   });
 });
+
+describe("EMAIL_FROM handling", () => {
+  it("sends from the unquoted sender when the variable carries quotes", async () => {
+    vi.resetModules();
+    process.env.SUPABASE_URL = "https://grfngjgjiipbgntsduom.supabase.co";
+    process.env.AUTH_EMAIL_HOOK_SECRET = SECRET;
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.EMAIL_FROM = '"EPHIA <noreply@ephia.de>"';
+    const bodies: Array<{ from: string }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response('{"id":"email_1"}', { status: 200 });
+    });
+    const { POST } = await import("./route");
+    const res = await POST(signedRequest(recoveryPayload));
+    expect(res.status).toBe(200);
+    expect(bodies[0].from).toBe("EPHIA <noreply@ephia.de>");
+    delete process.env.EMAIL_FROM;
+    vi.restoreAllMocks();
+  });
+});

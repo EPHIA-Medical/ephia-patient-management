@@ -5,6 +5,7 @@ process.env.APP_URL = "https://invoicing.ephia.de/";
 
 import {
   buildVerifyLink,
+  resolveSender,
   hookUserFirstName,
   hookSecretBytes,
   parseHookPayload,
@@ -192,5 +193,25 @@ describe("hookUserFirstName", () => {
     expect(hookUserFirstName(user("A".repeat(41)))).toBe("");
     expect(hookUserFirstName(user(42))).toBe("");
     expect(hookUserFirstName({ id: "u", email: "a@example.com" })).toBe("");
+  });
+});
+
+describe("resolveSender", () => {
+  it("defaults when unset", () => {
+    expect(resolveSender(undefined)).toEqual({ from: "EPHIA <noreply@ephia.de>", valid: true });
+    expect(resolveSender("  ")).toEqual({ from: "EPHIA <noreply@ephia.de>", valid: true });
+  });
+  it("accepts both Resend formats", () => {
+    expect(resolveSender("EPHIA <noreply@ephia.de>").from).toBe("EPHIA <noreply@ephia.de>");
+    expect(resolveSender("noreply@ephia.de").from).toBe("noreply@ephia.de");
+  });
+  it("strips quotes a dashboard kept around the value", () => {
+    expect(resolveSender('"EPHIA <noreply@ephia.de>"')).toEqual({ from: "EPHIA <noreply@ephia.de>", valid: true });
+    expect(resolveSender("'EPHIA <noreply@ephia.de>'").from).toBe("EPHIA <noreply@ephia.de>");
+  });
+  it("falls back on anything malformed", () => {
+    expect(resolveSender("EPHIA noreply@ephia.de")).toEqual({ from: "EPHIA <noreply@ephia.de>", valid: false });
+    expect(resolveSender("EPHIA <noreply@ephia.de").valid).toBe(false);
+    expect(resolveSender("EPHIA").valid).toBe(false);
   });
 });

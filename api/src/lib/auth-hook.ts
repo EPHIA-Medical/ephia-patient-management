@@ -306,3 +306,23 @@ export function planAuthMails(payload: SendEmailHookPayload): PlannedAuthMail[] 
       return [];
   }
 }
+
+// ── Sender ──────────────────────────────────────────────────────────────
+
+export const DEFAULT_FROM = "EPHIA <noreply@ephia.de>";
+
+const BARE_ADDRESS = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+const NAMED_ADDRESS = /^[^<>"]+ <[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+>$/;
+
+/**
+ * Sender for Resend out of EMAIL_FROM. Dashboards keep quotes typed around
+ * a value as part of it, which Resend rejects with a 422 ("Invalid `from`
+ * field"), so wrapping quotes are stripped. Anything still not in the
+ * `a@b.c` or `Name <a@b.c>` shape falls back to the default sender.
+ */
+export function resolveSender(raw: string | undefined): { from: string; valid: boolean } {
+  const v = (raw ?? "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  if (!v) return { from: DEFAULT_FROM, valid: true };
+  if (BARE_ADDRESS.test(v) || NAMED_ADDRESS.test(v)) return { from: v, valid: true };
+  return { from: DEFAULT_FROM, valid: false };
+}

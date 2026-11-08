@@ -3,6 +3,7 @@ import {
   hookUserFirstName,
   parseHookPayload,
   planAuthMails,
+  resolveSender,
   verifyStandardWebhookSignature,
 } from "@/lib/auth-hook";
 import { buildAuthMail } from "@/lib/auth-emails";
@@ -27,8 +28,6 @@ import { buildAuthMail } from "@/lib/auth-emails";
 
 export const runtime = "nodejs";
 
-const DEFAULT_FROM = "EPHIA <noreply@ephia.de>";
-
 function hookError(status: number, message: string) {
   // Error shape Supabase shows to the caller of the auth endpoint.
   return NextResponse.json({ error: { http_code: status, message } }, { status });
@@ -37,7 +36,11 @@ function hookError(status: number, message: string) {
 export async function POST(req: NextRequest) {
   const hookSecret = process.env.AUTH_EMAIL_HOOK_SECRET;
   const resendApiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || DEFAULT_FROM;
+  const sender = resolveSender(process.env.EMAIL_FROM);
+  if (!sender.valid) {
+    console.warn(`[email-hook] EMAIL_FROM is malformed, sending as ${sender.from}`);
+  }
+  const from = sender.from;
 
   if (!hookSecret || !resendApiKey || !process.env.SUPABASE_URL) {
     console.error("[email-hook] AUTH_EMAIL_HOOK_SECRET, RESEND_API_KEY or SUPABASE_URL not set");
