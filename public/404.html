@@ -7,7 +7,9 @@
     <script>
       // GitHub Pages SPA fix: save the path and redirect to root so React Router can handle it
       sessionStorage.setItem('ghpages-redirect', location.pathname + location.search + location.hash);
-      location.replace('/');
+      // Unique query so the browser never serves a cached (outdated) index.html;
+      // index.html restores the original path right away
+      location.replace('/?_r=' + Date.now());
     </script>
   </head>
   <body></body>

@@ -57,6 +57,7 @@ import PatientDetailView from "./components/patients/PatientDetailView";
 import InvoiceListView from "./components/invoices/InvoiceListView";
 import NotFoundPage from "./components/ui/NotFoundPage";
 import Select from "./components/ui/Select";
+import { APP_VERSION } from "./components/ui/UpdateNotice";
 
 let currentMEK = null;
 
@@ -4560,7 +4561,7 @@ export default function EphiaInvoice() {
         })()}
 
         <div className="mt-8 text-center text-xs text-gray-300">
-          EPHIA Rechnungs-Prototyp · Daten von Patient:innen werden gemäß DSGVO gespeichert · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/agb")}>AGB</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/datenschutz")}>Datenschutz</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/impressum")}>Impressum</button>
+          EPHIA Rechnungs-Prototyp · Version {APP_VERSION} · Daten von Patient:innen werden gemäß DSGVO gespeichert · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/agb")}>AGB</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/datenschutz")}>Datenschutz</button> · <button className="text-gray-400 hover:text-gray-500 underline" onClick={() => navigate("/impressum")}>Impressum</button>
         </div>
       </div>}
     </div>

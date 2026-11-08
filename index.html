@@ -11,7 +11,8 @@
         var redirect = sessionStorage.getItem('ghpages-redirect');
         if (redirect) {
           sessionStorage.removeItem('ghpages-redirect');
-          if (redirect !== '/') history.replaceState(null, null, redirect);
+          // Always restore, also for '/', to drop the cache-busting query from 404.html
+          history.replaceState(null, null, redirect);
         }
       })();
     </script>
