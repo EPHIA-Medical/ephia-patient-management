@@ -3,13 +3,14 @@ import { fmtPhone, parsePlzOrt, combinePlzOrt, lookupPlz } from "../../utils/hel
 import { PRIORITY_COUNTRIES, OTHER_COUNTRIES } from "../../constants";
 import { showToast } from "../../utils/toast";
 import Select from "../ui/Select";
+import CopyButton from "../ui/CopyButton";
 
 const inputCls = "border border-[#DFE3EB] rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400";
 const valueBtnCls = "-mx-1.5 px-1.5 py-0.5 rounded text-sm text-gray-700 text-right hover:bg-gray-50 hover:text-gray-900 cursor-text transition";
 const GESCHLECHT = { w: "Weiblich", m: "Männlich", d: "Divers" };
 
 // Click a value to edit it in place. Enter or leaving the field saves, Escape cancels.
-function InlineField({ label, value, display, type = "text", options, placeholder, onSave }) {
+function InlineField({ label, value, display, type = "text", options, placeholder, onSave, copyable = false }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const done = useRef(false); // blocks a second save from the blur that follows Enter/Escape
@@ -30,9 +31,12 @@ function InlineField({ label, value, display, type = "text", options, placeholde
           <input autoFocus type={type} className={inputCls + " min-w-0 w-40 text-right"} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} onKeyDown={keys} />
         )
       ) : (
-        <button type="button" className={valueBtnCls + " min-w-0 break-words"} title="Klicken zum Bearbeiten" onClick={start}>
-          {value ? (display ?? value) : <span className="text-gray-300">--</span>}
-        </button>
+        <div className="flex items-center gap-0.5 min-w-0">
+          <button type="button" className={valueBtnCls + " min-w-0 break-words"} title="Klicken zum Bearbeiten" onClick={start}>
+            {value ? (display ?? value) : <span className="text-gray-300">--</span>}
+          </button>
+          {copyable && value && <CopyButton value={display ?? value} label={`${label} kopieren`} className="-mr-1" />}
+        </div>
       )}
     </div>
   );
@@ -151,8 +155,8 @@ export default function PatientLeftSidebar({
         <h3 className="px-5 py-3.5 text-sm font-semibold text-gray-500 uppercase tracking-wider">Adressdaten</h3>
         <div className="px-5 pb-4">
           <div className="space-y-1.5">
-            <InlineField label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
-            <InlineField label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
+            <InlineField copyable label="E-Mail" type="email" value={shownEmail} placeholder="name@beispiel.de" onSave={(v) => save({ email: v })} />
+            <InlineField copyable label="Telefon" type="tel" value={data.phone} display={fmtPhone(data.phone || "")} placeholder="+49 123 456789" onSave={(v) => save({ phone: v })} />
             <div className="flex justify-between items-start gap-3 min-h-[28px]">
               <span className="text-sm text-gray-400 flex-shrink-0 pt-0.5">Adresse</span>
               {adresse.editing ? (
@@ -178,15 +182,24 @@ export default function PatientLeftSidebar({
                   </Select>
                 </div>
               ) : (
-                <button type="button" className={valueBtnCls + " flex flex-col items-end"} title="Klicken zum Bearbeiten" onClick={adresse.start}>
-                  {data.address1 || data.address2 ? (
-                    <>
-                      {data.address1 && <span>{data.address1}</span>}
-                      {data.address2 && <span>{data.address2}</span>}
-                      <span>{data.country || "Deutschland"}</span>
-                    </>
-                  ) : <span className="text-gray-300">--</span>}
-                </button>
+                <div className="flex items-start gap-0.5 min-w-0">
+                  <button type="button" className={valueBtnCls + " flex flex-col items-end"} title="Klicken zum Bearbeiten" onClick={adresse.start}>
+                    {data.address1 || data.address2 ? (
+                      <>
+                        {data.address1 && <span>{data.address1}</span>}
+                        {data.address2 && <span>{data.address2}</span>}
+                        <span>{data.country || "Deutschland"}</span>
+                      </>
+                    ) : <span className="text-gray-300">--</span>}
+                  </button>
+                  {(data.address1 || data.address2) && (
+                    <CopyButton
+                      value={[data.address1, data.address2, data.country || "Deutschland"].filter(Boolean).join("\n")}
+                      label="Adresse kopieren"
+                      className="-mr-1 mt-0.5"
+                    />
+                  )}
+                </div>
               )}
             </div>
           </div>
