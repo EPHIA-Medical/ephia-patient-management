@@ -36,7 +36,6 @@ export default function BehandlungDetailPanel({
   const [quickInvoiceWunschStr, setQuickInvoiceWunschStr] = useState("");
   const [quickInvoicePreisStr, setQuickInvoicePreisStr] = useState("");
   const [quickInvoiceExtraPreis, setQuickInvoiceExtraPreis] = useState({});
-  const [quickInvoiceAttachTreatment, setQuickInvoiceAttachTreatment] = useState(false);
   const [quickInvoiceSaving, setQuickInvoiceSaving] = useState(false);
 
   const inv = viewingTreatment;
@@ -449,12 +448,6 @@ export default function BehandlungDetailPanel({
                     </div>
                   )}
 
-                  {inv.treatmentDoc && (inv.treatmentDoc.markers?.length > 0 || inv.treatmentDoc.amount) && (
-                    <label className="flex items-start gap-2 cursor-pointer select-none mt-3">
-                      <input type="checkbox" className="w-4 h-4 mt-0.5 flex-shrink-0 rounded border-gray-300 text-blue-500 focus:ring-blue-400" checked={quickInvoiceAttachTreatment} onChange={(e) => setQuickInvoiceAttachTreatment(e.target.checked)} />
-                      <span className="text-xs text-gray-500">Behandlungsdokumentation ohne Notizen an Rechnung anh&auml;ngen</span>
-                    </label>
-                  )}
                 </div>
 
                 <div className="px-5 pb-5 pt-2 flex gap-2">
@@ -479,7 +472,6 @@ export default function BehandlungDetailPanel({
                           ml: qMl,
                           preisProMl: qPreisProMl,
                           sachkosten,
-                          attachTreatmentPdf: quickInvoiceAttachTreatment,
                         });
                         setQuickInvoiceOpen(false);
                       } catch (e) {

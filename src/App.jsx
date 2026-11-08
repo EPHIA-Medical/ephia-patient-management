@@ -44,6 +44,7 @@ import MobileScaledPreview from "./components/treatment/MobileScaledPreview";
 import SettingsPage from "./components/settings/SettingsPage";
 import InvoicePreview from "./components/invoice/InvoicePreview";
 import HonorarvereinbarungPreview from "./components/invoice/HonorarvereinbarungPreview";
+import SendToPatientDialog from "./components/invoice/SendToPatientDialog";
 import VoucherListView from "./components/voucher/VoucherListView";
 import VoucherCreateForm from "./components/voucher/VoucherCreateForm";
 import VoucherPreview from "./components/voucher/VoucherPreview";
@@ -155,7 +156,7 @@ export default function EphiaInvoice() {
   const [useBeratungLang, setUseBeratungLang] = useState(false);
   const [begruendung, setBegruendung] = useState("");
   const [markAsPaid, setMarkAsPaid] = useState(false);
-  const [attachTreatmentPdf, setAttachTreatmentPdf] = useState(false);
+  const [showSendToPatient, setShowSendToPatient] = useState(false);
   const [hvOnlyMode, setHvOnlyMode] = useState(false);
   const [beratungOnly, setBeratungOnly] = useState(false); // consultation-only invoice (no Präparat/Injektion)
   const [fromHvId, setFromHvId] = useState(null); // ID of imported HV
@@ -165,6 +166,7 @@ export default function EphiaInvoice() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [viewingInvoice, setViewingInvoice] = useState(null);
+  useEffect(() => { setShowSendToPatient(false); }, [viewingInvoice]);
   const [amendingId, setAmendingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmDeleteVoucher, setConfirmDeleteVoucher] = useState(null);
@@ -1274,7 +1276,6 @@ export default function EphiaInvoice() {
       selectedZuschlaege: [...selectedZuschlaege],
       sachkosten: hvOnlyMode ? [] : sachkosten.map((sk) => ({ ...sk })),
       treatmentDoc: (!isBeratungOnly && treatmentMarkers.length > 0) ? { markers: serializeMarkers(treatmentMarkers), behandlungsDatum: invoiceMeta.datum, praeparat, einheit, facePhoto: treatmentFacePhoto || "" } : null,
-      attachTreatmentPdf: (hvOnlyMode || isBeratungOnly) ? false : attachTreatmentPdf,
       paymentStatus: hvOnlyMode ? "ausstehend" : (markAsPaid ? "bezahlt" : "ausstehend"),
       indicationType: hvOnlyMode ? undefined : indicationType,
       _fromHvId: fromHvId || undefined,
@@ -1777,10 +1778,6 @@ export default function EphiaInvoice() {
       const result = await generatePDFBlob(elementId);
       if (!result) { showErrorToast("PDF konnte nicht erstellt werden: Dokument nicht gefunden."); return; }
       const { pdf } = result;
-      // Append treatment doc as page 2 for invoices (not HV/behandlung) when flag is set
-      if (previewTab === "rechnung" && viewingInvoice?.attachTreatmentPdf && viewingInvoice?.treatmentDoc) {
-        await appendPageToPDF(pdf, "invoice-treatment-doc-preview");
-      }
       trackEvent("pdf_downloaded", { type: previewTab }, session?.access_token);
       pdf.save(filename);
     } catch (e) {
@@ -2124,10 +2121,6 @@ export default function EphiaInvoice() {
       const result = await generatePDFBlob(elementId);
       if (!result) return;
       const { pdf } = result;
-      // Append treatment doc as page 2 for invoices (not HV/behandlung) when flag is set
-      if (previewTab === "rechnung" && viewingInvoice?.attachTreatmentPdf && viewingInvoice?.treatmentDoc) {
-        await appendPageToPDF(pdf, "invoice-treatment-doc-preview");
-      }
       const blob = pdf.output("blob");
       const file = new File([blob], filename, { type: "application/pdf" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2202,31 +2195,6 @@ export default function EphiaInvoice() {
         }
         throw e;
       }
-    } finally {
-      hiddenParents.forEach(({ node: n, prev }) => { n.style.cssText = prev; });
-    }
-  };
-
-  // Append a second page (from another DOM element) to an existing jsPDF instance
-  const appendPageToPDF = async (pdf, elementId) => {
-    let el = document.getElementById(elementId);
-    if (!el) return;
-    const hiddenParents = [];
-    let node = el;
-    while (node && node !== document.body) {
-      if (window.getComputedStyle(node).display === "none") {
-        hiddenParents.push({ node, prev: node.style.cssText });
-        node.style.cssText += ";display:block !important;position:absolute !important;left:-9999px !important;top:0 !important;";
-      }
-      node = node.parentElement;
-    }
-    try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
-      const imgData = canvas.toDataURL("image/png");
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
     } finally {
       hiddenParents.forEach(({ node: n, prev }) => { n.style.cssText = prev; });
     }
@@ -2350,14 +2318,10 @@ export default function EphiaInvoice() {
   };
 
   // Share or download PDF depending on device capability
-  const shareOrDownloadPDF = async (elementId, filename, extraPageElementId) => {
+  const shareOrDownloadPDF = async (elementId, filename) => {
     const result = await generatePDFBlob(elementId);
     if (!result) return;
     const { pdf } = result;
-    // Optionally append a second page (e.g., treatment doc)
-    if (extraPageElementId) {
-      await appendPageToPDF(pdf, extraPageElementId);
-    }
     const blob = pdf.output("blob");
     const file = new File([blob], filename, { type: "application/pdf" });
     const isMobile = window.innerWidth < 640;
@@ -3002,7 +2966,6 @@ export default function EphiaInvoice() {
                 if (hv.treatmentDoc && hv.treatmentDoc.markers && hv.treatmentDoc.markers.length > 0) {
                   setTreatmentMarkers(hv.treatmentDoc.markers.map((m, i) => ({ id: Date.now() + i, ...m })));
                   setTreatmentFacePhoto(hv.treatmentDoc.facePhoto || "");
-                  setAttachTreatmentPdf(true);
                 } else {
                   setTreatmentMarkers([]);
                   setTreatmentFacePhoto("");
@@ -3470,12 +3433,6 @@ export default function EphiaInvoice() {
                 <input type="checkbox" className="w-4 h-4 flex-shrink-0 rounded border-gray-300 text-green-500 focus:ring-green-400" checked={markAsPaid} onChange={(e) => setMarkAsPaid(e.target.checked)} />
                 <span className="text-xs text-gray-500">Als bezahlt markieren <span className="text-gray-400">(Rechnung erscheint ohne Zahlungsaufforderung und Bankverbindung)</span></span>
               </label>
-              )}
-              {!hvOnlyMode && !isBeratungOnly && treatmentMarkers.length > 0 && (
-                <label className="flex items-start gap-2 cursor-pointer select-none mb-4">
-                  <input type="checkbox" className="w-4 h-4 mt-0.5 flex-shrink-0 rounded border-gray-300 text-blue-500 focus:ring-blue-400" checked={attachTreatmentPdf} onChange={(e) => setAttachTreatmentPdf(e.target.checked)} />
-                  <span className="text-xs text-gray-500">Behandlungsdokumentation ohne Notizen an Rechnung anhängen</span>
-                </label>
               )}
               <div className="flex items-center justify-between">
                 <button className="px-4 py-2 text-sm rounded-lg border border-[#DFE3EB] text-gray-500 hover:bg-gray-50" onClick={() => { setAmendingId(null); setHvOnlyMode(false); setBeratungOnly(false); navigate("/rechnungen"); }}>
@@ -4433,6 +4390,11 @@ export default function EphiaInvoice() {
               })()}
               {/* Action buttons */}
               <div className="flex gap-1.5">
+                {previewTab === "rechnung" && viewHasTD && !isStandaloneTD && (
+                  <button className="px-3 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-700 transition" onClick={() => setShowSendToPatient(true)}>
+                    An Patient:in senden
+                  </button>
+                )}
                 {/* Share on mobile, Download on desktop */}
                 <button className="p-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition sm:hidden" onClick={handleShareCurrent} title="Teilen">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
@@ -4496,21 +4458,6 @@ export default function EphiaInvoice() {
                   <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                 )}
               </div>
-              {previewTab === "rechnung" && !isStandaloneTD && viewingInvoice.attachTreatmentPdf && viewingInvoice.treatmentDoc && (
-                <div>
-                  <p className="text-xs text-gray-400 text-center mb-2">Seite 2 — Behandlungsdokumentation</p>
-                  <div className="shadow-lg border border-[#DFE3EB]" style={{ width: "210mm" }}>
-                    <TreatmentDocPreview
-                      practice={viewPractice}
-                      patient={viewingInvoice.patient}
-                      treatmentDoc={viewingInvoice.treatmentDoc}
-                      showPatientHinweis={!!viewingInvoice._standalone}
-                      einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
-                      facePhoto={previewFacePhoto}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
             <MobileScaledPreview className="lg:hidden" a4Width={a4Px}>
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -4547,21 +4494,6 @@ export default function EphiaInvoice() {
                     <InvoicePreview practice={viewPractice} patient={viewingInvoice.patient} invoiceMeta={viewingInvoice.invoiceMeta} lineItems={viewingInvoice.lineItems} begruendung={viewingInvoice.begruendung} targetGesamt={viewingInvoice.targetGesamt} voucherRedemption={viewingInvoice.voucherRedemption} paymentStatus={viewingInvoice.paymentStatus} />
                   )}
                 </div>
-                {previewTab === "rechnung" && !isStandaloneTD && viewingInvoice.attachTreatmentPdf && viewingInvoice.treatmentDoc && (
-                  <div>
-                    <p style={{ fontSize: "11px", color: "#9ca3af", textAlign: "center", marginBottom: 8 }}>Seite 2 — Behandlungsdokumentation</p>
-                    <div className="shadow-lg border border-[#DFE3EB]" style={{ width: a4Px }}>
-                      <TreatmentDocPreview
-                        practice={viewPractice}
-                        patient={viewingInvoice.patient}
-                        treatmentDoc={viewingInvoice.treatmentDoc}
-                        showPatientHinweis={!!viewingInvoice._standalone}
-                        einheit={viewingInvoice.einheit || viewingInvoice.treatmentDoc?.einheit || "SE"}
-                        facePhoto={previewFacePhoto}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             </MobileScaledPreview>
             <p className="text-center text-xs text-gray-400 mt-2 lg:hidden">Zum Teilen oben auf das Teilen-Symbol tippen</p>
@@ -4577,6 +4509,21 @@ export default function EphiaInvoice() {
                   facePhoto={previewFacePhoto}
                 />
               </div>
+            )}
+            {showSendToPatient && (
+              <SendToPatientDialog
+                docs={[
+                  { key: "rechnung", label: "Rechnung", elementId: "invoice-preview", filename: `Rechnung_${viewingInvoice.invoiceMeta?.nummer || "X"}.pdf` },
+                  { key: "behandlung", label: "Behandlungsdokumentation", elementId: "invoice-treatment-doc-preview", filename: `Behandlungsdokumentation_${viewingInvoice.invoiceMeta?.nummer || "X"}.pdf` },
+                ]}
+                makeFile={async (elementId, filename) => {
+                  const result = await generatePDFBlob(elementId);
+                  if (!result) throw new Error(`Element ${elementId} not found`);
+                  return new File([result.blob], filename, { type: "application/pdf" });
+                }}
+                onClose={() => setShowSendToPatient(false)}
+                onDone={(how, types) => trackEvent(how === "shared" ? "pdf_shared" : "pdf_downloaded", { type: types.join("+"), source: "send_to_patient" }, session?.access_token)}
+              />
             )}
             {/* Hidden file input for HV upload */}
             <input ref={hvUploadRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleHvUpload} />
