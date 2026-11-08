@@ -1,7 +1,7 @@
 import { showToast } from "../../utils/toast";
 import React, { useState, useRef, useEffect } from "react";
 import { fmtDate } from "../../utils/helpers";
-import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
+import { resolveConsentTemplate } from "../consent/consentTemplateStore";
 import { FACE_IMAGE_B64 } from "../../constants";
 import TreatmentDocPreview from "./TreatmentDocumentPreview";
 import PatientLeftSidebar from "./PatientLeftSidebar";
@@ -123,7 +123,7 @@ export default function PatientDetailView({ patient, invoices, behandlungen = []
   // ── Helper functions (shared across components) ──
   const hasConsentRisks = (inv) => {
     const a = inv.consentData?.answers || inv.consentData || {};
-    const tpl = CONSENT_TEMPLATES.find(t => t.id === (inv.consentData?.templateId));
+    const tpl = resolveConsentTemplate(inv.consentData, practice);
     if (!tpl) return false;
     for (const q of tpl.questions) { if (a[q.id] === true) return true; }
     if (tpl.additionalQuestionsWomen && a.geschlecht === "w") {

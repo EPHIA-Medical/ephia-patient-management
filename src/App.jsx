@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -35,13 +35,13 @@ import PraeparatAutocomplete from "./components/ui/PraeparatAutocomplete";
 import InfoTooltip from "./components/ui/InfoTooltip";
 import Spinner from "./components/ui/Spinner";
 import ConsentFormPreview, { ConsentFormView } from "./components/consent/ConsentFormComponents";
-import { CONSENT_TEMPLATES } from "./components/consent/consentTemplates";
+import { resolveConsentTemplate, getAvailableConsentTemplates, consentTemplateLabel, practiceForDocument } from "./components/consent/consentTemplateStore";
 import SignaturePad, { SignatureModal } from "./components/consent/SignaturePad";
 import PinGate from "./components/consent/PinGate";
 import { serializeMarkers } from "./components/treatment/markerUtils";
 import TreatmentMap from "./components/treatment/TreatmentMap";
 import MobileScaledPreview from "./components/treatment/MobileScaledPreview";
-import SettingsPanel from "./components/settings/SettingsPanel";
+import SettingsPage from "./components/settings/SettingsPage";
 import InvoicePreview from "./components/invoice/InvoicePreview";
 import HonorarvereinbarungPreview from "./components/invoice/HonorarvereinbarungPreview";
 import VoucherListView from "./components/voucher/VoucherListView";
@@ -73,7 +73,8 @@ export default function EphiaInvoice() {
 
   // ─── Main App State ───
   const [practice, setPractice] = useState(DEFAULT_PRACTICE);
-  const [showSettings, setShowSettings] = useState(false);
+  // Praxiseinstellungen draft: lives here so unsaved edits survive leaving the page
+  const [settingsDraft, setSettingsDraft] = useState(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(null); // null | "welcome" | "patient"
   const [showVerdienst, setShowVerdienst] = useState(false);
@@ -91,10 +92,13 @@ export default function EphiaInvoice() {
   const isVoucherListPage = pathname === "/gutscheine";
   const isVoucherCreatePage = pathname === "/gutscheine/erstellen";
   const isVoucherPreviewPage = pathname.startsWith("/gutscheine/") && pathname.split("/")[2] && pathname.split("/")[2] !== "erstellen";
+  const isSettingsPage = pathname === "/einstellungen" || pathname.startsWith("/einstellungen/");
+  const settingsSection = isSettingsPage ? (pathname.split("/")[2] || "praxis") : null;
+  const settingsTemplateId = isSettingsPage ? (pathname.split("/")[3] || null) : null;
   const isKnownRoute = pathname === "/" || pathname === "/patients" || pathname === "/erstellen"
     || pathname === "/agb" || pathname === "/impressum" || pathname === "/datenschutz"
     || isPatientDetail || isCreatePage || isListPage || isPreviewPage || isConsentPage
-    || isVoucherListPage || isVoucherCreatePage || isVoucherPreviewPage;
+    || isVoucherListPage || isVoucherCreatePage || isVoucherPreviewPage || isSettingsPage;
   const activeDocId = isPreviewPage ? pathname.split("/")[2] : null;
   const activeVoucherId = isVoucherPreviewPage ? pathname.split("/")[2] : null;
   const activePatientId = isPatientDetail ? pathname.split("/")[2] : null;
@@ -174,6 +178,7 @@ export default function EphiaInvoice() {
   const [consentPatient, setConsentPatient] = useState(null); // patient for active consent flow
   const [consentTemplate, setConsentTemplate] = useState(null); // active consent template
   const [consentWarningPatient, setConsentWarningPatient] = useState(null); // patient pending consent warning confirmation
+  const [consentStartTemplate, setConsentStartTemplate] = useState(null); // template picked in the consent warning dialog
   const [consentHandback, setConsentHandback] = useState(null); // completed consent entry waiting for PIN-gated device handback
   const [consentHandbackPin, setConsentHandbackPin] = useState(false); // PIN gate visible on handback screen
   const pendingDocBehIdRef = useRef(null); // Behandlung ID to link next created doc to
@@ -885,6 +890,7 @@ export default function EphiaInvoice() {
     setActivityLog([]);
     setPatients([]);
     setPractice(DEFAULT_PRACTICE);
+    setSettingsDraft(null);
     setDataLoaded(false);
     docsMigrated.current = false;
     setAuthPage("login");
@@ -1023,17 +1029,33 @@ export default function EphiaInvoice() {
     }
   };
 
-  const savePracticeSettings = async () => {
+  const settingsDirty = useMemo(
+    () => !!settingsDraft && JSON.stringify(settingsDraft) !== JSON.stringify(practice),
+    [settingsDraft, practice]
+  );
+  const updateSettingsDraft = (upd) => setSettingsDraft((prev) => (typeof upd === "function" ? upd(prev ?? practice) : upd));
+
+  // Warn before closing the tab with unsaved Praxiseinstellungen
+  useEffect(() => {
+    if (!settingsDirty) return;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [settingsDirty]);
+
+  const savePracticeSettings = async (next = practice) => {
     if (session) {
       try {
         // practice_data stays plaintext (doctor's own business data)
-        await supabaseUpdateProfile(session.access_token, user.id, practice);
+        await supabaseUpdateProfile(session.access_token, user.id, next);
+        setPractice(next);
+        setSettingsDraft(null);
         trackEvent("practice_settings_saved", {}, session.access_token);
         const wasFirstTime = isFirstTimeUser;
-        setShowSettings(false);
         setIsFirstTimeUser(false);
         if (wasFirstTime) {
           setOnboardingStep("patient");
+          navigate("/patients");
         } else {
           setSaveToast("Praxiseinstellungen gespeichert");
           setTimeout(() => setSaveToast(""), 3000);
@@ -1232,7 +1254,7 @@ export default function EphiaInvoice() {
       indicationType: hvOnlyMode ? undefined : indicationType,
       _fromHvId: fromHvId || undefined,
       _kleinunternehmer: !!practice.kleinunternehmer,
-      _practice: { ...practice, logo: practice.logo || "" },
+      _practice: practiceForDocument(practice),
       voucherRedemption: (!hvOnlyMode && appliedVoucher && voucherBetrag > 0)
         ? { voucherId: appliedVoucher.id, code: appliedVoucher.code, betrag: voucherBetrag }
         : undefined,
@@ -1876,8 +1898,9 @@ export default function EphiaInvoice() {
       _patientDbId: patientDbId,
       patient: { vorname: rawData.vorname || consentPatient.vorname || "", nachname: rawData.nachname || consentPatient.nachname || "", email: rawData.email || consentPatient.email || "", phone: rawData.phone || "", address1: rawData.address1 || "", address2: rawData.address2 || "", country: rawData.country || "Deutschland" },
       invoiceMeta: { datum: consentData.treatmentDate || new Date().toISOString().slice(0, 10), ort: practice.city || "" },
-      consentData: { ...consentData, templateId: consentTemplate?.id, templateVersion: consentTemplate?.version },
-      _practice: { ...practice, logo: practice.logo || "" },
+      // templateSnapshot freezes the exact text the patient signed (templates are editable)
+      consentData: { ...consentData, templateId: consentTemplate?.id, templateVersion: consentTemplate?.version, templateSnapshot: consentTemplate || undefined },
+      _practice: practiceForDocument(practice),
       _kleinunternehmer: false,
       savedAt: new Date().toISOString(),
     };
@@ -1920,7 +1943,7 @@ export default function EphiaInvoice() {
         if (consentData.answers.geschlecht) demoFields.geschlecht = consentData.answers.geschlecht;
       }
       // Build anamnese entries from Ja answers
-      const tplForAnamnese = CONSENT_TEMPLATES.find(t => t.id === consentTemplate?.id);
+      const tplForAnamnese = consentTemplate;
       const allQs = tplForAnamnese ? [...tplForAnamnese.questions, ...(tplForAnamnese.additionalQuestionsWomen || [])] : [];
       const today = new Date().toISOString().slice(0, 10);
       const newAnamneseEntries = allQs
@@ -2545,9 +2568,11 @@ export default function EphiaInvoice() {
             </button>
             <div className="border-l border-[#DFE3EB] h-5 mx-0.5 sm:mx-1 hidden sm:block"></div>
             <button
-              className="text-xs px-2 sm:px-3 py-1.5 rounded border transition text-gray-500 hover:text-gray-700 border-[#DFE3EB] hover:bg-gray-50"
-              onClick={() => setShowSettings(true)}
+              className={`relative text-xs px-2 sm:px-3 py-1.5 rounded border transition ${isSettingsPage ? "bg-gray-800 text-white border-gray-800" : "text-gray-500 hover:text-gray-700 border-[#DFE3EB] hover:bg-gray-50"}`}
+              onClick={() => navigate("/einstellungen/praxis")}
+              title={settingsDirty ? "Ungespeicherte Änderungen in den Praxiseinstellungen" : undefined}
             >
+              {settingsDirty && !isSettingsPage && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-white" />}
               <span className="sm:hidden"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></span><span className="hidden sm:inline">Praxis-Einstellungen</span>
             </button>
             <button
@@ -2618,16 +2643,30 @@ export default function EphiaInvoice() {
               <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86l-8.6 14.86A1 1 0 002.54 20h18.92a1 1 0 00.85-1.28l-8.6-14.86a1 1 0 00-1.72 0z" /></svg>
               <h3 className="text-sm font-semibold text-gray-800">Wichtiger Hinweis</h3>
             </div>
+            {(() => {
+              const available = getAvailableConsentTemplates(practice);
+              if (available.length < 2) return null;
+              const selected = consentStartTemplate || available[0];
+              return (
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Aufklärungsbogen</label>
+                  <select className="w-full border border-[#DFE3EB] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" value={selected.id} onChange={(e) => setConsentStartTemplate(available.find(t => t.id === e.target.value) || null)}>
+                    {available.map(t => <option key={t.id} value={t.id}>{consentTemplateLabel(t)}</option>)}
+                  </select>
+                </div>
+              );
+            })()}
             <p className="text-xs text-gray-600 mb-4 leading-relaxed">
               Dieser Aufklärungsbogen ersetzt nicht das persönliche Aufklärungsgespräch zwischen Ärzt:in und Patient:in. Das individuelle Gespräch ist das rechtlich entscheidende Element der Aufklärung. Der Bogen dient lediglich als Dokumentationshilfe und Ergänzung. Bitte prüfe, ob der Bogen den Anforderungen Deiner Praxis und der geltenden Rechtslage entspricht, und passe ihn gegebenenfalls an.
             </p>
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-              <button className="px-3 py-2 sm:py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50 w-full sm:w-auto" onClick={() => setConsentWarningPatient(null)}>Abbrechen</button>
+              <button className="px-3 py-2 sm:py-1.5 text-xs rounded border border-[#DFE3EB] text-gray-600 hover:bg-gray-50 w-full sm:w-auto" onClick={() => { setConsentWarningPatient(null); setConsentStartTemplate(null); }}>Abbrechen</button>
               <button className="px-3 py-2 sm:py-1.5 text-xs rounded bg-teal-600 text-white hover:bg-teal-700 font-medium w-full sm:w-auto" onClick={() => {
                 const p = consentWarningPatient;
                 setConsentWarningPatient(null);
                 setConsentPatient(p);
-                setConsentTemplate(CONSENT_TEMPLATES[0]);
+                setConsentTemplate(consentStartTemplate || getAvailableConsentTemplates(practice)[0]);
+                setConsentStartTemplate(null);
                 if (isPatientDetail && window.innerWidth >= 1024) {
                   setPatientCreateModal("aufklaerung");
                 } else {
@@ -2682,7 +2721,6 @@ export default function EphiaInvoice() {
         </div>
       )}
 
-      <SettingsPanel practice={practice} setPractice={setPractice} show={showSettings} setShow={setShowSettings} onSave={savePracticeSettings} isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id} patients={patients} invoices={invoices} behandlungen={behandlungen} setPatients={setPatients} setInvoices={setInvoices} />
 
       {/* Verdienst Popup */}
       {showVerdienst && (() => {
@@ -2811,7 +2849,19 @@ export default function EphiaInvoice() {
         />
       )}
 
-      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
+      {pathname !== "/agb" && pathname !== "/impressum" && pathname !== "/datenschutz" && !isConsentPage && <div className={`mx-auto py-3 sm:py-5 ${isPatientDetail ? "max-w-full px-4 sm:px-6 lg:px-8" : isCreatePage ? "max-w-7xl px-3 sm:px-6" : isListPage || isSettingsPage || pathname === "/patients" || pathname === "/" ? "max-w-6xl px-3 sm:px-6" : isPreviewPage || isVoucherPreviewPage ? "max-w-5xl px-3 sm:px-6" : "max-w-3xl px-3 sm:px-6"}`}>
+        {/* ═══ PRAXISEINSTELLUNGEN ═══ */}
+        {isSettingsPage && (
+          <SettingsPage
+            practice={practice} setPractice={setPractice}
+            draft={settingsDraft ?? practice} setDraft={updateSettingsDraft} dirty={settingsDirty}
+            onSave={savePracticeSettings} onDiscard={() => setSettingsDraft(null)}
+            section={settingsSection} templateId={settingsTemplateId} onNavigate={(to) => navigate(to)}
+            isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id}
+            patients={patients} invoices={invoices} behandlungen={behandlungen}
+          />
+        )}
+
         {/* ═══ CREATE PAGE ═══ */}
         {(isCreatePage || patientCreateModal === "rechnung" || patientCreateModal === "hv") && (
           <>
@@ -3530,8 +3580,8 @@ export default function EphiaInvoice() {
               setPreviewTab("consent");
               navigate(`/aufklaerung/${inv._supabaseId || String(inv.id)}`);
               setTimeout(async () => {
-                const tpl = CONSENT_TEMPLATES.find(t => t.id === inv.consentData?.templateId);
-                const templateName = tpl ? tpl.title.replace("Aufklärungsbogen — ", "").replace(/\s+/g, "_") : "Aufklaerung";
+                const tpl = resolveConsentTemplate(inv.consentData, practice);
+                const templateName = consentTemplateLabel(tpl).replace(/[^\wÄÖÜäöüß-]+/g, "_") || "Aufklaerung";
                 const patName = [inv.patient?.vorname, inv.patient?.nachname].filter(Boolean).join("_") || "Patient";
                 const filename = `Aufklaerung_${templateName}_${patName}_${inv.invoiceMeta.datum}.pdf`;
                 const result = await generateMultiPagePDF("consent-form-pdf-target");
@@ -3655,7 +3705,7 @@ export default function EphiaInvoice() {
         })()}
 
         {/* ═══ ONBOARDING STEP 0: WELCOME ═══ */}
-        {onboardingStep === "welcome" && (pathname === "/patients" || pathname === "/") && dataLoaded && !showSettings && (
+        {onboardingStep === "welcome" && (pathname === "/patients" || pathname === "/") && dataLoaded && (
           <div className="max-w-lg mx-auto mt-12 sm:mt-20 px-4">
             <div className="bg-white rounded-xl border border-[#DFE3EB] shadow-sm overflow-hidden">
               <div className="px-6 py-8">
@@ -3680,7 +3730,7 @@ export default function EphiaInvoice() {
                 </div>
                 <button
                   className="w-full px-4 py-2.5 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition font-medium"
-                  onClick={() => { setOnboardingStep(null); setShowSettings(true); }}
+                  onClick={() => { setOnboardingStep(null); navigate("/einstellungen/praxis"); }}
                 >
                   Los geht's
                 </button>
@@ -3690,7 +3740,7 @@ export default function EphiaInvoice() {
         )}
 
         {/* ═══ ONBOARDING STEP 2 + GENERAL EMPTY STATE ═══ */}
-        {(pathname === "/patients" || pathname === "/") && patients.length === 0 && dataLoaded && !showSettings && onboardingStep !== "welcome" && (
+        {(pathname === "/patients" || pathname === "/") && patients.length === 0 && dataLoaded && onboardingStep !== "welcome" && (
           <div className="max-w-lg mx-auto mt-12 sm:mt-20 px-4">
             <div className="bg-white rounded-xl border border-[#DFE3EB] shadow-sm overflow-hidden">
               {onboardingStep === "patient" ? (
@@ -4000,8 +4050,8 @@ export default function EphiaInvoice() {
               setPreviewTab("consent");
               navigate(`/aufklaerung/${inv._supabaseId || String(inv.id)}`);
               setTimeout(async () => {
-                const tpl = CONSENT_TEMPLATES.find(t => t.id === inv.consentData?.templateId);
-                const templateName = tpl ? tpl.title.replace("Aufklärungsbogen — ", "").replace(/\s+/g, "_") : "Aufklaerung";
+                const tpl = resolveConsentTemplate(inv.consentData, practice);
+                const templateName = consentTemplateLabel(tpl).replace(/[^\wÄÖÜäöüß-]+/g, "_") || "Aufklaerung";
                 const patName = [inv.patient?.vorname, inv.patient?.nachname].filter(Boolean).join("_") || "Patient";
                 const filename = `Aufklaerung_${templateName}_${patName}_${inv.invoiceMeta.datum}.pdf`;
                 const result = await generateMultiPagePDF("consent-form-pdf-target");
@@ -4084,7 +4134,7 @@ export default function EphiaInvoice() {
                   begruendung: (customS && (customS.s1 > 2.3 || customS.s5 > 2.3 || customS.s267 > 2.3) && Math.max(customS.s1, customS.s5, customS.s267) <= 3.5) ? "Überdurchschnittlicher Zeitaufwand und erhöhte Schwierigkeit aufgrund individueller anatomischer Gegebenheiten." : "",
                   paymentStatus: "ausstehend",
                   _kleinunternehmer: !!practice.kleinunternehmer,
-                  _practice: { ...practice, logo: practice.logo || "" },
+                  _practice: practiceForDocument(practice),
                   savedAt: new Date().toISOString(),
                 };
 
@@ -4155,7 +4205,7 @@ export default function EphiaInvoice() {
         {/* ═══ CONSENT FORM PREVIEW ═══ */}
         {isPreviewPage && viewingInvoice && viewingInvoice._consentForm && (() => {
           const cd = viewingInvoice.consentData || {};
-          const tpl = CONSENT_TEMPLATES.find(t => t.id === cd.templateId) || CONSENT_TEMPLATES[0];
+          const tpl = resolveConsentTemplate(cd, practice);
           const viewPractice = viewingInvoice._practice || practice;
           const needsDoctorSig = !cd.refused && cd._signatures?.patient && !cd._signatures?.doctor;
           const isComplete = cd._signatures?.patient && cd._signatures?.doctor;

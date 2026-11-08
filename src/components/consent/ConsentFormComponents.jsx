@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import { CONSENT_TEMPLATES } from "./consentTemplates";
 import { fmtDate, fmtPhone } from "../../utils/helpers";
 import SignaturePad from "./SignaturePad";
 import PinGate from "./PinGate";

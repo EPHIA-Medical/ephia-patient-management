@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { fmtDate, fmt, evalAmount } from "../../utils/helpers";
-import { CONSENT_TEMPLATES } from "../consent/consentTemplates";
+import { resolveConsentTemplate, consentTemplateLabel } from "../consent/consentTemplateStore";
 import { spawnConfetti } from "../ui/ConfettiBurst";
 import { getPraeparate } from "../../utils/praeparate";
 
@@ -460,8 +460,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
                 const vorname = p.vorname || (p.name || "").split(" ")[0] || "";
                 const nachname = p.nachname || (p.name || "").split(" ").slice(1).join(" ") || "";
                 const cd = inv.consentData || {};
-                const tpl = CONSENT_TEMPLATES.find(t => t.id === cd.templateId);
-                const templateName = tpl ? tpl.title.replace("Aufklärungsbogen — ", "").substring(0, 30) : cd.templateId || "–";
+                const templateName = consentTemplateLabel(resolveConsentTemplate(cd)).substring(0, 30) || "–";
                 const createdAt = inv._createdAt ? fmtDate(inv._createdAt.slice(0, 10)) : (inv.savedAt ? fmtDate(inv.savedAt.slice(0, 10)) : "–");
                 const isRefused = cd.refused;
                 const hasPatientSig = !!cd._signatures?.patient;
