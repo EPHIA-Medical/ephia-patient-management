@@ -204,7 +204,7 @@ export function ResetPasswordScreen({ onResetClick, onBackClick, isLoading, erro
 
         {success && (
           <div className="mb-4 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
-            Passwort-Reset-Link wurde an deine E-Mail gesendet. Bitte überprüfe dein Postfach.<br /><strong>Wichtig:</strong> Der Link muss im selben Browser geöffnet werden, in dem du ihn angefordert hast.
+            Wir haben Dir einen Link zum Zurücksetzen Deines Passworts geschickt. Bitte sieh in Deinem Postfach nach, auch im Spam-Ordner. Der Link funktioniert in jedem Browser und auf jedem Gerät.
           </div>
         )}
 
