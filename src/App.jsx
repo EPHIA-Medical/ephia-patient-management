@@ -1109,9 +1109,9 @@ export default function EphiaInvoice() {
 
   // Compute live preview
   const isKlein = practice.kleinunternehmer;
-  const isAusland = patient.country && patient.country !== "Deutschland";
   const isMedical = indicationType === "medical";
-  const noMwst = isKlein || isAusland || isMedical;
+  // Patient abroad does not remove the USt: place of supply is the practice (§ 3a Abs. 1 UStG).
+  const noMwst = isKlein || isMedical;
   // HV cost deviation: auto-adjust Gesamtbetrag when costs exceed HV base
   const currentProductCost = ganzeAmpulle ? Math.round(ampullenpreis * 100) / 100 : Math.round(ml * preisProMl * 100) / 100;
   const currentSachkostenTotal = (sachkosten || []).reduce((sum, sk) => sum + parseDE(sk.betragStr), 0);
@@ -3458,9 +3458,6 @@ export default function EphiaInvoice() {
                     <option disabled>────────────</option>
                     {OTHER_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </Select>
-                  {patient.country !== "Deutschland" && (
-                    <p className="text-xs text-gray-500 mt-1">Kein inländischer Wohnsitz: MwSt. entfällt.</p>
-                  )}
               </div>
               </div>
                 </>
@@ -4515,7 +4512,6 @@ export default function EphiaInvoice() {
                 const rawData = selectedPatient._raw?.data;
                 const pd = (typeof rawData === "object" && rawData) || (typeof selectedPatient.data === "object" && selectedPatient.data) || { vorname: selectedPatient.vorname || "", nachname: selectedPatient.nachname || "", email: selectedPatient.email || "" };
                 const patientDbId = selectedPatient._raw?.id || selectedPatient?.id || null;
-                const isAusland = (pd.country || "Deutschland") !== "Deutschland";
 
                 const entry = {
                   id: Date.now(),

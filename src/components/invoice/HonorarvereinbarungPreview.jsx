@@ -11,9 +11,8 @@ export default function HonorarvereinbarungPreview({ practice, patient: rawPatie
   const tableItems = isStandalone ? lineItems.filter((it) => !it.isProduct || it.isPraeparat) : goaItems;
   const tableZwischensumme = tableItems.reduce((s, it) => s + it.betrag, 0);
   const isKlein = practice.kleinunternehmer;
-  const isAusland = patient.country && patient.country !== "Deutschland";
   const isMedical = !!(invoiceMeta && invoiceMeta.diagnose);
-  const noMwst = isKlein || isAusland || isMedical;
+  const noMwst = isKlein || isMedical;
   const tableMwst = noMwst ? 0 : Math.round(tableZwischensumme * 0.19 * 100) / 100;
   const tableGesamt = Math.round((tableZwischensumme + tableMwst) * 100) / 100;
   // For non-standalone, keep old variable names for backwards compat
@@ -118,13 +117,6 @@ export default function HonorarvereinbarungPreview({ practice, patient: rawPatie
             <tr>
               <td colSpan={5} style={{ padding: "8px 0 0 0", fontSize: "9px", color: "#888" }}>
                 Gemäß §19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung).
-              </td>
-            </tr>
-          )}
-          {isAusland && !isKlein && !isMedical && (
-            <tr>
-              <td colSpan={5} style={{ padding: "8px 0 0 0", fontSize: "9px", color: "#888" }}>
-                Kein inländischer Wohnsitz. Umsatzsteuer entfällt.
               </td>
             </tr>
           )}

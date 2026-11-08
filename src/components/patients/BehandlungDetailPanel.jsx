@@ -354,9 +354,8 @@ export default function BehandlungDetailPanel({
         {/* Quick-Invoice Modal */}
         {quickInvoiceOpen && (() => {
           const qPreisProMl = parseDE(quickInvoicePreisStr);
-          const isAusland = (patient._raw?.data?.country || patient.country || "Deutschland") !== "Deutschland";
           const qiIsMedical = false;
-          const noMwst = kleinunternehmer || isAusland || qiIsMedical;
+          const noMwst = kleinunternehmer || qiIsMedical;
           // The first Präparat is the product line; further Präparate go in as material lines
           const mainT = praepTotals[0];
           const extraT = praepTotals.slice(1).filter((t) => t.units > 0);
@@ -379,7 +378,7 @@ export default function BehandlungDetailPanel({
           const effectiveWunsch = quickInvoiceWunschStr ? wunschVal : (qPreisProMl > 0 ? defaultGesamt : 0);
           const customS = quickInvoiceWunschStr && wunschVal > 0 ? calcWeightedForGesamt(wunschVal, qMl, qPreisProMl, [], sachkosten, noMwst, false) : null;
           const lineItems = effectiveWunsch > 0 ? buildLineItems(praep, qMl, qPreisProMl, [], sachkosten, customS, qEinh, false) : [];
-          const gesamt = effectiveWunsch > 0 ? calcGesamt(lineItems, kleinunternehmer, isAusland, qiIsMedical) : 0;
+          const gesamt = effectiveWunsch > 0 ? calcGesamt(lineItems, kleinunternehmer, false, qiIsMedical) : 0;
           const effectiveMax = customS != null ? Math.max(customS.s1, customS.s5, customS.s267) : 3.5;
           const materialkosten = Math.round((qMl * qPreisProMl + sachkosten.reduce((s, sk) => s + parseDE(sk.betragStr), 0)) * 100) / 100;
           const netto = lineItems.reduce((s, it) => s + it.betrag, 0);

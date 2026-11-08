@@ -43,10 +43,9 @@ export default function PatientListView({ patients, invoices, kleinunternehmer, 
     });
     const invoiceGesamt = (inv) => {
       const netto = (inv.lineItems || []).reduce((s, it) => s + (it.betrag || 0), 0);
-      const isAusland = (inv.patient || {}).country && (inv.patient || {}).country !== "Deutschland";
       const invIsMedical = !!(inv.invoiceMeta && inv.invoiceMeta.diagnose) || inv.indicationType === "medical";
       const invKlein = inv._kleinunternehmer != null ? inv._kleinunternehmer : kleinunternehmer;
-      const noMwst = invKlein || isAusland || invIsMedical;
+      const noMwst = invKlein || invIsMedical;
       const mwst = noMwst ? 0 : Math.round(netto * 0.19 * 100) / 100;
       return Math.round((netto + mwst) * 100) / 100;
     };

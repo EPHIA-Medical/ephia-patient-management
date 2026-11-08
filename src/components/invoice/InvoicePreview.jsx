@@ -10,9 +10,8 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
   const showBank = !isPaid && practice.showBankOnInvoice !== false;
   const zwischensumme = lineItems.reduce((s, it) => s + it.betrag, 0);
   const isKlein = practice.kleinunternehmer;
-  const isAusland = patient.country && patient.country !== "Deutschland";
   const isMedical = !!(invoiceMeta && invoiceMeta.diagnose);
-  const noMwst = isKlein || isAusland || isMedical;
+  const noMwst = isKlein || isMedical;
   // When targetGesamt is set, force the total to match and derive MwSt as the difference
   const standardMwst = noMwst ? 0 : Math.round(zwischensumme * 0.19 * 100) / 100;
   const standardGesamt = Math.round((zwischensumme + standardMwst) * 100) / 100;
@@ -142,13 +141,6 @@ export default function InvoicePreview({ practice, patient: rawPatient, invoiceM
             <tr>
               <td colSpan={5} style={{ padding: "8px 0 0 0", fontSize: "9px", color: "#888" }}>
                 Gemäß §19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung).
-              </td>
-            </tr>
-          )}
-          {isAusland && !isKlein && !isMedical && (
-            <tr>
-              <td colSpan={5} style={{ padding: "8px 0 0 0", fontSize: "9px", color: "#888" }}>
-                Kein inländischer Wohnsitz. Umsatzsteuer entfällt.
               </td>
             </tr>
           )}

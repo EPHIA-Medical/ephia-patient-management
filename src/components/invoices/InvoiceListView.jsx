@@ -89,7 +89,7 @@ export default function InvoiceListView({ invoices, kleinunternehmer, onView, on
     nachname: (inv) => safePatient(inv).nachname || (safePatient(inv).name || "").split(" ").slice(1).join(" ") || "",
     nummer: (inv) => parseNummer(inv.invoiceMeta.nummer),
     datum: (inv) => inv.invoiceMeta.datum || "",
-    betrag: (inv) => { const zw = (inv.lineItems || []).reduce((s, it) => s + (it.betrag || 0), 0); const isAusland = (inv.patient || {}).country && (inv.patient || {}).country !== "Deutschland"; const invMed = !!(inv.invoiceMeta && inv.invoiceMeta.diagnose); const invK = inv._kleinunternehmer != null ? inv._kleinunternehmer : kleinunternehmer; const noMwst = invK || isAusland || invMed; return zw + (noMwst ? 0 : Math.round(zw * 0.19 * 100) / 100); },
+    betrag: (inv) => { const zw = (inv.lineItems || []).reduce((s, it) => s + (it.betrag || 0), 0); const invMed = !!(inv.invoiceMeta && inv.invoiceMeta.diagnose); const invK = inv._kleinunternehmer != null ? inv._kleinunternehmer : kleinunternehmer; const noMwst = invK || invMed; return zw + (noMwst ? 0 : Math.round(zw * 0.19 * 100) / 100); },
     status: (inv) => inv.paymentStatus || "ausstehend",
   };
 

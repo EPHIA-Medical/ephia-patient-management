@@ -299,9 +299,14 @@ export function calcWeightedForGesamt(desiredGesamt, ml, preisProMl, selectedZus
   return solveS267(s1, s5);
 }
 
-export function calcGesamt(lineItems, kleinunternehmer, isAusland, isMedical) {
+// USt: 19% on aesthetic treatments regardless of where the patient lives
+// (place of supply is the practice, § 3a Abs. 1 UStG; cosmetic treatments are
+// not § 3a Abs. 4 Katalogleistungen). Exempt only for Kleinunternehmer (§ 19)
+// and medically indicated treatments (§ 4 Nr. 14 lit. a). The third parameter
+// is kept for call-site compatibility and ignored.
+export function calcGesamt(lineItems, kleinunternehmer, _isAuslandIgnored, isMedical) {
   const zwischensumme = lineItems.reduce((s, it) => s + it.betrag, 0);
-  const noMwst = kleinunternehmer || isAusland || isMedical;
+  const noMwst = kleinunternehmer || isMedical;
   const mwst = noMwst ? 0 : Math.round(zwischensumme * 0.19 * 100) / 100;
   return Math.round((zwischensumme + mwst) * 100) / 100;
 }
