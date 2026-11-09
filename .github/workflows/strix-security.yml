@@ -79,10 +79,31 @@ jobs:
         with:
           # Full history so we can diff against a commit from a week ago.
           fetch-depth: 0
+          # The scan job holds LLM_API_KEY and runs a third-party binary;
+          # don't leave the GITHUB_TOKEN in .git/config for it as well.
+          persist-credentials: false
 
       - name: Install Strix
+        # Pinned release binary with a committed SHA256 instead of
+        # `curl https://strix.ai/install | bash`, so a compromised installer
+        # or release can't silently run with LLM_API_KEY. To upgrade: pick a
+        # release on github.com/usestrix/strix, copy the sha256 digest of
+        # strix-<version>-linux-x86_64.tar.gz from the release page (or
+        # `gh release view v<version> -R usestrix/strix --json assets`) and
+        # update both values below.
+        env:
+          STRIX_VERSION: "1.7.0"
+          STRIX_SHA256: "b8cd7e84d63cbeff6726301a9e08fddedf40fc6a4edcdb4edda8a853b3312de6"
         run: |
-          curl -sSL https://strix.ai/install | bash
+          set -euo pipefail
+          f="strix-${STRIX_VERSION}-linux-x86_64.tar.gz"
+          curl -fsSL -o "$f" "https://github.com/usestrix/strix/releases/download/v${STRIX_VERSION}/$f"
+          echo "${STRIX_SHA256}  $f" | sha256sum -c -
+          mkdir -p "$HOME/.strix/bin"
+          tar -xzf "$f"
+          install -m 0755 "strix-${STRIX_VERSION}-linux-x86_64" "$HOME/.strix/bin/strix"
+          rm -f "$f" "strix-${STRIX_VERSION}-linux-x86_64"
+          "$HOME/.strix/bin/strix" --version
           # Each `run:` step is a fresh non-login shell, so put the strix
           # binary on PATH explicitly rather than relying on shell profiles.
           echo "$HOME/.strix/bin" >> "$GITHUB_PATH"
