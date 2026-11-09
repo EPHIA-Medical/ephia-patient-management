@@ -1,0 +1,274 @@
+name: Strix Security Scan
+
+# Runs the Strix AI pentester every week against the changes that landed
+# on main since the previous run (diff-scoped, so it spends nothing on
+# weeks with no code changes). When it flags something it pings Slack
+# (#plattform), attaches the full report as a downloadable artifact, and
+# fails the run (which also makes GitHub email you).
+#
+# Ported from ephia-admin's strix-security.yml on 2026-11-09; see that file
+# for the history behind the budget cap, the billing-error handling and the
+# separate notify job. The two repos are independent; keep them in sync by
+# hand if one changes.
+#
+# Code-only: Strix gets the checked-out tree, never a live URL. It must not
+# send requests to invoicing.ephia.de, api.pms.ephia.de or the production
+# Supabase project (see .strix/accepted-risks.md, which is passed to every
+# scan via --instruction-file).
+#
+# A full-tree baseline audit can be started by hand from the Actions tab
+# (workflow_dispatch with scope=full).
+#
+# Requires repo secrets (Settings -> Secrets and variables -> Actions),
+# same values as in ephia-admin:
+#   STRIX_LLM         e.g. anthropic/claude-sonnet-4-6
+#   LLM_API_KEY       Anthropic API key of the org that holds the credit
+#   SLACK_BOT_TOKEN   bot token of the EPHIA Slack app (chat:write,
+#                     chat:write.customize, channels:join). Optional: if
+#                     unset, the Slack step skips and GitHub's failure email
+#                     remains. Only exposed to the `notify` job.
+#
+# The Slack wiring can be checked without a scan: run the workflow from the
+# Actions tab with notify_test ticked.
+
+on:
+  schedule:
+    # 06:00 UTC every Monday (08:00 Berlin). GitHub may delay scheduled
+    # runs under load, so treat the time as approximate.
+    - cron: "0 6 * * 1"
+  # Lets you trigger an on-demand run from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "diff = changes of the last week, full = whole repository (baseline audit)"
+        type: choice
+        options: [diff, full]
+        default: diff
+      mode:
+        description: "Strix scan depth (quick: minutes, standard: ~1h, deep: 1-4h)"
+        type: choice
+        options: [quick, standard, deep]
+        default: quick
+      budget:
+        description: "Hard LLM spend cap for this scan in USD"
+        type: string
+        default: "25"
+      notify_test:
+        description: "Skip the scan and only send a test message to Slack (checks the Slack wiring, spends no tokens)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strix-scan
+  cancel-in-progress: true
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    # A deep full-tree scan can take a few hours; the cost is bounded by
+    # --max-budget, not by this.
+    timeout-minutes: 300
+    outputs:
+      result: ${{ steps.scan.outputs.result }}
+      report_url: ${{ steps.report.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so we can diff against a commit from a week ago.
+          fetch-depth: 0
+
+      - name: Install Strix
+        run: |
+          curl -sSL https://strix.ai/install | bash
+          # Each `run:` step is a fresh non-login shell, so put the strix
+          # binary on PATH explicitly rather than relying on shell profiles.
+          echo "$HOME/.strix/bin" >> "$GITHUB_PATH"
+
+      - name: Run Strix
+        id: scan
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          # Scheduled runs: weekly diff scan in quick mode with a modest
+          # cap. Manual runs take whatever the Actions form says.
+          SCOPE: ${{ inputs.scope || 'diff' }}
+          MODE: ${{ inputs.mode || 'quick' }}
+          BUDGET: ${{ inputs.budget || '25' }}
+          NOTIFY_TEST: ${{ inputs.notify_test || 'false' }}
+        run: |
+          set -uo pipefail
+          if [ "$NOTIFY_TEST" = "true" ]; then
+            echo "Test notification requested; skipping the scan."
+            echo "result=test" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE=""
+          if [ "$SCOPE" = "diff" ]; then
+            # Newest commit older than 8 days = the base of the week's
+            # window. 8 rather than 7 so that a scheduled run that GitHub
+            # delayed by a few hours still overlaps the previous window
+            # instead of leaving a gap.
+            BASE="$(git rev-list -1 --before='8 days ago' HEAD || true)"
+            # Gate on scan-relevant changes only: a week of pure docs or
+            # image commits doesn't warrant booting the sandbox and spending
+            # tokens. (Strix itself still scans the full diff once we do run;
+            # this filter only decides WHETHER to run.)
+            if [ -n "$BASE" ]; then
+              code_changes="$(git diff --name-only "$BASE" HEAD -- \
+                ':(exclude,glob)**/*.md' \
+                ':(exclude,glob)docs/**' \
+                ':(exclude,glob)**/*.png' \
+                ':(exclude,glob)**/*.jpg' \
+                ':(exclude,glob)**/*.jpeg' \
+                ':(exclude,glob)**/*.svg' \
+                ':(exclude,glob)**/*.webp' \
+                ':(exclude,glob)**/*.ico' \
+                ':(exclude,glob)**/*.pdf' \
+                ':(exclude,glob)**/*.docx' \
+                )"
+              if [ -z "$code_changes" ]; then
+                echo "No scan-relevant changes on main since $BASE; nothing to scan."
+                echo "result=clean" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+          fi
+          # GitHub runs `run:` steps with bash -e, so a bare strix call with
+          # findings (non-zero exit) would kill the step before we can capture
+          # the exit code — the `|| code=$?` keeps the script alive. The tee
+          # captures output so we can recognize the billing errors below
+          # (pipefail makes the pipeline carry strix's exit code through it).
+          code=0
+          if [ -n "$BASE" ]; then
+            echo "Scanning changes since $BASE (mode=$MODE, budget=$BUDGET USD)"
+            strix -n -t ./ --scan-mode "$MODE" --max-budget "$BUDGET" \
+              --scope-mode diff --diff-base "$BASE" \
+              --instruction-file .strix/accepted-risks.md 2>&1 | tee strix_output.log || code=$?
+          else
+            if [ "$SCOPE" = "diff" ]; then
+              echo "History shorter than 8 days; scanning full tree."
+            else
+              echo "Full-tree baseline scan (mode=$MODE, budget=$BUDGET USD)"
+            fi
+            strix -n -t ./ --scan-mode "$MODE" --max-budget "$BUDGET" --scope-mode full \
+              --instruction-file .strix/accepted-risks.md 2>&1 | tee strix_output.log || code=$?
+          fi
+          # Strix exits non-zero both when it confirms a vulnerability AND
+          # when the scan itself dies (e.g. the sandbox container failing to
+          # boot on the runner). Tell the two apart via the SARIF report: a
+          # crashed run writes 0 results. Without this check an infra failure
+          # sends a scary "security issues" Slack ping (happened 2026-08-13).
+          if [ "$code" -eq 0 ]; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            count="$(jq -s '[.[].runs[]?.results[]? | select(.level != "none")] | length' strix_runs/*/findings.sarif 2>/dev/null || echo 0)"
+            # The sed/tr strips Strix's box-drawing + wrapping so the error
+            # phrases match even when the error box breaks them across lines.
+            flat="$(sed 's/│//g' strix_output.log | tr '\n' ' ' | tr -s ' ')"
+            if [ "${count:-0}" -gt 0 ] 2>/dev/null; then
+              echo "result=findings" >> "$GITHUB_OUTPUT"
+            # A capped API key is a deliberate cost control doing its job, not
+            # an incident: end the run green with a log line instead of a red
+            # run + Slack warning (that noise ran daily 2026-08-17..22).
+            elif grep -q 'reached your specified API usage limits' <<<"$flat"; then
+              echo "result=capped" >> "$GITHUB_OUTPUT"
+              echo "API key hit its monthly spend cap; skipping scan until the cap resets."
+            # An empty prepaid balance is different: nothing will work again
+            # until someone adds funds, so this one does alert, but with a
+            # message that says what to do instead of "infra error".
+            elif grep -q 'credit balance is too low' <<<"$flat"; then
+              echo "result=nocredit" >> "$GITHUB_OUTPUT"
+              echo "The Anthropic organisation behind LLM_API_KEY has no credit left."
+            else
+              echo "result=error" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Upload Strix report
+        id: report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-report
+          path: strix_runs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  notify:
+    # Separate job on a fresh runner so the Slack token never sits on the
+    # machine that ran the Strix installer (curl | bash) and the scan.
+    needs: security-scan
+    if: contains(fromJSON('["findings","error","nocredit","test"]'), needs.security-scan.outputs.result)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Notify Slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # Public channel (without "#"). The bot joins it on the first
+          # post if it is not a member yet, like slack-bot.ts does.
+          SLACK_CHANNEL: plattform
+          SCAN_RESULT: ${{ needs.security-scan.outputs.result }}
+          # Direct link to the uploaded report artifact. Empty if nothing was
+          # uploaded, in which case we fall back to the run page below.
+          REPORT_URL: ${{ needs.security-scan.outputs.report_url }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+            echo "No SLACK_BOT_TOKEN secret set; skipping Slack notification."
+            exit 0
+          fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          report_link="${REPORT_URL:-$run_url}"
+          # Slack renders <url|label> as a clickable link in the text field.
+          case "$SCAN_RESULT" in
+            findings)
+              text=":rotating_light: Strix flagged potential security issues in today's scan of ${GITHUB_REPOSITORY}. <${report_link}|Open the report> · <${run_url}|View the run>" ;;
+            test)
+              text=":white_check_mark: Test message from the Strix workflow of ${GITHUB_REPOSITORY} (manual run, no scan). <${run_url}|View the run>" ;;
+            nocredit)
+              text=":moneybag: Strix scan of ${GITHUB_REPOSITORY} could not start: the Anthropic account behind LLM_API_KEY has no credit left. Add funds or turn on auto-reload in the Anthropic console. <${run_url}|View the run>" ;;
+            *)
+              text=":warning: Strix scan of ${GITHUB_REPOSITORY} failed to run (infra error, no findings). <${run_url}|View the run>" ;;
+          esac
+          api() { # api <method> <json body>
+            curl -sS -X POST "https://slack.com/api/$1" \
+              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              -H 'Content-type: application/json; charset=utf-8' --data "$2"
+          }
+          # Build the JSON with jq so the text is escaped safely. The
+          # username/icon are the sender identity the team sees, same
+          # mechanism as the personas in slack-bot.ts.
+          payload="$(jq -n --arg c "#$SLACK_CHANNEL" --arg t "$text" \
+            '{channel: $c, text: $t, username: "Strix Security Scan", icon_emoji: ":shield:", unfurl_links: false, unfurl_media: false}')"
+          res="$(api chat.postMessage "$payload")"
+          if [ "$(jq -r '.error // empty' <<<"$res")" = "not_in_channel" ]; then
+            id="$(api conversations.list '{"types":"public_channel","exclude_archived":true,"limit":1000}' \
+              | jq -r --arg n "$SLACK_CHANNEL" '.channels[]? | select(.name == $n) | .id')"
+            if [ -n "$id" ]; then
+              api conversations.join "$(jq -n --arg id "$id" '{channel: $id}')" >/dev/null
+              res="$(api chat.postMessage "$payload")"
+            else
+              echo "#$SLACK_CHANNEL not found among public channels; add the EPHIA app to it by hand."
+            fi
+          fi
+          if [ "$(jq -r '.ok' <<<"$res")" != "true" ]; then
+            echo "Slack rejected the message: $(jq -r '.error // "unknown error"' <<<"$res")"
+            exit 1
+          fi
+          echo "Posted to #$SLACK_CHANNEL."
+
+      - name: Mark run failed
+        # The red X here is what triggers GitHub's built-in failure email, a
+        # free backstop on top of Slack. Delete this step if you'd rather the
+        # run stay green and rely on the Slack ping alone. always() so a
+        # rejected Slack post still ends in the same red run.
+        if: always() && needs.security-scan.outputs.result != 'test'
+        env:
+          SCAN_RESULT: ${{ needs.security-scan.outputs.result }}
+        run: |
+          echo "Strix result: $SCAN_RESULT — see the Slack alert and the run artifact."
+          exit 1
