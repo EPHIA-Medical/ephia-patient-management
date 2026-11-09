@@ -17,7 +17,36 @@ export function base64ToBuf(str) {
   return buf.buffer;
 }
 
-export async function derivePDK(password, saltBase64, iterations = 100000) {
+// PBKDF2-SHA256 iterations for the password-derived key (PDK) that wraps the
+// MEK. New wraps use PDK_ITERATIONS (OWASP 2023 figure for PBKDF2-SHA256).
+// Unwrapping always uses the count stored in profiles.mek_params, so raising
+// this never locks anyone out; profiles without mek_params predate the field
+// and were wrapped with LEGACY_PDK_ITERATIONS. Logins re-wrap older profiles
+// up to PDK_ITERATIONS (see needsPdkUpgrade / wrapMEKWithPassword).
+export const PDK_ITERATIONS = 600000;
+export const LEGACY_PDK_ITERATIONS = 100000;
+
+export function storedPdkIterations(profile) {
+  return profile?.mek_params?.iterations || LEGACY_PDK_ITERATIONS;
+}
+
+export function needsPdkUpgrade(profile) {
+  return !!profile?.encrypted_mek && storedPdkIterations(profile) < PDK_ITERATIONS;
+}
+
+// Wraps the MEK under a fresh salt and the current iteration count. Returns
+// the four profile columns, to be written together in one PATCH.
+export async function wrapMEKWithPassword(mek, password) {
+  const mek_salt = generateSalt();
+  const pdk = await derivePDK(password, mek_salt, PDK_ITERATIONS);
+  const { encrypted, iv } = await wrapMEK(mek, pdk);
+  return { encrypted_mek: encrypted, mek_iv: iv, mek_salt, mek_params: { iterations: PDK_ITERATIONS, hash: "SHA-256" } };
+}
+
+// No default for iterations on purpose: an unwrap must use the stored count,
+// and a silent default is how a mismatch would creep in.
+export async function derivePDK(password, saltBase64, iterations) {
+  if (!Number.isInteger(iterations) || iterations < 1) throw new Error("derivePDK: iterations required");
   const enc = new TextEncoder();
   const salt = base64ToBuf(saltBase64);
   const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);

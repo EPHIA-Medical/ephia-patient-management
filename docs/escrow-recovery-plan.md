@@ -25,7 +25,7 @@ Key hierarchy (`src/lib/crypto.js`, `src/App.jsx`):
 
 | Column (profiles)                  | Content                                              |
 |------------------------------------|------------------------------------------------------|
-| `encrypted_mek`, `mek_iv`, `mek_salt`, `mek_params` | MEK wrapped with PBKDF2(password), 100k iterations |
+| `encrypted_mek`, `mek_iv`, `mek_salt`, `mek_params` | MEK wrapped with PBKDF2(password), 100k iterations (600k since 2026-11-09, older wraps upgraded at login) |
 | `recovery_wrapped_mek`, `recovery_iv` | MEK wrapped with a random AES key                 |
 | `recovery_key`                     | that random AES key, plaintext base64                |
 | `encryption_version`               | 1                                                    |

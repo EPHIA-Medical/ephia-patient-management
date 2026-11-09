@@ -3,7 +3,7 @@ import InfoTooltip from "../ui/InfoTooltip";
 import Spinner from "../ui/Spinner";
 import ConsentTemplateEditor from "./ConsentTemplateEditor";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, pgv } from "../../lib/supabase/client";
-import { computePatientHash, getPatientIdentifier, encryptData, derivePDK, generateSalt, wrapMEK } from "../../lib/crypto";
+import { computePatientHash, getPatientIdentifier, encryptData, wrapMEKWithPassword } from "../../lib/crypto";
 import { supabaseUpdateProfile } from "../../lib/supabase/profiles";
 import { supabaseDeletePatient } from "../../lib/supabase/patients";
 import { supabaseCreateBehandlung, supabaseDeleteBehandlung } from "../../lib/supabase/behandlungen";
@@ -66,10 +66,7 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
       // encrypted_mek/mek_iv/mek_salt/mek_params fields, profiles keyed by id).
       let rewrap = null;
       if (currentMEK && userId) {
-        const newSalt = generateSalt();
-        const newPdk = await derivePDK(pwNew, newSalt);
-        const { encrypted: encrypted_mek, iv: mek_iv } = await wrapMEK(currentMEK, newPdk);
-        rewrap = { encrypted_mek, mek_iv, mek_salt: newSalt, mek_params: { iterations: 100000, hash: "SHA-256" } };
+        rewrap = await wrapMEKWithPassword(currentMEK, pwNew);
       }
 
       // Update password via Supabase Auth API

@@ -15,7 +15,7 @@ import { supabaseFetchActivityLog, supabaseCreateActivityLog, supabaseDeleteActi
 import { trackEvent } from "./lib/analytics";
 import {
   MEK_SESSION_KEY, bufToBase64, base64ToBuf, derivePDK,
-  generateMEK, generateSalt,
+  generateMEK, generateSalt, wrapMEKWithPassword, needsPdkUpgrade, storedPdkIterations,
   wrapMEK, unwrapMEK, encryptData, decryptData,
   exportMEKToBase64, importMEKFromBase64,
   storeMEKInSession, loadMEKFromSession, clearMEKFromSession,
@@ -782,9 +782,7 @@ export default function EphiaInvoice() {
   const initializeEncryption = async (accessToken, userId, password) => {
     console.log("[E2EE] Initializing encryption for user", userId);
     const mek = await generateMEK();
-    const salt = generateSalt();
-    const pdk = await derivePDK(password, salt);
-    const { encrypted: encryptedMek, iv: mekIv } = await wrapMEK(mek, pdk);
+    const pdkWrap = await wrapMEKWithPassword(mek, password);
     // Recovery after a password loss goes through the escrow blob (release
     // path below); no server-readable recovery key is written any more.
     const escrowFields = await escrowFieldsFor(mek, userId);
@@ -793,8 +791,7 @@ export default function EphiaInvoice() {
       method: "PATCH",
       headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}`, "Prefer": "return=representation" },
       body: JSON.stringify({
-        encrypted_mek: encryptedMek, mek_salt: salt, mek_iv: mekIv,
-        mek_params: { iterations: 100000, hash: "SHA-256" },
+        ...pdkWrap,
         encryption_version: escrowFields.escrow_wrapped_mek ? 2 : 1,
         ...escrowFields,
       }),
@@ -812,7 +809,7 @@ export default function EphiaInvoice() {
 
   // ─── E2EE: Unlock MEK from password ───
   const unlockMEK = async (password, profile, accessToken) => {
-    const pdk = await derivePDK(password, profile.mek_salt, profile.mek_params?.iterations || 100000);
+    const pdk = await derivePDK(password, profile.mek_salt, storedPdkIterations(profile));
     let mek;
     try {
       mek = await unwrapMEK(profile.encrypted_mek, profile.mek_iv, pdk);
@@ -827,7 +824,34 @@ export default function EphiaInvoice() {
     }
     currentMEK = mek;
     storeMEKInSession(await exportMEKToBase64(mek));
+    if (needsPdkUpgrade(profile)) await upgradePdk(mek, password, profile, accessToken);
     await ensureEscrow(mek, profile, accessToken);
+  };
+
+  // ─── E2EE: re-wrap an older password wrap with PDK_ITERATIONS ───
+  // Same MEK, new salt/IV/iteration count, written as one PATCH. The filter on
+  // the old encrypted_mek makes it a compare-and-swap: if the wrap changed in
+  // the meantime (password changed on another device), nothing is written,
+  // because overwriting it with a wrap under this older password would break
+  // the newer one. Any failure leaves the old wrap valid; the next login retries.
+  const upgradePdk = async (mek, password, profile, accessToken) => {
+    try {
+      const fields = await wrapMEKWithPassword(mek, password);
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(profile.id)}&encrypted_mek=eq.${pgv(profile.encrypted_mek)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}`, "Prefer": "return=representation" },
+        body: JSON.stringify(fields),
+      });
+      const rows = res.ok ? await res.json() : [];
+      if (rows.length === 1 && rows[0].encrypted_mek === fields.encrypted_mek) {
+        Object.assign(profile, fields);
+        console.log("[E2EE] Password wrap upgraded to", fields.mek_params.iterations, "iterations");
+      } else {
+        console.warn("[E2EE] Password wrap upgrade not written", res.status);
+      }
+    } catch (e) {
+      console.warn("[E2EE] Password wrap upgrade failed", e);
+    }
   };
 
   const hasValidRelease = (profile) =>
@@ -854,14 +878,13 @@ export default function EphiaInvoice() {
         throw new Error("Der Code passt nicht zu diesem Konto. Bitte wende Dich an customerlove@ephia.de.");
       }
       // Verified. Re-wrap under the current password and clear the release in one write.
-      const newSalt = generateSalt();
-      const newPdk = await derivePDK(password, newSalt);
-      const { encrypted, iv } = await wrapMEK(mek, newPdk);
+      const pdkWrap = await wrapMEKWithPassword(mek, password);
+      const encrypted = pdkWrap.encrypted_mek;
       const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${pgv(profile.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${sess.access_token}`, "Prefer": "return=representation" },
         body: JSON.stringify({
-          encrypted_mek: encrypted, mek_iv: iv, mek_salt: newSalt, mek_params: { iterations: 100000, hash: "SHA-256" },
+          ...pdkWrap,
           escrow_release: null, escrow_release_iv: null, escrow_release_salt: null, escrow_release_expires_at: null,
         }),
       });
