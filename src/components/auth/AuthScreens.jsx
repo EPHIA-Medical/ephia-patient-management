@@ -252,7 +252,7 @@ export function ResetPasswordScreen({ onResetClick, onBackClick, isLoading, erro
   );
 }
 
-export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, success }) {
+export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, success, welcome = false }) {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const passwordsMatch = password && passwordConfirm && password === passwordConfirm;
@@ -262,8 +262,14 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full border border-[#DFE3EB]">
         <div className="text-center mb-8">
           <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
-          <div className="text-xs text-gray-400 uppercase tracking-wider">Neues Passwort festlegen</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wider">{welcome ? "Willkommen" : "Neues Passwort festlegen"}</div>
         </div>
+
+        {welcome && !success && (
+          <p className="mb-5 text-xs text-gray-600 leading-relaxed">
+            Wähle das Passwort für Dein Konto. Mit ihm werden Deine Patient:innendaten in Deinem Browser verschlüsselt. Danach meldest Du Dich direkt an.
+          </p>
+        )}
 
         {success && (
           <div className="mb-4 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
@@ -280,7 +286,7 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
         {!success && (
           <>
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Neues Passwort</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">{welcome ? "Passwort" : "Neues Passwort"}</label>
               <input
                 type="password"
                 className="w-full border border-[#DFE3EB] rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
@@ -306,7 +312,7 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
               onClick={() => onSubmit(password)}
               disabled={isLoading || !passwordsMatch || password.length < 6}
             >
-              {isLoading ? "Wird gespeichert..." : "Passwort speichern"}
+              {isLoading ? "Wird gespeichert..." : welcome ? "Passwort speichern und anmelden" : "Passwort speichern"}
             </button>
           </>
         )}

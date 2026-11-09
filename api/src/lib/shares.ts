@@ -130,7 +130,7 @@ function serviceKey(): string {
   return k;
 }
 
-function serviceHeaders(extra: Record<string, string> = {}): Record<string, string> {
+export function serviceHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const k = serviceKey();
   // Legacy service_role keys are JWTs and go in Authorization too; new sb_secret_ keys only in apikey.
   return { apikey: k, ...(k.startsWith("eyJ") ? { Authorization: `Bearer ${k}` } : {}), ...extra };

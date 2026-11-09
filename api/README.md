@@ -13,6 +13,9 @@ needs a secret: today the Supabase auth mails, next the Stripe integration.
       src/lib/email-layout.ts              EPHIA email layout (port of ephia-admin's)
       src/app/api/shares/...               secure document sending (below)
       src/lib/shares.ts                    its crypto, storage, email (tested)
+      src/app/api/invites/route.ts         invitations sent from admin.ephia.de (below)
+      src/app/i/[token]/route.ts           the link in the invite email
+      src/lib/invites.ts                   invite tokens, links, email, landing page (tested)
       scripts/auth-hook-test.ts            fires a signed test request
 
 ## Local
@@ -105,3 +108,24 @@ Setup (once):
 
 Expired links lose files and secrets lazily on the next send (at most every
 10 minutes); status rows are deleted after a year.
+
+## Invitations from admin.ephia.de
+
+The team sends an invitation from a person's page in admin.ephia.de
+(card "Patient Management System"). ephia-admin calls `POST /api/invites`
+with `Authorization: Bearer $PMS_INVITE_SECRET`; `GET /api/invites?email=`
+returns the status (`none`, `invited`, `expired`, `active`).
+
+The email links to `{API_URL}/i/<token>`, valid 14 days (only the token's
+SHA-256 is stored in `pms_invites`). GET shows a page with one button; only
+its POST asks Supabase (`admin/generate_link`, no Supabase mail) for an
+invite link, or a recovery link if the account is already confirmed but has
+no keys yet, and redirects there with `redirect_to = APP_URL?einladung=1`.
+That way mail scanners cannot use up the link and Supabase's one hour starts
+at the click. The app then shows "Passwort festlegen", logs the doctor in
+and creates the keys as after a normal signup. A new invite to the same
+address revokes the older one; addresses with keys get no mail (`active`).
+
+Setup: run `supabase/migrations/0006_pms_invites.sql`, set
+`PMS_INVITE_SECRET` here and the same value in ephia-admin, and
+`/api/health` shows `pmsInviteSecret: true`.

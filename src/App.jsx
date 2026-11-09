@@ -82,6 +82,8 @@ export default function EphiaInvoice() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authPage, setAuthPage] = useState("login"); // "login" | "signup" | "reset" | "set_new_password"
   const [recoveryAccessToken, setRecoveryAccessToken] = useState(null);
+  // Invitation from the EPHIA team (api /i/<token>): same screen, welcome wording, login right after
+  const [inviteFlow, setInviteFlow] = useState(false);
   // Login whose MEK could not be unwrapped with the password (password was
   // reset): { sess, profile, password }, kept in memory until the escrow
   // release code completes the login. See docs/escrow-recovery-plan.md 3.2.
@@ -379,12 +381,13 @@ export default function EphiaInvoice() {
     const checkSession = async () => {
       try {
         // Detect password recovery redirect from Supabase
-        // Case 1: Hash fragment flow (#access_token=...&type=recovery)
+        // Case 1: Hash fragment flow (#access_token=...&type=recovery, or type=invite)
         const hash = window.location.hash;
-        if (hash && hash.includes("type=recovery")) {
+        if (hash && (hash.includes("type=recovery") || hash.includes("type=invite"))) {
           const params = new URLSearchParams(hash.substring(1));
           const token = params.get("access_token");
           if (token) {
+            setInviteFlow(params.get("type") === "invite" || new URLSearchParams(window.location.search).get("einladung") === "1");
             setRecoveryAccessToken(token);
             setAuthPage("set_new_password");
             window.history.replaceState(null, "", window.location.pathname);
@@ -2763,6 +2766,14 @@ export default function EphiaInvoice() {
               // recovers it (unlockMEK fallback, later the escrow release path).
 
               setRecoveryAccessToken(null);
+              if (inviteFlow && updateData.email) {
+                // Invited account: no keys yet, so the normal first login creates them.
+                setInviteFlow(false);
+                setAuthPage("login");
+                setAuthLoading(false);
+                await handleSignIn(updateData.email, newPassword);
+                return;
+              }
               setAuthSuccess(true);
             } catch (err) {
               setAuthError(err.message || "Fehler beim Setzen des Passworts.");
@@ -2770,10 +2781,11 @@ export default function EphiaInvoice() {
               setAuthLoading(false);
             }
           }}
-          onBackClick={() => { setAuthPage("login"); setAuthError(""); setAuthSuccess(false); setRecoveryAccessToken(null); }}
+          onBackClick={() => { setAuthPage("login"); setAuthError(""); setAuthSuccess(false); setRecoveryAccessToken(null); setInviteFlow(false); }}
           isLoading={authLoading}
           error={authError}
           success={authSuccess}
+          welcome={inviteFlow}
         />
       );
     }

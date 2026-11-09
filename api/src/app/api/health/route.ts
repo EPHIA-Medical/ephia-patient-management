@@ -17,6 +17,8 @@ export function GET() {
       supabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
       shareKeySecret: Buffer.from(process.env.SHARE_KEY_SECRET || "", "base64").length === 32,
       resendWebhookSecret: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+      // PMS invitations from admin.ephia.de
+      pmsInviteSecret: (process.env.PMS_INVITE_SECRET || "").length >= 32,
     },
   });
 }
