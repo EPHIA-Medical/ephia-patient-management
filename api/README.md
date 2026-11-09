@@ -122,8 +122,10 @@ its POST asks Supabase (`admin/generate_link`, no Supabase mail) for an
 invite link, or a recovery link if the account is already confirmed but has
 no keys yet, and redirects there with `redirect_to = APP_URL?einladung=1`.
 That way mail scanners cannot use up the link and Supabase's one hour starts
-at the click. The app then shows "Passwort festlegen", logs the doctor in
-and creates the keys as after a normal signup. A new invite to the same
+at the click. The app then shows "Passwort festlegen" with welcome wording; the
+doctor signs in with her own address (no automatic sign-in from the URL
+token, against login CSRF) and that first login creates the keys as after a
+normal signup. A new invite to the same
 address revokes the older one; addresses with keys get no mail (`active`).
 
 Setup: run `supabase/migrations/0006_pms_invites.sql`, set

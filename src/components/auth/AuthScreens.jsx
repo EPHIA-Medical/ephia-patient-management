@@ -267,13 +267,13 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
 
         {welcome && !success && (
           <p className="mb-5 text-xs text-gray-600 leading-relaxed">
-            Wähle das Passwort für Dein Konto. Mit ihm werden Deine Patient:innendaten in Deinem Browser verschlüsselt. Danach meldest Du Dich direkt an.
+            Wähle das Passwort für Dein Konto. Mit ihm werden Deine Patient:innendaten in Deinem Browser verschlüsselt. Danach meldest Du Dich mit Deiner E-Mail-Adresse und diesem Passwort an.
           </p>
         )}
 
         {success && (
           <div className="mb-4 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
-            Passwort erfolgreich geändert. Du kannst dich jetzt anmelden.
+            {welcome ? "Passwort gespeichert. Melde Dich jetzt mit Deiner E-Mail-Adresse und Deinem Passwort an." : "Passwort erfolgreich geändert. Du kannst Dich jetzt anmelden."}
           </div>
         )}
 
@@ -312,7 +312,7 @@ export function SetNewPasswordScreen({ onSubmit, onBackClick, isLoading, error, 
               onClick={() => onSubmit(password)}
               disabled={isLoading || !passwordsMatch || password.length < 6}
             >
-              {isLoading ? "Wird gespeichert..." : welcome ? "Passwort speichern und anmelden" : "Passwort speichern"}
+              {isLoading ? "Wird gespeichert..." : "Passwort speichern"}
             </button>
           </>
         )}

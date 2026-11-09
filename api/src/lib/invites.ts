@@ -203,7 +203,7 @@ export async function sendInviteMail(to: string, mail: { subject: string; html: 
 export type LandingKind = "ok" | "expired" | "revoked" | "unknown" | "active" | "error";
 
 const LANDING: Record<LandingKind, { title: string; text: string; cta?: "form" | "login" }> = {
-  ok: { title: `Willkommen beim ${PRODUCT_NAME}`, text: "Klicke auf den Button, um Dein Passwort festzulegen. Danach meldest Du Dich direkt an.", cta: "form" },
+  ok: { title: `Willkommen beim ${PRODUCT_NAME}`, text: "Klicke auf den Button, um Dein Passwort festzulegen. Danach meldest Du Dich mit Deiner E-Mail-Adresse an.", cta: "form" },
   active: { title: "Dein Konto ist schon eingerichtet", text: "Du kannst Dich mit Deiner E-Mail-Adresse und Deinem Passwort anmelden.", cta: "login" },
   expired: { title: "Diese Einladung ist abgelaufen", text: "Schreib uns an customerlove@ephia.de, dann schicken wir Dir eine neue Einladung." },
   revoked: { title: "Es gibt eine neuere Einladung", text: "Bitte nutze den Link aus der neuesten E-Mail von uns. Falls Du sie nicht findest, schreib uns an customerlove@ephia.de." },

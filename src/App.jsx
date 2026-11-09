@@ -2765,15 +2765,10 @@ export default function EphiaInvoice() {
               // The MEK is still wrapped under the old password. The next login
               // recovers it (unlockMEK fallback, later the escrow release path).
 
+              // No automatic sign-in, also not for invites: the token comes from the URL,
+              // and a crafted link must not log a doctor into someone else's account.
+              // She signs in with her own address; that first login creates the keys.
               setRecoveryAccessToken(null);
-              if (inviteFlow && updateData.email) {
-                // Invited account: no keys yet, so the normal first login creates them.
-                setInviteFlow(false);
-                setAuthPage("login");
-                setAuthLoading(false);
-                await handleSignIn(updateData.email, newPassword);
-                return;
-              }
               setAuthSuccess(true);
             } catch (err) {
               setAuthError(err.message || "Fehler beim Setzen des Passworts.");
