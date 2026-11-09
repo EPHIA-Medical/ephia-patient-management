@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { AVV_VERSION, AVV_DATE, AVV_PROVIDER, AVV_SECTIONS } from "./avvText";
 import { fmtDate } from "../../utils/helpers";
+import { AGB_VERSION, AGB_DATE } from "./agbText";
+import { AGBBody } from "./AGB";
 
 // ═══════════════════ Auftragsverarbeitungsvertrag ═══════════════════
 
@@ -67,41 +69,83 @@ export default function AVVPage({ onBack, practice, acceptance }) {
   );
 }
 
-// Blocking screen shown after login until the current version is accepted.
-export function AVVAcceptScreen({ practice, email, onAccept, onLogout, isLoading, error, onboarding }) {
-  const [checked, setChecked] = useState(false);
+// Blocking screen shown after login until the current AGB and AVV versions are
+// accepted. Only what is still missing is shown; each needs its own checkbox.
+export function AVVAcceptScreen({ practice, email, onAccept, onLogout, isLoading, error, onboarding, needAgb = false, needAvv = true }) {
+  const [agbOk, setAgbOk] = useState(false);
+  const [avvOk, setAvvOk] = useState(false);
   const party = practiceLine(practice);
+  const title = needAgb && needAvv ? "AGB und Auftragsverarbeitungsvertrag" : needAgb ? "Allgemeine Geschäftsbedingungen" : "Auftragsverarbeitungsvertrag";
+  const ready = (!needAgb || agbOk) && (!needAvv || avvOk);
   return (
     <div className="min-h-screen bg-gray-50 py-6 sm:py-10 px-4" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4">
           <div className="mb-3 flex justify-center"><img src="/logo-centered.svg" alt="EPHIA by Dr. Sophia" style={{ width: "128px" }} /></div>
-          <h1 className="text-lg font-bold text-gray-800 text-center mb-2">Auftragsverarbeitungsvertrag</h1>
+          <h1 className="text-lg font-bold text-gray-800 text-center mb-2">{title}</h1>
           {onboarding && <p className="text-xs text-gray-400 text-center mb-2">Praxisdaten gespeichert. Noch ein Schritt, dann geht es los.</p>}
-          <p className="text-sm text-gray-600 text-center">{onboarding ? "Zum Start schließen" : "Bevor Du weiterarbeitest, schließen"} wir den Auftragsverarbeitungsvertrag nach Art. 28 DSGVO ab. Er regelt, wie EPHIA die Daten Deiner Patient:innen für Dich verarbeitet. Lies ihn in Ruhe; Du findest ihn später jederzeit unter Praxis-Einstellungen.</p>
+          <p className="text-sm text-gray-600 text-center">
+            {onboarding ? "Zum Start" : "Bevor Du weiterarbeitest,"}{" "}
+            {needAgb && needAvv
+              ? "bestätigst Du bitte unsere AGB und schließt mit uns den Auftragsverarbeitungsvertrag nach Art. 28 DSGVO ab. Er regelt, wie EPHIA die Daten Deiner Patient:innen für Dich verarbeitet."
+              : needAgb
+                ? "bestätigst Du bitte unsere AGB."
+                : "schließen wir den Auftragsverarbeitungsvertrag nach Art. 28 DSGVO ab. Er regelt, wie EPHIA die Daten Deiner Patient:innen für Dich verarbeitet."}{" "}
+            Lies alles in Ruhe; Du findest beides später jederzeit in der App.
+          </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4 max-h-[60vh] overflow-y-auto">
-          <p className="text-xs text-gray-400 mb-4">Version {AVV_VERSION} · Stand: {AVV_DATE}</p>
-          <AVVBody practice={practice} />
-        </div>
+        {needAgb && (
+          <div className="bg-amber-50 rounded-lg border border-amber-200 p-5 sm:p-6 mb-4 text-sm text-amber-900 leading-relaxed">
+            <p className="font-semibold mb-1">Alpha-Testphase</p>
+            <p>Das EPHIA Patient Management System befindet sich in einer Alpha-Testphase. Wir können seine Stabilität derzeit nicht garantieren, und Datenverluste sind nicht ausgeschlossen. Für Datenverluste übernehmen wir keine Verantwortung, soweit das gesetzlich zulässig ist (§ 2a AGB). Bitte sichere Rechnungen und Dokumentationen deshalb zusätzlich außerhalb des Systems, zum Beispiel als PDF.</p>
+          </div>
+        )}
+
+        {needAgb && (
+          <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4 max-h-[50vh] overflow-y-auto">
+            <h2 className="text-base font-bold text-gray-800 mb-1">Allgemeine Geschäftsbedingungen</h2>
+            <p className="text-xs text-gray-400 mb-2">Version {AGB_VERSION} · Stand: {AGB_DATE}</p>
+            <AGBBody />
+          </div>
+        )}
+
+        {needAvv && (
+          <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8 mb-4 max-h-[50vh] overflow-y-auto">
+            {needAgb && <h2 className="text-base font-bold text-gray-800 mb-1">Auftragsverarbeitungsvertrag</h2>}
+            <p className="text-xs text-gray-400 mb-4">Version {AVV_VERSION} · Stand: {AVV_DATE}</p>
+            <AVVBody practice={practice} />
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow border border-[#DFE3EB] p-6 sm:p-8">
           {error && <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{error}</div>}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => setChecked(e.target.checked)} disabled={isLoading} />
-            <span className="text-sm text-gray-700">
-              Ich schließe den Auftragsverarbeitungsvertrag (Version {AVV_VERSION}) {party ? <>für <strong>{party}</strong></> : "für meine Praxis"} mit der EPHIA Medical GmbH ab. Konto: {email}.
-            </span>
-          </label>
+          <div className="space-y-4">
+            {needAgb && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={agbOk} onChange={(e) => setAgbOk(e.target.checked)} disabled={isLoading} />
+                <span className="text-sm text-gray-700">
+                  Ich akzeptiere die Allgemeinen Geschäftsbedingungen (Version {AGB_VERSION}) der EPHIA Medical GmbH, einschließlich der Regelungen zur Alpha-Testphase in § 2a. Konto: {email}.
+                </span>
+              </label>
+            )}
+            {needAvv && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={avvOk} onChange={(e) => setAvvOk(e.target.checked)} disabled={isLoading} />
+                <span className="text-sm text-gray-700">
+                  Ich schließe den Auftragsverarbeitungsvertrag (Version {AVV_VERSION}) {party ? <>für <strong>{party}</strong></> : "für meine Praxis"} mit der EPHIA Medical GmbH ab. Konto: {email}.
+                </span>
+              </label>
+            )}
+          </div>
           <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <button className="text-xs text-gray-500 hover:text-gray-700" onClick={onLogout} disabled={isLoading}>Jetzt nicht, abmelden</button>
             <button
               className="bg-gray-800 text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onAccept}
-              disabled={!checked || isLoading}
+              disabled={!ready || isLoading}
             >
-              {isLoading ? "Wird gespeichert..." : "Vertrag abschließen"}
+              {isLoading ? "Wird gespeichert..." : needAvv ? "Zustimmen und Vertrag abschließen" : "Zustimmen"}
             </button>
           </div>
         </div>

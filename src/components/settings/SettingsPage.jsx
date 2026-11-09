@@ -37,7 +37,7 @@ const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleDateString("de-DE", { 
 // `practice` is the saved state, `draft` the edited copy (lifted into App so it
 // survives leaving the page). Nothing is stored until "Speichern".
 
-export default function SettingsPage({ practice, setPractice, draft, setDraft, dirty, onSave, onDiscard, section, templateId, onNavigate, isFirstTime, session, currentMEK, userId, patients, invoices, behandlungen, avvAcceptance }) {
+export default function SettingsPage({ practice, setPractice, draft, setDraft, dirty, onSave, onDiscard, section, templateId, onNavigate, isFirstTime, session, currentMEK, userId, patients, invoices, behandlungen, avvAcceptance, agbAcceptance }) {
   const [pwCurrent, setPwCurrent] = React.useState("");
   const [pwNew, setPwNew] = React.useState("");
   const [pwConfirm, setPwConfirm] = React.useState("");
@@ -601,6 +601,17 @@ export default function SettingsPage({ practice, setPractice, draft, setDraft, d
               : "Noch nicht abgeschlossen."}
           </p>
           <button className="text-xs text-blue-600 hover:text-blue-700 font-medium" onClick={() => onNavigate("/avv")}>Vertrag anzeigen und als PDF speichern</button>
+        </div>
+      )}
+      {!isFirstTime && session && (
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-sm text-gray-700 mb-1">Allgemeine Geschäftsbedingungen</p>
+          <p className="text-xs text-gray-400 mb-2">
+            {agbAcceptance
+              ? `Bestätigt am ${new Date(agbAcceptance.accepted_at).toLocaleDateString("de-DE")} (Version ${agbAcceptance.version}).`
+              : "Noch nicht bestätigt."}
+          </p>
+          <button className="text-xs text-blue-600 hover:text-blue-700 font-medium" onClick={() => onNavigate("/agb")}>AGB anzeigen und als PDF speichern</button>
         </div>
       )}
       {!isFirstTime && session && (

@@ -65,6 +65,9 @@ describe("invite helpers", () => {
     expect(m.html).toContain("https://api.pms.ephia.de/i/x");
     expect(m.html).toContain("23.11.2026");
     expect(m.text).toContain("Einladung annehmen: https://api.pms.ephia.de/i/x");
+    expect(m.html).toContain("Alpha-Testphase.");
+    expect(m.text).toContain("Datenverluste sind nicht ausgeschlossen");
+    expect(m.html.indexOf("Alpha-Testphase")).toBeLessThan(m.html.indexOf("Einladung annehmen"));
     expect(m.text).not.toMatch(/!/);
     expect(m.text).not.toMatch(/\bSie\b/);
   });

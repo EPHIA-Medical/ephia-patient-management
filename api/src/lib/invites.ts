@@ -144,14 +144,22 @@ const fmtDateDe = (iso: string) => {
   return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`;
 };
 
+/** Bordered notice block; the layout allows only one peach info box, which holds the expiry date. */
+function alphaNotice(text: string): string {
+  const T = EMAIL_TOKENS;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;"><tr><td style="border-left:3px solid #d97706;padding:4px 0 4px 14px;font-family:${T.fontStack};font-size:15px;line-height:1.6;color:${T.text};"><strong>Alpha-Testphase.</strong> ${escapeHtml(text.replace(/^Bitte beachte: /, ""))}</td></tr></table>`;
+}
+
 export function buildInviteMail(a: { firstName: string; link: string; expiresAt: string }): { subject: string; html: string; text: string } {
   const subject = `Deine Einladung zum ${PRODUCT_NAME}`;
   const intro = `wir haben Dir einen Zugang zum ${PRODUCT_NAME} eingerichtet. Damit dokumentierst Du Deine Behandlungen und schreibst Rechnungen für Deine Patient:innen an einem Ort.`;
+  const alpha = `Bitte beachte: Das ${PRODUCT_NAME} befindet sich in einer Alpha-Testphase. Wir können seine Stabilität derzeit nicht garantieren, und Datenverluste sind nicht ausgeschlossen. Für Datenverluste übernehmen wir keine Verantwortung, soweit das gesetzlich zulässig ist. Sichere Deine Rechnungen und Dokumentationen deshalb bitte zusätzlich außerhalb des Systems, zum Beispiel als PDF. Die Einzelheiten regeln unsere AGB, die Du beim ersten Anmelden bestätigst.`;
   const keys = "Beim ersten Öffnen wählst Du Dein Passwort. Deine Patient:innendaten werden damit in Deinem Browser verschlüsselt, bevor sie gespeichert werden.";
   const help = "Fragen beantworten wir Dir gern unter customerlove@ephia.de.";
   const body = [
     greeting(a.firstName),
     paragraph(escapeHtml(intro)),
+    alphaNotice(alpha),
     button(a.link, "Einladung annehmen"),
     infoBox("Einladung gültig bis", fmtDateDe(a.expiresAt)),
     paragraph(escapeHtml(keys)),
@@ -163,6 +171,9 @@ export function buildInviteMail(a: { firstName: string; link: string; expiresAt:
     `Hallo${a.firstName ? ` ${a.firstName}` : ""},`,
     "",
     intro,
+    "",
+    "ALPHA-TESTPHASE",
+    alpha.replace(/^Bitte beachte: /, ""),
     "",
     `Einladung annehmen: ${a.link}`,
     `Einladung gültig bis: ${fmtDateDe(a.expiresAt)}`,
@@ -203,7 +214,7 @@ export async function sendInviteMail(to: string, mail: { subject: string; html: 
 export type LandingKind = "ok" | "expired" | "revoked" | "unknown" | "active" | "error";
 
 const LANDING: Record<LandingKind, { title: string; text: string; cta?: "form" | "login" }> = {
-  ok: { title: `Willkommen beim ${PRODUCT_NAME}`, text: "Klicke auf den Button, um Dein Passwort festzulegen. Danach meldest Du Dich mit Deiner E-Mail-Adresse an.", cta: "form" },
+  ok: { title: `Willkommen beim ${PRODUCT_NAME}`, text: "Klicke auf den Button, um Dein Passwort festzulegen. Danach meldest Du Dich mit Deiner E-Mail-Adresse an und bestätigst unsere AGB und den Auftragsverarbeitungsvertrag. Das System befindet sich in einer Alpha-Testphase, Datenverluste sind nicht ausgeschlossen.", cta: "form" },
   active: { title: "Dein Konto ist schon eingerichtet", text: "Du kannst Dich mit Deiner E-Mail-Adresse und Deinem Passwort anmelden.", cta: "login" },
   expired: { title: "Diese Einladung ist abgelaufen", text: "Schreib uns an customerlove@ephia.de, dann schicken wir Dir eine neue Einladung." },
   revoked: { title: "Es gibt eine neuere Einladung", text: "Bitte nutze den Link aus der neuesten E-Mail von uns. Falls Du sie nicht findest, schreib uns an customerlove@ephia.de." },

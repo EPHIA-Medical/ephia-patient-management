@@ -33,6 +33,7 @@ import DatenschutzPage from "./components/legal/Datenschutz";
 import AGBPage from "./components/legal/AGB";
 import AVVPage, { AVVAcceptScreen } from "./components/legal/AVV";
 import { AVV_VERSION, avvDocumentHash } from "./components/legal/avvText";
+import { AGB_VERSION, agbDocumentHash } from "./components/legal/agbText";
 import PreviewScaler from "./components/ui/PreviewScaler";
 import { spawnConfetti } from "./components/ui/ConfettiBurst";
 import PraeparatAutocomplete from "./components/ui/PraeparatAutocomplete";
@@ -93,6 +94,9 @@ export default function EphiaInvoice() {
   const [avvChecked, setAvvChecked] = useState(false);
   const [avvSaving, setAvvSaving] = useState(false);
   const [avvError, setAvvError] = useState("");
+  // AGB acceptance (migration 0007); accepted together with the AVV on the same screen
+  const [agbAcceptance, setAgbAcceptance] = useState(null);
+  const [agbChecked, setAgbChecked] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState(false);
   const [authSuccessEmail, setAuthSuccessEmail] = useState("");
@@ -537,6 +541,18 @@ export default function EphiaInvoice() {
         setAvvChecked(avvRes.ok);
       } catch (e) {
         console.error("[AVV] Failed to load acceptance:", e);
+      }
+      // AGB acceptance for the current version (same gate). If the table does not
+      // exist yet (migration 0007 not run), agbChecked stays false and nothing blocks.
+      try {
+        const agbRes = await fetch(`${SUPABASE_URL}/rest/v1/agb_acceptances?user_id=eq.${pgv(userId)}&version=eq.${encodeURIComponent(AGB_VERSION)}&select=version,document_sha256,accepted_at`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+        });
+        const rows = agbRes.ok ? await agbRes.json() : [];
+        setAgbAcceptance(rows.length > 0 ? rows[0] : null);
+        setAgbChecked(agbRes.ok);
+      } catch (e) {
+        console.error("[AGB] Failed to load acceptance:", e);
       }
       // Load practice data
       const profiles = await supabaseFetchProfiles(accessToken, userId);
@@ -1040,27 +1056,41 @@ export default function EphiaInvoice() {
     }
   };
 
-  const handleAcceptAvv = async () => {
+  // Accepts whatever is still missing: the AGB and/or the AVV (one screen, two checkboxes).
+  const handleAcceptLegal = async () => {
     if (!session || !user) return;
     setAvvSaving(true);
     setAvvError("");
+    const headers = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" };
     try {
-      const document_sha256 = await avvDocumentHash();
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/avv_acceptances`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, "Prefer": "return=representation" },
-        body: JSON.stringify({
-          user_id: user.id,
-          version: AVV_VERSION,
-          document_sha256,
-          practice_snapshot: { name: practice.name || "", address1: practice.address1 || "", address2: practice.address2 || "", address3: practice.address3 || "", email: user.email || "" },
-          user_agent: navigator.userAgent.slice(0, 300),
-        }),
-      });
-      const rows = res.ok ? await res.json() : [];
-      if (!res.ok || rows.length !== 1) throw new Error("Der Vertrag konnte nicht gespeichert werden. Bitte versuche es noch einmal.");
-      setAvvAcceptance(rows[0]);
-      trackEvent("avv_accepted", { version: AVV_VERSION }, session.access_token);
+      if (agbChecked && !agbAcceptance) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/agb_acceptances`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ user_id: user.id, version: AGB_VERSION, document_sha256: await agbDocumentHash(), user_agent: navigator.userAgent.slice(0, 300) }),
+        });
+        const rows = res.ok ? await res.json() : [];
+        if (!res.ok || rows.length !== 1) throw new Error("Deine Zustimmung zu den AGB konnte nicht gespeichert werden. Bitte versuche es noch einmal.");
+        setAgbAcceptance(rows[0]);
+        trackEvent("agb_accepted", { version: AGB_VERSION }, session.access_token);
+      }
+      if (avvChecked && !avvAcceptance) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/avv_acceptances`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            user_id: user.id,
+            version: AVV_VERSION,
+            document_sha256: await avvDocumentHash(),
+            practice_snapshot: { name: practice.name || "", address1: practice.address1 || "", address2: practice.address2 || "", address3: practice.address3 || "", email: user.email || "" },
+            user_agent: navigator.userAgent.slice(0, 300),
+          }),
+        });
+        const rows = res.ok ? await res.json() : [];
+        if (!res.ok || rows.length !== 1) throw new Error("Der Vertrag konnte nicht gespeichert werden. Bitte versuche es noch einmal.");
+        setAvvAcceptance(rows[0]);
+        trackEvent("avv_accepted", { version: AVV_VERSION }, session.access_token);
+      }
     } catch (err) {
       setAvvError(err.message);
     } finally {
@@ -1092,6 +1122,8 @@ export default function EphiaInvoice() {
     setSelectedPatient(null);
     setAvvAcceptance(null);
     setAvvChecked(false);
+    setAgbAcceptance(null);
+    setAgbChecked(false);
     setAuthPage("login");
     setAuthError("");
     // Leave any record URL behind, so the next login on this browser never
@@ -2836,16 +2868,20 @@ export default function EphiaInvoice() {
     );
   }
 
-  // ─── AVV gate: nothing else until the current version is accepted ───
+  // ─── AGB + AVV gate: nothing else until the current versions are accepted ───
   // First-time accounts enter their practice data first (onboarding), so the
   // contract names the practice; the gate fires right after that save.
-  if (dataLoaded && avvChecked && !avvAcceptance && !isFirstTimeUser) {
+  const needAgb = agbChecked && !agbAcceptance;
+  const needAvv = avvChecked && !avvAcceptance;
+  if (dataLoaded && (needAgb || needAvv) && !isFirstTimeUser) {
     return (
       <AVVAcceptScreen
         practice={practice}
         onboarding={onboardingStep === "patient"}
         email={user?.email || ""}
-        onAccept={handleAcceptAvv}
+        needAgb={needAgb}
+        needAvv={needAvv}
+        onAccept={handleAcceptLegal}
         onLogout={handleSignOut}
         isLoading={avvSaving}
         error={avvError}
@@ -3088,7 +3124,7 @@ export default function EphiaInvoice() {
         );
       })()}
 
-      {pathname === "/agb" && <AGBPage onBack={() => navigate("/patients")} />}
+      {pathname === "/agb" && <AGBPage onBack={() => navigate("/patients")} acceptance={agbAcceptance} />}
       {pathname === "/avv" && <AVVPage onBack={() => navigate("/einstellungen/sicherheit")} practice={practice} acceptance={avvAcceptance} />}
       {pathname === "/impressum" && <ImpressumPage onBack={() => navigate("/patients")} />}
       {pathname === "/datenschutz" && <DatenschutzPage onBack={() => navigate("/patients")} />}
@@ -3161,7 +3197,7 @@ export default function EphiaInvoice() {
             draft={settingsDraft ?? practice} setDraft={updateSettingsDraft} dirty={settingsDirty}
             onSave={savePracticeSettings} onDiscard={() => setSettingsDraft(null)}
             section={settingsSection} templateId={settingsTemplateId} onNavigate={(to) => navigate(to)}
-            isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id} avvAcceptance={avvAcceptance}
+            isFirstTime={isFirstTimeUser} session={session} currentMEK={currentMEK} userId={user?.id} avvAcceptance={avvAcceptance} agbAcceptance={agbAcceptance}
             patients={patients} invoices={invoices} behandlungen={behandlungen}
           />
         )}
