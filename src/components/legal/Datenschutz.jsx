@@ -33,6 +33,7 @@ export default function DatenschutzPage({ onBack }) {
             <p><strong>Rechnungsdaten:</strong> Rechnungsnummern, Leistungspositionen (GOÄ-Ziffern), Beträge und Datumsangaben. Diese Daten werden unverschlüsselt gespeichert.</p>
             <p><strong>Patient:innendaten:</strong> Name, Adresse, Geburtsdatum und E-Mail-Adresse Deiner Patient:innen. Diese Daten werden in Deinem Browser verschlüsselt, bevor sie an den Server übertragen werden, und dort ausschließlich verschlüsselt gespeichert (siehe Abschnitt 5). Im laufenden Betrieb hat EPHIA keinen Zugriff auf diese Daten im Klartext.</p>
             <p><strong>Technische Daten:</strong> Bei der Nutzung der App werden automatisch technische Informationen wie IP-Adresse, Browsertyp und Zugriffszeiten erfasst. Diese Daten werden ausschließlich zur Sicherstellung des Betriebs und zur Fehlerbehebung verwendet.</p>
+            <p><strong>Nutzungsdaten:</strong> Wenn Du angemeldet bist, speichern wir, welche Funktionen der App Du verwendest, zum Beispiel das Anlegen einer Behandlungsdokumentation oder das Teilen eines PDFs. Gespeichert werden die Art der Aktion, der Zeitpunkt, Dein Konto und technische Merkmale wie der Dokumenttyp. Patient:innendaten oder Inhalte Deiner Dokumente sind darin nicht enthalten. Wir nutzen diese Daten ausschließlich intern, um die App zu verbessern und Fehler zu erkennen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; unser berechtigtes Interesse liegt in der Weiterentwicklung und Qualitätssicherung der App. Du kannst dieser Verarbeitung jederzeit widersprechen (Art. 21 DSGVO), eine kurze Nachricht an uns genügt. Die Nutzungsdaten werden nach 24 Monaten gelöscht, spätestens mit der Löschung Deines Kontos.</p>
           </section>
 
           <section>
@@ -58,7 +59,8 @@ export default function DatenschutzPage({ onBack }) {
 
           <section>
             <h2 className="text-sm font-semibold text-gray-800 mt-6 mb-2">7. Cookies und Tracking</h2>
-            <p>Die App verwendet keine Cookies zu Marketing- oder Trackingzwecken. Es werden lediglich technisch notwendige Sitzungsdaten im Browser (sessionStorage) gespeichert, um die Verschlüsselungsfunktionalität während einer Sitzung aufrechtzuerhalten. Diese Daten werden beim Schließen des Browsers automatisch gelöscht.</p>
+            <p>Die App verwendet keine Cookies. Im Browser werden nur technisch notwendige Daten gespeichert: Deine Anmeldung im localStorage, damit Du angemeldet bleibst, bis Du Dich abmeldest, und der Schlüssel zur Entschlüsselung Deiner Patient:innendaten im sessionStorage. Der Schlüssel wird beim Schließen des Browsers automatisch gelöscht.</p>
+            <p>Die in Abschnitt 3 beschriebenen Nutzungsdaten werden auf unseren eigenen Servern gespeichert und nicht an Dritte weitergegeben. Externe Analyse- oder Trackingdienste setzen wir nicht ein.</p>
           </section>
 
           <section>
