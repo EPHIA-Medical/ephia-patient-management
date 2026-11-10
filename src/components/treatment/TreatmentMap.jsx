@@ -424,7 +424,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                         const active = view === c.id;
                         return (
                           <button key={c.id} type="button" onClick={() => setView(c.id)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition ${active ? "bg-gray-800 text-white font-medium" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 text-xs rounded-md transition font-medium ${active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                             style={{ height: 26 }}>
                             {c.label}
                             {n > 0 && <span className={`text-[10px] font-semibold rounded-full px-1.5 ${active ? "bg-white/20" : "bg-white text-gray-700"}`}>{n}</span>}
@@ -444,7 +444,9 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 </p>
               </div>
               {/* Side layout: the chart sits absolutely inside its cell so its size never feeds back into the row heights it is measured from */}
-              <div ref={sideLayout ? chartAreaRef : undefined} className="min-w-0 min-h-0" style={{ gridArea: "chart", position: sideLayout ? "relative" : "static" }}>
+              {/* min-h-0 only in the side layout: in the single column it would let the auto rows shrink below
+                  their content, so the point list and photo button slid under the chart instead of scrolling */}
+              <div ref={sideLayout ? chartAreaRef : undefined} className={`min-w-0 ${sideLayout ? "min-h-0" : ""}`} style={{ gridArea: "chart", position: sideLayout ? "relative" : "static" }}>
                 <div className="flex items-start justify-center" style={sideLayout ? { position: "absolute", inset: 0 } : undefined}>
                 <div
                   ref={boxRef}
@@ -516,7 +518,7 @@ export default function TreatmentMap({ markers, setMarkers, einheit, readOnly, n
                 </div>
                 </div>
               </div>
-              <div className="min-h-0" style={{ gridArea: "points", overflowY: sideLayout ? "auto" : "visible", paddingRight: sideLayout ? 4 : 0 }}>
+              <div className={sideLayout ? "min-h-0" : ""} style={{ gridArea: "points", overflowY: sideLayout ? "auto" : "visible", paddingRight: sideLayout ? 4 : 0 }}>
                 <VectorLegend markers={markers.filter(inView)} force={vt.mode === "linie" || vt.mode === "faecher"} forceGuide={vt.mode === "markierung"} className="mb-2" />
                 <p className="text-xs font-medium text-gray-500 mb-1.5">{chartById(view).label}</p>
                 <div className="space-y-1.5">

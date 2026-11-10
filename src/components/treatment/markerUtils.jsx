@@ -121,10 +121,10 @@ export function MarkerDot({ marker, idx, size = 18, fontSize = 9, shadow = false
 }
 
 // Dose presets offered as one-tap chips in the editor, per unit
-// `main` is always visible, `more` unfolds behind a "Mehr" button
+// `main` is always visible (four, so the row fits one line on a phone), `more` opens behind "Mehr"
 export const DOSE_PRESETS = {
-  ml: { main: ["0,1", "0,2", "0,3", "0,5", "1"], more: ["0,05", "0,15", "0,25", "0,4", "0,7", "1,5", "2"] },
-  SE: { main: ["2", "2,5", "5", "7,5", "10"], more: ["1", "1,5", "3", "4", "6", "8", "12", "15", "20"] },
+  ml: { main: ["0,1", "0,2", "0,5", "1"], more: ["0,05", "0,15", "0,25", "0,3", "0,4", "0,7", "1,5", "2"] },
+  SE: { main: ["2", "2,5", "5", "10"], more: ["1", "1,5", "3", "4", "6", "7,5", "8", "12", "15", "20"] },
 };
 DOSE_PRESETS.IE = DOSE_PRESETS.SE;
 export const dosePresetsFor = (einheit) => DOSE_PRESETS[einheit] || DOSE_PRESETS.SE;
@@ -135,12 +135,47 @@ export const sameAmount = (a, b) => {
   return va > 0 && Math.abs(va - vb) < 1e-9;
 };
 
+const CHIP_GAP = 4;
+const chipStyle = (active, color, compact = false) => ({
+  minWidth: compact ? 28 : 32,
+  height: 26,
+  padding: compact ? "0 6px" : "0 8px",
+  background: active ? color : "#f3f4f6",
+  color: active ? markerTextColor(color) : "#374151",
+  // Inset ring: marks the active chip without growing it or touching its neighbours
+  boxShadow: active ? "inset 0 0 0 2px rgba(255,255,255,0.55)" : "none",
+});
+
 // Dose chip row: pick the amount that new points receive. Selecting the active
 // chip again clears the preset. The free-text field keeps its own text, so typing
 // "1" on the way to "12" does not jump to the "1" chip and empty the field.
 // onChange(value, { typed }) tells the editor whether the value came from the field.
+// Everything stays on one line: further presets open in a dropdown behind "Mehr",
+// which shows the chosen value itself while one of them is active.
+// Row narrower than this: four quick presets plus "Mehr", the field and the unit no longer fit one line
+const NARROW_ROW_PX = 330;
+const useNarrowRow = () => {
+  const [narrow, setNarrow] = React.useState(false);
+  const ro = React.useRef(null);
+  const ref = React.useCallback((el) => {
+    ro.current?.disconnect();
+    ro.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => { if (el.clientWidth > 0) setNarrow(el.clientWidth < NARROW_ROW_PX); };
+    measure();
+    ro.current = new ResizeObserver(measure);
+    ro.current.observe(el);
+  }, []);
+  React.useEffect(() => () => ro.current?.disconnect(), []);
+  return [narrow, ref];
+};
+
 export function DoseChips({ value, onChange, einheit, color, label = "Dosis für neue Punkte", labelWidth }) {
-  const { main, more } = dosePresetsFor(einheit);
+  const presets = dosePresetsFor(einheit);
+  // Narrow rows (iPhone SE, the desktop side column): the last quick preset moves into the dropdown
+  const [narrow, rowRef] = useNarrowRow();
+  const main = narrow ? presets.main.slice(0, -1) : presets.main;
+  const more = narrow ? [...presets.main.slice(-1), ...presets.more].sort((a, b) => evalAmount(a) - evalAmount(b)) : presets.more;
   const all = [...main, ...more];
   const [text, setText] = React.useState(() => (all.some((d) => sameAmount(d, value)) ? "" : value || ""));
   // Value changed from outside (e.g. reset or another Präparat): mirror it unless it is what was typed
@@ -149,54 +184,64 @@ export function DoseChips({ value, onChange, einheit, color, label = "Dosis für
     setText(all.some((d) => sameAmount(d, value)) ? "" : value || "");
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const chipValue = text ? "" : value;
-  const inMore = more.some((d) => sameAmount(d, chipValue));
-  const [expanded, setExpanded] = React.useState(false);
-  const showMore = expanded || inMore;
-  const presets = showMore ? all : main;
+  const activeMore = more.find((d) => sameAmount(d, chipValue));
+  const [open, setOpen] = React.useState(false);
+  const menuRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey, true);
+    return () => { document.removeEventListener("pointerdown", onDown); window.removeEventListener("keydown", onKey, true); };
+  }, [open]);
+  const pick = (d, active) => { setText(""); setOpen(false); onChange(active ? "" : d, { typed: false }); };
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-xs text-gray-500 mr-0.5 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
-      {presets.map((d) => {
+    <div ref={rowRef} className="flex items-center flex-nowrap" style={{ gap: narrow ? 3 : CHIP_GAP }}>
+      <span className="text-xs text-gray-500 flex-shrink-0" style={labelWidth ? { width: labelWidth, marginRight: 2 } : { marginRight: 2 }}>{labelWidth ? label : `${label}:`}</span>
+      {main.map((d) => {
         const active = sameAmount(d, chipValue);
         return (
-          <button
-            key={d}
-            type="button"
-            onClick={() => { setText(""); onChange(active ? "" : d, { typed: false }); }}
-            className="text-xs font-semibold rounded-full transition"
-            style={{
-              minWidth: 34,
-              height: 26,
-              padding: "0 9px",
-              background: active ? color : "#f3f4f6",
-              color: active ? markerTextColor(color) : "#374151",
-              outline: active ? `2px solid ${color}` : "none",
-              outlineOffset: 2,
-            }}
-          >
+          <button key={d} type="button" onClick={() => pick(d, active)} className="flex-shrink-0 text-xs font-semibold rounded-full transition-colors" style={chipStyle(active, color, narrow)}>
             {d}
           </button>
         );
       })}
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="text-xs text-blue-500 hover:text-blue-700 px-1"
-        style={{ height: 26 }}
-      >
-        {showMore ? "Weniger" : "Mehr"}
-      </button>
+      <div ref={menuRef} className="relative flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className={`text-xs rounded-full transition-colors ${activeMore ? "font-semibold" : "text-blue-500 hover:text-blue-700"}`}
+          style={activeMore ? chipStyle(true, color, narrow) : { height: 26, padding: narrow ? "0 2px" : "0 4px" }}
+          title="Weitere Mengen"
+        >
+          {activeMore || "Mehr"}
+        </button>
+        {open && (
+          <div className="absolute right-0 top-full mt-1 z-40 grid grid-cols-5 gap-1 p-1.5 rounded-xl bg-white shadow-lg ring-1 ring-black/5" style={{ width: 5 * 40 + 4 * 4 + 12 }}>
+            {more.map((d) => {
+              const active = sameAmount(d, chipValue);
+              return (
+                <button key={d} type="button" onClick={() => pick(d, active)} className="text-xs font-semibold rounded-full transition-colors" style={{ ...chipStyle(active, color), minWidth: 0 }}>
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <input
         type="text"
         inputMode="decimal"
-        className={`px-2.5 py-1 text-xs rounded-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${text ? "border-2 font-semibold" : "border border-[#DFE3EB]"}`}
-        style={{ width: 92, borderColor: text ? color : undefined }}
+        className={`flex-1 min-w-0 px-2 text-xs rounded-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${text ? "border-2 font-semibold" : "border border-[#DFE3EB]"}`}
+        style={{ height: 26, maxWidth: 92, minWidth: 52, borderColor: text ? color : undefined }}
         placeholder="Andere"
         title="Eigene Menge, z.B. 3,5 oder 2x3"
         value={text}
         onChange={(e) => { const v = e.target.value.replace(/[^\d,.+*×x\- ]/g, ""); setText(v); onChange(v, { typed: true }); }}
       />
-      <span className="text-xs text-gray-400">{einheit}</span>
+      <span className="text-xs text-gray-400 flex-shrink-0">{einheit}</span>
     </div>
   );
 }
@@ -214,7 +259,7 @@ export function PraeparatChips({ praeparate, value, onChange, label = "Präparat
             key={i}
             type="button"
             onClick={() => onChange(i)}
-            className={`text-xs rounded-full transition px-2.5 ${active ? "bg-gray-800 text-white font-semibold" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            className={`text-xs rounded-full transition px-2.5 font-medium ${active ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
             style={{ height: 26 }}
           >
             <span className="font-bold mr-1">{praepLetter(i)}</span>{p.name || `Präparat ${praepLetter(i)}`}
@@ -243,21 +288,27 @@ export function PraeparatBadge({ marker, praeparate, onCycle }) {
   );
 }
 
-// Colour swatch row used in the editor
+// Colour swatch row used in the editor: always one line, the swatches shrink a little on narrow phones.
+// The active swatch gets an inset white ring, so nothing grows or overlaps its neighbours.
 export function ColorSwatches({ value, onChange, label = "Farbe für neue Punkte", labelWidth }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-gray-500 flex-shrink-0" style={labelWidth ? { width: labelWidth } : undefined}>{labelWidth ? label : `${label}:`}</span>
-      {MARKER_COLORS.map((c) => (
-        <button
-          key={c.hex}
-          type="button"
-          title={c.name}
-          onClick={() => onChange(c.hex)}
-          className="rounded-full transition"
-          style={{ width: 22, height: 22, background: c.hex, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.12)", outline: value === c.hex ? `2px solid ${c.hex}` : "none", outlineOffset: 2, opacity: value === c.hex ? 1 : 0.8 }}
-        />
-      ))}
+    <div className="flex items-center flex-nowrap" style={{ gap: 5 }}>
+      <span className="text-xs text-gray-500 flex-shrink-0" style={labelWidth ? { width: labelWidth, marginRight: 1 } : undefined}>{labelWidth ? label : `${label}:`}</span>
+      {MARKER_COLORS.map((c) => {
+        const active = value === c.hex;
+        return (
+          <button
+            key={c.hex}
+            type="button"
+            title={c.name}
+            aria-label={c.name}
+            aria-pressed={active}
+            onClick={() => onChange(c.hex)}
+            className="rounded-full transition-opacity"
+            style={{ flex: "0 1 22px", minWidth: 16, aspectRatio: "1 / 1", background: c.hex, boxShadow: active ? `inset 0 0 0 2px ${c.hex}, inset 0 0 0 4px #ffffff` : "inset 0 0 0 1px rgba(0,0,0,0.12)", opacity: active ? 1 : 0.8 }}
+          />
+        );
+      })}
     </div>
   );
 }

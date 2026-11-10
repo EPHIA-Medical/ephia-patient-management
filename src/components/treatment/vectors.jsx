@@ -245,7 +245,8 @@ export function useVectorTools({ markers, setMarkers, color, amount, praep, view
   return { mode, setMode, tool, setTool, depth, setDepth, handleClick, handleMove, preview, finish, activeFan, activeGuide, lineStart, drawing };
 }
 
-const segBtn = (active) => `px-2.5 text-xs rounded-md transition ${active ? "bg-white text-gray-900 shadow-sm font-medium" : "text-gray-500 hover:text-gray-800"}`;
+// Same font weight in both states, so selecting a segment never changes its width
+const segBtn = (active) => `px-2.5 text-xs font-medium rounded-md transition ${active ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"}`;
 
 // Shared label column for the editor's setting rows (Technik, Instrument, Präparat, Dosis, Farbe)
 export const EDITOR_LABEL_WIDTH = 72;
