@@ -39,7 +39,16 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
   const [newBehandlungOpen, setNewBehandlungOpen] = useState(false);
   const [newBehDatum, setNewBehDatum] = useState(new Date().toISOString().slice(0, 10));
   const [newBehZeit, setNewBehZeit] = useState("");
-  const [expandedBeh, setExpandedBeh] = useState(null);
+  // The open Behandlung survives a remount: PDF downloads of Rechnung, HV and Aufklärung
+  // briefly navigate to the document route and back. Only the opaque row id is stored.
+  const expandedKey = `pms.expandedBeh.${patientDbId}`;
+  const [expandedBeh, setExpandedBehState] = useState(() => {
+    try { return sessionStorage.getItem(expandedKey) || null; } catch { return null; }
+  });
+  const setExpandedBeh = (id) => {
+    setExpandedBehState(id);
+    try { if (id) sessionStorage.setItem(expandedKey, id); else sessionStorage.removeItem(expandedKey); } catch { /* storage unavailable */ }
+  };
   const [historieOpen, setHistorieOpen] = useState(false);
   const [noteEditing, setNoteEditing] = useState(false);
   const [centerTab, setCenterTab] = useState("behandlungen"); // "behandlungen" | "rechnungen"
@@ -197,6 +206,14 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
       setCenterView("behandlung_detail");
     }
     else { onView && onView(inv); }
+  };
+
+  // Quick download from a document row; `embeddedHv` = the HV that lives inside a Rechnung
+  const handleDocDownload = (inv, { embeddedHv = false } = {}) => {
+    if (embeddedHv || inv._hvOnly || inv._docType === "hv") { onDownloadHV && onDownloadHV(inv); }
+    else if (inv._consentForm || inv._docType === "aufklaerung") { onDownloadConsent && onDownloadConsent(inv); }
+    else if ((inv._standalone || inv._treatmentDocOnly) || inv._docType === "behandlungsdoku") { downloadTreatmentDoc(inv); }
+    else { onDownload && onDownload(inv); }
   };
 
   // "+ Behandlungsdoku" inside a Behandlung: the document starts on the Behandlungstermin
@@ -395,7 +412,7 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
                   onViewConsent={onViewConsent} onViewHV={onViewHV} onView={onView}
                   setViewingTreatment={setViewingTreatment} setConfirmDeleteBeh={setConfirmDeleteBeh}
                   hasConsentRisks={hasConsentRisks} getDocLabel={getDocLabel} getDocStatus={getDocStatus} handleDocClick={handleDocClick}
-                  onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete}
+                  onLinkDocToBehandlung={onLinkDocToBehandlung} onDelete={onDelete} onDownloadDoc={handleDocDownload}
                   titleSuggestions={behTitleSuggestions}
                 />
               </div>

@@ -14,7 +14,7 @@ export default function PatientBehandlungenSidebar({
   onViewConsent, onViewHV, onView,
   setViewingTreatment, setConfirmDeleteBeh,
   hasConsentRisks, getDocLabel, getDocStatus, handleDocClick,
-  onLinkDocToBehandlung, onDelete, titleSuggestions = [], onSetPaymentStatus, hideHeader = false,
+  onLinkDocToBehandlung, onDelete, onDownloadDoc, titleSuggestions = [], onSetPaymentStatus, hideHeader = false,
 }) {
   // Rechnung: the payment status is a toggle (Ausstehend ⇄ Bezahlt); other documents show plain status text
   const renderStatus = (doc, status) => (status.payment && onSetPaymentStatus ? (
@@ -38,6 +38,12 @@ export default function PatientBehandlungenSidebar({
   const trashBtn = (onClick, title = "Dokument löschen") => (
     <button className="p-1 rounded text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 focus:opacity-100 transition" title={title} onClick={onClick}>
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+    </button>
+  );
+  // Always visible (unlike delete): downloading is a frequent, harmless action
+  const downloadBtn = (doc, opts) => (
+    <button className="p-1 rounded text-gray-400 hover:text-blue-600 transition" title="PDF herunterladen" aria-label="PDF herunterladen" onClick={(e) => { e.stopPropagation(); onDownloadDoc(doc, opts); }} onKeyDown={(e) => e.stopPropagation()}>
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
     </button>
   );
   const [dragOverBehId, setDragOverBehId] = useState(null);
@@ -258,9 +264,9 @@ export default function PatientBehandlungenSidebar({
                   )}
 
                   {/* Dokumente */}
-                  <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                  <div className="px-4 pt-3 pb-1 flex items-center gap-x-4 gap-y-1 flex-wrap">
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Dokumente</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { onStartConsent && onStartConsent(patient, beh._id); }}>+ Aufkl&auml;rung</button>
                       <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { onNewHV && onNewHV(beh._id); }}>+ HV</button>
                       <button className="text-xs text-blue-500 hover:text-blue-700 font-medium" onClick={() => { if (onAddBehandlungsdoku) { onAddBehandlungsdoku(beh); return; } if (setNewTreatmentBehId) setNewTreatmentBehId(beh._id); setCenterView("behandlungen_add"); }}>+ Behandlungsdoku</button>
@@ -282,6 +288,7 @@ export default function PatientBehandlungenSidebar({
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {renderStatus(doc, status)}
+                          {onDownloadDoc && downloadBtn(doc)}
                           {onDelete && trashBtn((e) => { e.stopPropagation(); onDelete(doc.id); })}
                         </div>
                       </div>
@@ -306,6 +313,7 @@ export default function PatientBehandlungenSidebar({
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {statusPill(status)}
+                          {onDownloadDoc && downloadBtn(inv, { embeddedHv: true })}
                           {/* Same width as the delete button of the other rows; this HV is deleted with its Rechnung */}
                           {onDelete && <span className="w-6" />}
                         </div>
@@ -361,6 +369,7 @@ export default function PatientBehandlungenSidebar({
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {renderStatus(doc, status)}
+                  {onDownloadDoc && downloadBtn(doc)}
                   {onDelete && (
                     <button
                       className="p-1 text-gray-300 hover:text-red-500 transition"
