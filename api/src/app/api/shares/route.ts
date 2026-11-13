@@ -65,11 +65,19 @@ export async function POST(req: NextRequest) {
   }
   if (total > MAX_TOTAL_BYTES) return json(req, { error: "Die Dokumente sind zusammen größer als 15 MB. Bitte einzeln senden." }, 413);
 
-  // Per-practice daily limit protects the sending domain if an account is misused
+  // Per-practice daily limit protects the sending domain if an account is misused.
+  // This early count spares the uploads; the binding check is the insert trigger of
+  // migration 0010, which serialises parallel sends of one account. An unreadable
+  // count refuses the send instead of allowing it.
+  const limitReached = () => json(req, { error: "Heute wurden schon sehr viele Unterlagen versendet. Bitte versuche es morgen wieder." }, 429);
   const since = new Date(Date.now() - 86400_000).toISOString();
   const countRes = await rest(`document_shares?user_id=eq.${user.id}&created_at=gt.${since}&select=id`, { method: "HEAD", prefer: "count=exact" });
-  const sentToday = Number((countRes.headers.get("content-range") || "*/0").split("/")[1]) || 0;
-  if (sentToday >= DAILY_LIMIT_PER_PRACTICE) return json(req, { error: "Heute wurden schon sehr viele Unterlagen versendet. Bitte versuche es morgen wieder." }, 429);
+  const sentToday = Number((countRes.headers.get("content-range") || "").split("/")[1]);
+  if (!countRes.ok || !Number.isFinite(sentToday)) {
+    console.error("[shares] daily count failed:", countRes.status);
+    return json(req, { error: "Der Versand ist gerade nicht möglich. Bitte versuche es später noch einmal." }, 503);
+  }
+  if (sentToday >= DAILY_LIMIT_PER_PRACTICE) return limitReached();
 
   void cleanupExpired();
 
@@ -113,6 +121,8 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (e) {
+    // Refused by the daily-limit trigger (migration 0010): nothing was stored.
+    if (paths.length === 0 && /daily_share_limit/.test(String((e as Error)?.message || e))) return limitReached();
     console.error("[shares] storing failed:", e);
     await storageRemove(paths);
     await rest(`document_shares?id=eq.${id}`, { method: "DELETE" });

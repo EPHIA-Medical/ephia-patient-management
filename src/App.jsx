@@ -74,6 +74,20 @@ import { APP_VERSION } from "./components/ui/UpdateNotice";
 
 let currentMEK = null;
 
+// Every record write goes through this. Without an unlocked key it throws instead
+// of sending plaintext: the server must only ever receive ciphertext.
+const encryptForServer = async (obj) => {
+  if (!currentMEK) throw new Error("Deine Verschlüsselung ist nicht entsperrt. Bitte melde Dich ab und wieder an.");
+  const enc = await encryptData(obj, currentMEK);
+  return { serverData: enc.ciphertext, serverIv: enc.iv, serverEncVer: 2 };
+};
+
+// Set while a consent form runs in kiosk mode (Praxis-PIN set). Survives a reload
+// in the tab, so a reload cannot drop the patient into the unlocked app.
+const KIOSK_LOCK_KEY = "ephia_kiosk_lock";
+const readKioskLock = () => { try { return sessionStorage.getItem(KIOSK_LOCK_KEY) === "1"; } catch (e) { return false; } };
+const writeKioskLock = (on) => { try { on ? sessionStorage.setItem(KIOSK_LOCK_KEY, "1") : sessionStorage.removeItem(KIOSK_LOCK_KEY); } catch (e) { /* storage blocked */ } };
+
 // ═══════════════════ Main App ═══════════════════
 
 export default function EphiaInvoice() {
@@ -329,6 +343,22 @@ export default function EphiaInvoice() {
     }
   }, [consentKioskActive, isConsentPage]);
 
+  // Kiosk lock across reloads. The flow state above lives only in memory, while the
+  // session and the key survive a reload. So a PIN-protected flow (form or handback
+  // screen, page or modal) is mirrored into sessionStorage; with a PIN set it can only
+  // end through the PIN, which clears the marker. A marker found on mount locks the app.
+  const [kioskLocked, setKioskLocked] = useState(readKioskLock);
+  const kioskFlowActive = !!(kioskPin && ((consentPatient && consentTemplate) || consentHandback));
+  const kioskFlowWasActive = useRef(false);
+  useEffect(() => {
+    if (kioskFlowActive) { writeKioskLock(true); kioskFlowWasActive.current = true; }
+    else if (kioskFlowWasActive.current) { writeKioskLock(false); kioskFlowWasActive.current = false; }
+  }, [kioskFlowActive]);
+  // PIN removed in the meantime: nothing left to lock with.
+  useEffect(() => {
+    if (kioskLocked && dataLoaded && !kioskPin) { writeKioskLock(false); setKioskLocked(false); }
+  }, [kioskLocked, dataLoaded, kioskPin]);
+
   // ─── Navigate to the right preview URL based on document type ───
   const navigateToPreview = (inv) => {
     setViewingInvoice(inv);
@@ -467,24 +497,18 @@ export default function EphiaInvoice() {
               }
             }
 
-            // If MEK couldn't be restored, check if user has encryption set up
-            // If so, force re-login so password can unlock the MEK
+            // No key in this tab (new tab, restarted browser): the password is needed to
+            // unlock or set up encryption. Never open the app without a key, whatever the
+            // profile says, so no write can fall back to plaintext.
             if (!currentMEK) {
-              try {
-                const profiles = await supabaseFetchProfiles(newSess.access_token, newSess.user.id);
-                const profile = profiles.length > 0 ? profiles[0] : null;
-                if (profile && profile.encrypted_mek) {
-                  console.log("[E2EE] MEK lost from session, forcing re-login to unlock encryption");
-                  localStorage.removeItem("ephia_session");
-                  clearMEKFromSession();
-                  setSession(null);
-                  setUser(null);
-                  setAuthLoading(false);
-                  return; // Exit early — user must re-enter password
-                }
-              } catch (e) {
-                console.error("Failed to check encryption profile:", e);
-              }
+              console.log("[E2EE] No key in this tab, re-login required");
+              localStorage.removeItem("ephia_session");
+              clearMEKFromSession();
+              writeKioskLock(false);
+              setSession(null);
+              setUser(null);
+              setAuthLoading(false);
+              return;
             }
 
             await loadUserData(newSess.access_token, newSess.user.id, newSess.user.email);
@@ -1039,6 +1063,13 @@ export default function EphiaInvoice() {
 
       await loadUserData(data.access_token, data.user.id, data.user.email);
     } catch (err) {
+      // Not logged in until the key is unlocked: undo the session set above.
+      if (!currentMEK) {
+        localStorage.removeItem("ephia_session");
+        clearMEKFromSession();
+        setSession(null);
+        setUser(null);
+      }
       setAuthError(err.message);
     } finally {
       setAuthLoading(false);
@@ -1132,6 +1163,8 @@ export default function EphiaInvoice() {
     localStorage.removeItem("ephia_session");
     currentMEK = null;
     clearMEKFromSession();
+    writeKioskLock(false);
+    setKioskLocked(false);
     setSession(null);
     setUser(null);
     setInvoices([]);
@@ -1377,11 +1410,7 @@ export default function EphiaInvoice() {
 
   // ─── Document CRUD adapters (dual-path: invoices vs documents table) ───
   const saveDocAdapter = async (entry, docType, patientId, behandlungId) => {
-    let serverData = entry, serverIv = null, serverEncVer = null;
-    if (currentMEK) {
-      const enc = await encryptData(entry, currentMEK);
-      serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-    }
+    const { serverData, serverIv, serverEncVer } = await encryptForServer(entry);
     if (docsMigrated.current) {
       return supabaseCreateDocument(session.access_token, user.id, patientId, behandlungId, docType, serverData, serverIv, serverEncVer);
     }
@@ -1389,11 +1418,7 @@ export default function EphiaInvoice() {
   };
 
   const updateDocAdapter = async (docId, entry) => {
-    let serverData = entry, serverIv = null, serverEncVer = null;
-    if (currentMEK) {
-      const enc = await encryptData(entry, currentMEK);
-      serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-    }
+    const { serverData, serverIv, serverEncVer } = await encryptForServer(entry);
     if (docsMigrated.current) return supabaseUpdateDocument(session.access_token, docId, serverData, serverIv, serverEncVer);
     return supabaseUpdateInvoice(session.access_token, docId, serverData, serverIv, serverEncVer);
   };
@@ -1406,11 +1431,7 @@ export default function EphiaInvoice() {
   // ─── Voucher (Wertgutschein) handlers ───
   // Encrypt + persist a voucher's data blob and update its plaintext status.
   const persistVoucher = async (voucherId, voucherData, status) => {
-    let serverData = voucherData, serverIv = null, serverEncVer = null;
-    if (currentMEK) {
-      const enc = await encryptData(voucherData, currentMEK);
-      serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-    }
+    const { serverData, serverIv, serverEncVer } = await encryptForServer(voucherData);
     return supabaseUpdateVoucher(session.access_token, voucherId, serverData, serverIv, serverEncVer, status);
   };
 
@@ -1423,11 +1444,7 @@ export default function EphiaInvoice() {
       const voucherObj = { ...createVoucherObject(form), receiptMeta: form.receiptMeta || {} };
       const today = new Date().toISOString().slice(0, 10);
       const status = computeStatus(voucherObj, today);
-      let serverData = voucherObj, serverIv = null, serverEncVer = null;
-      if (currentMEK) {
-        const enc = await encryptData(voucherObj, currentMEK);
-        serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-      }
+      const { serverData, serverIv, serverEncVer } = await encryptForServer(voucherObj);
       // Generate a fully random code; retry on the (astronomically rare) unique
       // collision so a duplicate can never silently fail.
       let created = null, code = null;
@@ -2135,11 +2152,7 @@ export default function EphiaInvoice() {
 
   // ─── Behandlung CRUD handlers ───
   const handleCreateBehandlung = async (patientId, behData) => {
-    let serverData = behData, serverIv = null, serverEncVer = null;
-    if (currentMEK) {
-      const enc = await encryptData(behData, currentMEK);
-      serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-    }
+    const { serverData, serverIv, serverEncVer } = await encryptForServer(behData);
     const created = await supabaseCreateBehandlung(session.access_token, user.id, patientId, serverData, serverIv, serverEncVer);
     const newBeh = { ...behData, _id: created.id, _patientId: patientId, _createdAt: created.created_at };
     setBehandlungen(prev => [newBeh, ...prev]);
@@ -2148,11 +2161,7 @@ export default function EphiaInvoice() {
   };
 
   const persistBehandlung = async (behId, behData) => {
-    let serverData = behData, serverIv = null, serverEncVer = null;
-    if (currentMEK) {
-      const enc = await encryptData(behData, currentMEK);
-      serverData = enc.ciphertext; serverIv = enc.iv; serverEncVer = 2;
-    }
+    const { serverData, serverIv, serverEncVer } = await encryptForServer(behData);
     await supabaseUpdateBehandlung(session.access_token, behId, serverData, serverIv, serverEncVer);
     setBehandlungen(prev => prev.map(b => b._id === behId ? { ...behData, _id: behId, _patientId: b._patientId, _createdAt: b._createdAt } : b));
   };
@@ -2887,6 +2896,29 @@ export default function EphiaInvoice() {
         onDatenschutzClick={() => setAuthPage("datenschutz")}
         isLoading={authLoading}
         error={authError}
+      />
+    );
+  }
+
+  // ─── Kiosk lock after a reload: nothing of the app until the Praxis-PIN is entered ───
+  if (kioskLocked) {
+    if (!dataLoaded || !kioskPin) {
+      return (
+        <div className="min-h-screen bg-white flex items-center justify-center p-6" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+          <div className="text-center">
+            <p className="text-xs text-gray-400 mb-4">Wird geladen...</p>
+            <button type="button" className="text-xs text-gray-400 hover:text-gray-600" onClick={handleSignOut}>Abmelden</button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <PinGate
+        pin={kioskPin}
+        subtitle="Die Seite wurde neu geladen. Zum Fortfahren bitte die Praxis-PIN eingeben."
+        cancelLabel="Abmelden"
+        onSuccess={() => { writeKioskLock(false); setKioskLocked(false); navigate("/patients", { replace: true }); }}
+        onCancel={handleSignOut}
       />
     );
   }

@@ -19,7 +19,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>ephia</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind is compiled at build time (src/tailwind.css, linked below the custom
+         styles, where the Play CDN used to inject it). No third-party script may run in
+         this origin: it holds the session and the encryption key. -->
     <style>
       /* Dropdowns (native <select> on touch, .ephia-select button on mouse devices):
          chevron inset from the edge, slim enough for short values like "SE" */
@@ -53,6 +55,7 @@
         input, select, textarea { font-size: 16px !important; }
       }
     </style>
+    <link rel="stylesheet" href="/src/tailwind.css" />
   </head>
   <body>
     <div id="root"></div>

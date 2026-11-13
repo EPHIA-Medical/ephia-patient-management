@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 // Short commit hash of the build, shown in the footer and published as
@@ -40,8 +41,27 @@ const shareCsp = () => ({
   },
 });
 
+// Main app: only our own scripts may run. The page holds the session and the
+// encryption key. Scripts only (styles, images and fetches are not restricted);
+// inline scripts, i.e. the 404 redirect replay, are allowed by hash. Build only,
+// like the share CSP. Runs last, so the hashes match the served bytes.
+const mainCsp = () => ({
+  name: "main-csp",
+  apply: "build",
+  transformIndexHtml: {
+    order: "post",
+    handler(html, ctx) {
+      if (ctx.filename.replace(/\\/g, "/").endsWith("/d/index.html")) return html;
+      const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+        .map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
+      const csp = [`script-src 'self' ${hashes.join(" ")}`.trim(), "object-src 'none'", "base-uri 'self'"].join("; ");
+      return html.replace("<head>", `<head>\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`);
+    },
+  },
+});
+
 export default defineConfig({
-  plugins: [react(), versionFile(), shareCsp()],
+  plugins: [react(), versionFile(), shareCsp(), mainCsp()],
   define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   base: "/",
   // Second page: the patient's opening page for protected document links (/d/)

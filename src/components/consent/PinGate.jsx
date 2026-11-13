@@ -3,7 +3,7 @@ import React, { useState } from "react";
 // Full-screen numeric PIN prompt used to exit patient-facing kiosk views
 // (Aufklärungsbogen). Not a cryptographic barrier — it prevents patients
 // from tapping their way into the practice's patient database.
-export default function PinGate({ pin, title = "Praxis-PIN eingeben", subtitle, onSuccess, onCancel }) {
+export default function PinGate({ pin, title = "Praxis-PIN eingeben", subtitle, onSuccess, onCancel, cancelLabel = "Abbrechen" }) {
   const [entered, setEntered] = useState("");
   const [error, setError] = useState(false);
   const expected = String(pin || "");
@@ -68,7 +68,7 @@ export default function PinGate({ pin, title = "Praxis-PIN eingeben", subtitle, 
 
         {onCancel && (
           <button type="button" className="mt-6 py-2 px-4 text-xs md:text-sm text-gray-400 hover:text-gray-600 transition" onClick={onCancel}>
-            Abbrechen
+            {cancelLabel}
           </button>
         )}
       </div>
