@@ -354,10 +354,8 @@ export default function EphiaInvoice() {
     if (kioskFlowActive) { writeKioskLock(true); kioskFlowWasActive.current = true; }
     else if (kioskFlowWasActive.current) { writeKioskLock(false); kioskFlowWasActive.current = false; }
   }, [kioskFlowActive]);
-  // PIN removed in the meantime: nothing left to lock with.
-  useEffect(() => {
-    if (kioskLocked && dataLoaded && !kioskPin) { writeKioskLock(false); setKioskLocked(false); }
-  }, [kioskLocked, dataLoaded, kioskPin]);
+  // The lock never clears itself (a failed settings load would look like "no PIN"):
+  // the only ways out are the PIN or signing out.
 
   // ─── Navigate to the right preview URL based on document type ───
   const navigateToPreview = (inv) => {
@@ -2906,7 +2904,7 @@ export default function EphiaInvoice() {
       return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
           <div className="text-center">
-            <p className="text-xs text-gray-400 mb-4">Wird geladen...</p>
+            <p className="text-xs text-gray-400 mb-4">{dataLoaded ? "Bitte melde Dich neu an." : "Wird geladen..."}</p>
             <button type="button" className="text-xs text-gray-400 hover:text-gray-600" onClick={handleSignOut}>Abmelden</button>
           </div>
         </div>
