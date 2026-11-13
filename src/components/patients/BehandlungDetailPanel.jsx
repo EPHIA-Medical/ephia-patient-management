@@ -241,7 +241,13 @@ export default function BehandlungDetailPanel({
   const consentDate = (d) => (d._createdAt || d.savedAt || "").slice(0, 10);
   const terminConsent = (patientDocs || []).filter((d) => isConsent(d) && inv._behandlungId && d._behandlungId === inv._behandlungId)
     .sort((x, y) => consentDate(y).localeCompare(consentDate(x)))[0] || null;
-  const latestConsent = terminConsent || (patientDocs || []).filter(isConsent).sort((x, y) => consentDate(y).localeCompare(consentDate(x)))[0] || null;
+  // Fallback for older treatments: the latest Bogen from on or before the treatment day
+  const behDay = td.behandlungsDatum || "";
+  const otherConsents = (patientDocs || []).filter(isConsent).sort((x, y) => consentDate(y).localeCompare(consentDate(x)));
+  const latestConsent = terminConsent || (behDay && otherConsents.find((d) => consentDate(d) && consentDate(d) <= behDay)) || otherConsents[0] || null;
+  // § 630e Abs. 2 Nr. 2 BGB: the Aufklärung has to happen before the treatment. Consent forms carry
+  // no signing timestamp, so the creation date stands in for it.
+  const consentAfter = !!(latestConsent && behDay && consentDate(latestConsent) && consentDate(latestConsent) > behDay);
   const consentFromOtherTermin = !!latestConsent && !terminConsent;
   const consentSigs = latestConsent?.consentData?._signatures;
   const consentRefused = !!latestConsent?.consentData?.refused;
@@ -260,11 +266,11 @@ export default function BehandlungDetailPanel({
     }));
   })();
   const prepSummary = [
-    !latestConsent ? "Kein Aufklärungsbogen" : `Aufklärung vom ${fmtDate(consentDate(latestConsent))}: ${consentStatus}`,
+    !latestConsent ? "Kein Aufklärungsbogen" : `Aufklärung vom ${fmtDate(consentDate(latestConsent))}: ${consentStatus}${consentAfter ? ", nach der Behandlung" : ""}`,
     latestConsent && !consentRefused ? (consentFindings.length ? `${consentFindings.length} ${consentFindings.length === 1 ? "Auffälligkeit" : "Auffälligkeiten"}` : "Anamnese unauffällig") : null,
     td.indikation ? "Indikation dokumentiert" : null,
   ].filter(Boolean).join(" · ");
-  const prepDone = consentSigned && !consentRefused && !!td.indikation;
+  const prepDone = consentSigned && !consentRefused && !consentAfter && !!td.indikation;
 
   // Abschluss
   const VERTRAEGLICHKEIT = [["keine", "Keine Auffälligkeiten"], ["haematom", "Hämatom"], ["schwellung", "Schwellung"], ["vasovagal", "Vasovagale Reaktion"], ["sonstiges", "Sonstiges"]];
@@ -410,9 +416,14 @@ export default function BehandlungDetailPanel({
                       <button type="button" className="text-sm font-medium text-gray-800 hover:text-blue-600 text-left" onClick={() => openDoc(latestConsent)}>
                         Aufklärungsbogen vom {fmtDate(consentDate(latestConsent))}
                       </button>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${consentRefused ? "bg-red-50 text-red-700" : consentSigned ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{consentStatus}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${consentRefused ? "bg-red-50 text-red-700" : consentSigned && !consentAfter ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>{consentStatus}</span>
                       {consentFromOtherTermin && <span className="text-xs text-gray-500">aus einem früheren Termin</span>}
                     </div>
+                    {consentAfter && (
+                      <p className="text-sm text-amber-800 bg-amber-50 rounded px-2.5 py-2">
+                        Der Aufklärungsbogen ist auf den {fmtDate(consentDate(latestConsent))} datiert, also nach der Behandlung am {fmtDate(behDay)}. Die Aufklärung muss vor dem Eingriff erfolgen (§ 630e Abs. 2 BGB). Falls sie rechtzeitig mündlich stattgefunden hat, halte das {locked ? "als Nachtrag" : "in den Notizen"} fest.
+                      </p>
+                    )}
                     {consentRefused ? (
                       <p className="text-sm text-red-700">Die Patient:in hat die Einwilligung abgelehnt.</p>
                     ) : consentFindings.length === 0 ? (
