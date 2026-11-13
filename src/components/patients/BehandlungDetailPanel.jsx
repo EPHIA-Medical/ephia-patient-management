@@ -63,7 +63,8 @@ export default function BehandlungDetailPanel({
   const praepTotals = praeparatTotals({ ...td, praeparat: praep, einheit: einh });
   const unitFor = (m) => (multiPraep ? (praeparate[markerPraepIdx(m, praepCount)]?.einheit || einh) : einh);
   const datumStr = td.behandlungsDatum ? fmtDate(td.behandlungsDatum) : "–";
-  const hasInvoice = inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "—";
+  // Legacy records carry the invoice inside the Behandlungsdoku itself
+  const ownInvoice = !!(inv.invoiceMeta?.nummer && inv.invoiceMeta.nummer !== "—");
   // Markierungen (guide lines) are drawn on the chart but are not points
   const markerCount = treatmentPoints(td.markers).length;
   const hasChartMarks = (td.markers || []).length > 0;
@@ -284,6 +285,11 @@ export default function BehandlungDetailPanel({
   // Documents of the same Behandlung, earlier treatments of this patient
   const idOf = (d) => d._supabaseId || d.id;
   const behDocs = inv._behandlungId ? (patientDocs || []).filter((d) => d._behandlungId === inv._behandlungId && idOf(d) !== idOf(inv)) : [];
+  // Invoice of this Behandlung: the legacy embedded one, else a Rechnung linked to the same Termin
+  const isInvoiceDoc = (d) => !(d._consentForm || d._docType === "aufklaerung" || d._hvOnly || d._docType === "hv" || d._standalone || d._treatmentDocOnly || d._docType === "behandlungsdoku")
+    && d.invoiceMeta?.nummer && d.invoiceMeta.nummer !== "—";
+  const invoiceDoc = ownInvoice ? inv : (behDocs.find(isInvoiceDoc) || null);
+  const hasInvoice = !!invoiceDoc;
   // Honorarvereinbarung of this Termin: counts only when fully signed on or before the Behandlung
   const terminHvs = behDocs.filter((d) => d._hvOnly || d._docType === "hv");
   const signedHvBefore = terminHvs.find((h) => { const on = hvSignedDate(h); return !!on && (!td.behandlungsDatum || on <= td.behandlungsDatum); }) || null;
@@ -348,7 +354,7 @@ export default function BehandlungDetailPanel({
             </div>
             <div className="flex gap-1.5 flex-wrap mt-2.5">
               {behDocs.map((d) => { const st = getDocStatus ? getDocStatus(d) : { label: "", done: true }; const l = getDocLabel ? getDocLabel(d) : "Dokument"; return pill(!!st.done, `${l}${st.label && st.label !== "—" ? `: ${st.label}` : ""}`, () => openDoc(d)); })}
-              {pill(hasInvoice, hasInvoice ? `Rechnung ${inv.invoiceMeta.nummer}` : "Keine Rechnung")}
+              {(ownInvoice || !hasInvoice) && pill(hasInvoice, hasInvoice ? `Rechnung ${invoiceDoc.invoiceMeta.nummer}` : "Keine Rechnung")}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap relative">
@@ -697,7 +703,11 @@ export default function BehandlungDetailPanel({
             <div className="bg-white rounded-lg shadow-sm px-4 py-4 space-y-3">
               <h3 className="text-sm font-semibold text-gray-800">Abrechnung</h3>
               {hasInvoice ? (
-                <p className="text-sm text-gray-700">Rechnung {inv.invoiceMeta.nummer} vom {fmtDate(inv.invoiceMeta.datum)}</p>
+                <p className="text-sm text-gray-700">
+                  {ownInvoice ? <>Rechnung {invoiceDoc.invoiceMeta.nummer}</> : <button type="button" className="text-blue-600 hover:underline" onClick={() => openDoc(invoiceDoc)}>Rechnung {invoiceDoc.invoiceMeta.nummer}</button>}
+                  {invoiceDoc.invoiceMeta.datum ? <> vom {fmtDate(invoiceDoc.invoiceMeta.datum)}</> : null}
+                  {!ownInvoice && getDocStatus ? <span className="text-gray-400"> · {getDocStatus(invoiceDoc).label}</span> : null}
+                </p>
               ) : (
                 <>
                   <p className="text-sm text-gray-500">Noch keine Rechnung zu dieser Behandlung.</p>
