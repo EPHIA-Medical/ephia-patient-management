@@ -4607,7 +4607,7 @@ export default function EphiaInvoice() {
                 await syncBehandlungToDoc(updated, previous?.treatmentDoc?.behandlungsDatum);
               }
             }}
-            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, begruendung: qBegruendung, hvVerzicht: qHvVerzicht, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
+            onQuickInvoice={async ({ treatment, nummer, wunschGesamt, customS, lineItems, gesamt, hasHV, fromHvId: qFromHvId, hvExternSignedOn: qHvSignedOn, begruendung: qBegruendung, hvVerzicht: qHvVerzicht, praeparat: qPraep, einheit: qEinh, ml: qMl, preisProMl: qPpm, sachkosten: qSachkosten, attachTreatmentPdf: qAttachTreatment }) => {
               if (qHvVerzicht && session) {
                 // Proof that the § 2 GOÄ notice was confirmed; without it the Rechnung is not created
                 try {
@@ -4643,7 +4643,8 @@ export default function EphiaInvoice() {
                   treatmentDoc: treatment.treatmentDoc || null,
                   attachTreatmentPdf: !!qAttachTreatment,
                   begruendung: qBegruendung || "",
-                  hvVerzicht: qHvVerzicht ? { at: new Date().toISOString(), version: HV_WAIVER_VERSION } : undefined,
+                  hvVerzicht: qHvVerzicht ? { at: new Date().toISOString(), version: HV_WAIVER_VERSION, ...(qHvSignedOn ? { hvSignedOn: qHvSignedOn } : {}) } : undefined,
+                  _fromHvId: qFromHvId || undefined,
                   paymentStatus: "ausstehend",
                   _kleinunternehmer: !!practice.kleinunternehmer,
                   _practice: practiceForDocument(practice),

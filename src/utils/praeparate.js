@@ -14,14 +14,16 @@ export const praepLetter = (i) => LETTERS[i] || String(i + 1);
 
 // `charge` is the Chargennummer (LOT) of the product used. Optional for Botulinum,
 // required for Dermalfiller (Klasse-III-Medizinprodukt, Rückverfolgbarkeit nach § 630f BGB).
-export const emptyPraeparat = (einheit = "SE") => ({ name: "", einheit, amount: "", charge: "" });
+// `verfall` is the expiry month ("2028-03"), `rekonstitution` the dilution as typed
+// ("50 SE in 1,25 ml NaCl 0,9 %"); both optional.
+export const emptyPraeparat = (einheit = "SE") => ({ name: "", einheit, amount: "", charge: "", verfall: "", rekonstitution: "" });
 
 export function getPraeparate(td) {
   const t = td || {};
   if (Array.isArray(t.praeparate) && t.praeparate.length > 0) {
-    return t.praeparate.map((p) => ({ name: p.name || "", einheit: p.einheit || t.einheit || "SE", amount: p.amount || "", charge: p.charge || "" }));
+    return t.praeparate.map((p) => ({ name: p.name || "", einheit: p.einheit || t.einheit || "SE", amount: p.amount || "", charge: p.charge || "", verfall: p.verfall || "", rekonstitution: p.rekonstitution || "" }));
   }
-  return [{ name: t.praeparat || "", einheit: t.einheit || "SE", amount: t.amount || "", charge: t.charge || "" }];
+  return [{ name: t.praeparat || "", einheit: t.einheit || "SE", amount: t.amount || "", charge: t.charge || "", verfall: "", rekonstitution: "" }];
 }
 
 export const markerPraepIdx = (m, count = Infinity) => {
@@ -57,7 +59,7 @@ export const praeparateSummary = (td) => praeparatTotals(td)
 // typed amount of the first Präparat when there are no points.
 export function withPraeparate(td, praeparate) {
   const list = (praeparate && praeparate.length > 0 ? praeparate : [emptyPraeparat()])
-    .map((p) => ({ name: (p.name || "").trim(), einheit: p.einheit || "SE", amount: (p.amount || "").trim(), charge: (p.charge || "").trim() }));
+    .map((p) => ({ name: (p.name || "").trim(), einheit: p.einheit || "SE", amount: (p.amount || "").trim(), charge: (p.charge || "").trim(), verfall: (p.verfall || "").trim(), rekonstitution: (p.rekonstitution || "").trim() }));
   const markers = treatmentPoints(td && td.markers);
   const total = Math.round(markers.reduce((s, m) => s + evalAmount(m.amount), 0) * 100) / 100;
   return {

@@ -452,9 +452,10 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
 
       {/* Behandlungsdoku view modal (same shell as Rechnung, HV and Aufklärungsbogen) */}
       {centerView === "behandlung_detail" && viewingTreatment && (
-        <Modal title="Behandlungsdokumentation" onClose={closeTreatmentModal} escapeBlocked={!!confirmDeleteTreatment} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 py-4 sm:py-6">
-          <div className="bg-white rounded-lg shadow-sm">
+        <Modal title="Behandlungsdokumentation" size="wide" onClose={closeTreatmentModal} escapeBlocked={!!confirmDeleteTreatment} bodyClassName="bg-[#F5F8FA] px-3 sm:px-6 py-4 sm:py-6">
+          <div>
             <BehandlungDetailPanel
+              key={viewingTreatment._supabaseId || viewingTreatment.id}
               inModal
               viewingTreatment={viewingTreatment} setViewingTreatment={setViewingTreatment}
               setCenterView={setCenterView}
@@ -466,6 +467,10 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
               onSendTreatmentDoc={accessToken ? (inv) => { setTreatmentDocTarget(inv); setSendTdInv(inv); } : null}
               pendingQuickInvoice={pendingQuickInvoice} setPendingQuickInvoice={setPendingQuickInvoice}
               onStartHvFromValues={onStartHvFromValues}
+              behandlung={viewingTreatment._behandlungId ? patientBeh.find((b) => b._id === viewingTreatment._behandlungId) || null : null}
+              patientDocs={matchingInvoices} copySourceDocs={copySourceDocs}
+              getDocLabel={getDocLabel} getDocStatus={getDocStatus} onOpenDoc={handleDocClick}
+              onStartConsent={onStartConsent ? (behId) => { closeTreatmentModal(); onStartConsent(patient, behId); } : null}
             />
           </div>
         </Modal>
