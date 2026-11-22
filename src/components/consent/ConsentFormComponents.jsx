@@ -58,7 +58,8 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
     // Check all visible questions
     template.questions.forEach(q => {
       if (answers[q.id] === null) errors.add(q.id);
-      if (answers[q.id] === true && q.followUp && !answers[q.id + "_text"]?.trim()) errors.add(q.id + "_text");
+      // A subQuestion (Komplikationen ja/nein) replaces the free-text follow-up, which asks the same thing
+      if (answers[q.id] === true && q.followUp && !q.subQuestion && !answers[q.id + "_text"]?.trim()) errors.add(q.id + "_text");
       if (q.subQuestion && answers[q.id] === true && answers["q13_komplikationen"] === null) errors.add("q13_komplikationen");
       if (q.subQuestion && answers[q.id] === true && answers["q13_komplikationen"] === true && !answers["q13_komplikationen_text"]?.trim()) errors.add("q13_komplikationen_text");
     });
@@ -224,7 +225,7 @@ export function ConsentFormView({ template, patient, practice, onComplete, onCan
                       <button className={`px-4 md:px-5 py-1.5 md:py-2 text-xs md:text-sm rounded-full border transition ${answers[q.id] === true ? "bg-blue-500 text-white border-blue-500" : "bg-white text-gray-400 border-[#DFE3EB]"}`} onClick={() => setAnswer(q.id, true)}>Ja</button>
                     </div>
                   </div>
-                  {answers[q.id] && q.followUp && (
+                  {answers[q.id] && q.followUp && !q.subQuestion && (
                     <div className="mt-2 md:mt-3" data-field={q.id + "_text"}>
                       <label className={`text-xs md:text-sm ${validationErrors.has(q.id + "_text") ? "text-red-500 font-medium" : "text-gray-500"}`}>{q.followUp}</label>
                       <input className={inputCls + " mt-1" + (validationErrors.has(q.id + "_text") ? " border-red-400 ring-1 ring-red-400" : "")} value={answers[q.id + "_text"]} onChange={e => setAnswer(q.id + "_text", e.target.value)} />
