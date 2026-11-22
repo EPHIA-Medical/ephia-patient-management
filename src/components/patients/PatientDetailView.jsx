@@ -6,6 +6,7 @@ import SendToPatientDialog from "../invoice/SendToPatientDialog";
 import { treatmentCopySources } from "../../utils/copySources";
 import { fmtDate } from "../../utils/helpers";
 import { resolveConsentTemplate } from "../consent/consentTemplateStore";
+import { criticalFindings } from "../../utils/criticalFindings";
 import { FACE_IMAGE_B64 } from "../../constants";
 import TreatmentDocPreview from "./TreatmentDocumentPreview";
 import PatientLeftSidebar from "./PatientLeftSidebar";
@@ -120,6 +121,7 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
 
   // Anamnese data
   const anamnese = (rawData.anamnese || []).slice().sort((a, b) => (a.addedAt || "").localeCompare(b.addedAt || ""));
+  const criticals = criticalFindings(anamnese);
 
   // ── Retroactive sync from existing consent forms: demographics + Anamnese ──
   // Fills missing demographic fields and adds Anamnese entries for every "Ja" answer that is
@@ -285,6 +287,25 @@ export default function PatientDetailView({ accessToken, patient, invoices, beha
           </button>
         )}
       </div>
+
+      {/* Critical Anamnese findings (infection, allergy, ...) so they are seen before every treatment */}
+      {criticals.length > 0 && (
+        <div className="mb-5 lg:mb-6 rounded-lg bg-red-50 border border-red-200/70 px-4 sm:px-5 py-3.5" role="note" aria-label="Wichtige Hinweise aus der Anamnese">
+          <div className="flex items-center gap-2 mb-2">
+            <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            <span className="text-sm font-semibold text-red-800">Wichtige Hinweise aus der Anamnese</span>
+          </div>
+          <ul className="flex flex-wrap gap-2">
+            {criticals.map((f) => (
+              <li key={f.key} className="text-sm bg-white/70 text-red-900 rounded-md px-2.5 py-1">
+                <span className="font-medium">{f.label}</span>
+                {f.details.length > 0 && <span>: {f.details.join(", ")}</span>}
+                {f.addedAt && <span className="text-red-700/60 text-xs"> · angegeben am {fmtDate(f.addedAt)}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Pinned personal note (encrypted with the patient data, appears on no document) */}
       {(rawData.note || noteEditing) && (
